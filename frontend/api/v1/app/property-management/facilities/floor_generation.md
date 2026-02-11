@@ -5,7 +5,7 @@ These endpoints generate facility floors and spaces from a prompt, using the Ope
 ## Endpoints
 
 ### Generate floors for a facility
-`POST /api/v1/crm/facilities/{facility}/floors/generate`
+`POST /api/v1/app/{company}/property-management/facilities/{facility}/floors/generate`
 
 Request body:
 - `prompt` (string, required)
@@ -60,7 +60,7 @@ Notes:
 - Uses `FacilityFloorResource` for formatting.
 
 ### Generate floors for a block
-`POST /api/v1/crm/facilities/blocks/{block}/floors/generate`
+`POST /api/v1/app/{company}/property-management/facilities/blocks/{block}/floors/generate`
 
 Request body:
 - `prompt` (string, required)
@@ -69,7 +69,7 @@ Response:
 - Same shape as facility generation above.
 
 ### Generate floors for a wing
-`POST /api/v1/crm/facilities/wings/{wing}/floors/generate`
+`POST /api/v1/app/{company}/property-management/facilities/wings/{wing}/floors/generate`
 
 Request body:
 - `prompt` (string, required)
@@ -83,4 +83,3 @@ Response:
   - `prompt` is missing or not a string.
   - Space allocation validation fails (e.g., insufficient `leasable_space` or `common_space`).
 - `403 Forbidden` if the authenticated user is not authorized.
-

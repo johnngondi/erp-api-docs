@@ -1,0 +1,766 @@
+[
+    {
+        "class": "App\\Enums\\AssetStatus",
+        "cases": [
+            {
+                "value": "in use",
+                "color": "success"
+            },
+            {
+                "value": "decommissioned",
+                "color": "danger"
+            },
+            {
+                "value": "suspended",
+                "color": "warning"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\AssetValueChangeType",
+        "cases": [
+            {
+                "value": "appreciate",
+                "color": "success"
+            },
+            {
+                "value": "depreciate",
+                "color": "warning"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\BidStatus",
+        "cases": [
+            {
+                "value": "bid",
+                "color": "secondary"
+            },
+            {
+                "value": "selected",
+                "color": "success"
+            },
+            {
+                "value": "recommended",
+                "color": "primary"
+            },
+            {
+                "value": "rejected",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\BillStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "warning"
+            },
+            {
+                "value": "unpaid",
+                "color": "danger"
+            },
+            {
+                "value": "partially-paid",
+                "color": "info"
+            },
+            {
+                "value": "paid",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "secondary"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\BookingStatus",
+        "cases": [
+            {
+                "value": "new",
+                "color": "primary"
+            },
+            {
+                "value": "confirmed",
+                "color": "success"
+            },
+            {
+                "value": "boarded",
+                "color": "secondary"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ContractStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "warning"
+            },
+            {
+                "value": "active",
+                "color": "success"
+            },
+            {
+                "value": "suspended",
+                "color": "secondary"
+            },
+            {
+                "value": "expired",
+                "color": "danger"
+            },
+            {
+                "value": "inactive",
+                "color": "muted"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\CreditNoteStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "applied",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ExpenseStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "info"
+            },
+            {
+                "value": "unpaid",
+                "color": "warning"
+            },
+            {
+                "value": "partially-paid",
+                "color": "primary"
+            },
+            {
+                "value": "paid",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\InvoiceStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "unpaid",
+                "color": "warning"
+            },
+            {
+                "value": "partially paid",
+                "color": "primary"
+            },
+            {
+                "value": "paid",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\LeaseApplicationStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "approved",
+                "color": "success"
+            },
+            {
+                "value": "review",
+                "color": "info"
+            },
+            {
+                "value": "rejected",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\LeaseStatus",
+        "cases": [
+            {
+                "value": "active",
+                "color": "success"
+            },
+            {
+                "value": "suspended",
+                "color": "secondary"
+            },
+            {
+                "value": "terminated",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\LpoStatus",
+        "cases": [
+            {
+                "value": "lpo",
+                "color": "primary"
+            },
+            {
+                "value": "delivered",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\PaymentVoucherPayableAs",
+        "cases": [
+            {
+                "value": "vendor",
+                "color": "primary"
+            },
+            {
+                "value": "landlord",
+                "color": "info"
+            },
+            {
+                "value": "tenant",
+                "color": "success"
+            },
+            {
+                "value": "other",
+                "color": "secondary"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\PaymentVoucherStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "released",
+                "color": "info"
+            },
+            {
+                "value": "paid",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\PayoutStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "approved",
+                "color": "primary"
+            },
+            {
+                "value": "settled",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\Priority",
+        "cases": [
+            {
+                "value": "high",
+                "color": "danger"
+            },
+            {
+                "value": "normal",
+                "color": "primary"
+            },
+            {
+                "value": "low",
+                "color": "success"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ProcurementRequestStatus",
+        "cases": [
+            {
+                "value": "new",
+                "color": "info"
+            },
+            {
+                "value": "request",
+                "color": "secondary"
+            },
+            {
+                "value": "order",
+                "color": "primary"
+            },
+            {
+                "value": "quotes-review",
+                "color": "primary"
+            },
+            {
+                "value": "lpo",
+                "color": "success"
+            },
+            {
+                "value": "rejected",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ProcurementRequestStepStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": null
+            },
+            {
+                "value": "approved",
+                "color": null
+            },
+            {
+                "value": "review",
+                "color": null
+            },
+            {
+                "value": "rejected",
+                "color": null
+            },
+            {
+                "value": "waiting-quotes",
+                "color": null
+            },
+            {
+                "value": "quotes-review",
+                "color": null
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ProjectMilestoneStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "in-progress",
+                "color": "primary"
+            },
+            {
+                "value": "late",
+                "color": "warning"
+            },
+            {
+                "value": "stuck",
+                "color": "danger"
+            },
+            {
+                "value": "completed",
+                "color": "success"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ProjectStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "warning"
+            },
+            {
+                "value": "in-progress",
+                "color": "primary"
+            },
+            {
+                "value": "completed",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "secondary"
+            },
+            {
+                "value": "stalled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ProjectTaskPriority",
+        "cases": [
+            {
+                "value": "low",
+                "color": "success"
+            },
+            {
+                "value": "normal",
+                "color": "primary"
+            },
+            {
+                "value": "high",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ProjectTaskStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "in-progress",
+                "color": "primary"
+            },
+            {
+                "value": "late",
+                "color": "warning"
+            },
+            {
+                "value": "stuck",
+                "color": "danger"
+            },
+            {
+                "value": "done",
+                "color": "success"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ReceiptAllocationStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "confirmed",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "cancelled"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\ReceiptStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "confirmed",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\RemittanceStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "unpaid",
+                "color": "warning"
+            },
+            {
+                "value": "paid",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\SensorCurrentStatus",
+        "cases": [
+            {
+                "value": "ok",
+                "color": "success"
+            },
+            {
+                "value": "warning",
+                "color": "warning"
+            },
+            {
+                "value": "critical",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\SettlementStatus",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "info"
+            },
+            {
+                "value": "settled",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\SpaceStatus",
+        "cases": [
+            {
+                "value": "available",
+                "color": "success"
+            },
+            {
+                "value": "occupied",
+                "color": "secondary"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\Status",
+        "cases": [
+            {
+                "value": "pending",
+                "color": "secondary"
+            },
+            {
+                "value": "active",
+                "color": "success"
+            },
+            {
+                "value": "suspended",
+                "color": "warning"
+            },
+            {
+                "value": "expired",
+                "color": "danger"
+            },
+            {
+                "value": "inactive",
+                "color": "danger"
+            },
+            {
+                "value": "in-use",
+                "color": "success"
+            },
+            {
+                "value": "decommissioned",
+                "color": "danger"
+            },
+            {
+                "value": "running",
+                "color": "success"
+            },
+            {
+                "value": "off",
+                "color": "danger"
+            },
+            {
+                "value": "terminated",
+                "color": "danger"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            },
+            {
+                "value": "available",
+                "color": "success"
+            },
+            {
+                "value": "occupied",
+                "color": "danger"
+            },
+            {
+                "value": "confirmed",
+                "color": "success"
+            },
+            {
+                "value": "unpaid",
+                "color": "danger"
+            },
+            {
+                "value": "partially paid",
+                "color": "danger"
+            },
+            {
+                "value": "applied",
+                "color": "success"
+            },
+            {
+                "value": "paid",
+                "color": "success"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\SystemService",
+        "cases": [
+            {
+                "value": "sensor",
+                "color": "primary"
+            },
+            {
+                "value": "gps",
+                "color": "primary"
+            },
+            {
+                "value": "leasing",
+                "color": "primary"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\SystemType",
+        "cases": [
+            {
+                "value": "first-party",
+                "color": "success"
+            },
+            {
+                "value": "third-party",
+                "color": "warning"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\TenantStatementStatus",
+        "cases": [
+            {
+                "value": "confirmed",
+                "color": "success"
+            },
+            {
+                "value": "cancelled",
+                "color": "danger"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\TicketStatus",
+        "cases": [
+            {
+                "value": "closed",
+                "color": "success"
+            },
+            {
+                "value": "open",
+                "color": "primary"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\TripStatus",
+        "cases": [
+            {
+                "value": "open",
+                "color": "success"
+            },
+            {
+                "value": "full",
+                "color": "warning"
+            },
+            {
+                "value": "in-progress",
+                "color": "primary"
+            },
+            {
+                "value": "completed",
+                "color": "secondary"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\UtilityType",
+        "cases": [
+            {
+                "value": "electricity",
+                "color": "success"
+            },
+            {
+                "value": "gas",
+                "color": "default"
+            },
+            {
+                "value": "water",
+                "color": "primary"
+            },
+            {
+                "value": "other",
+                "color": "warning"
+            }
+        ]
+    },
+    {
+        "class": "App\\Enums\\VehicleStatus",
+        "cases": [
+            {
+                "value": "in use",
+                "color": "success"
+            },
+            {
+                "value": "decommissioned",
+                "color": "danger"
+            },
+            {
+                "value": "suspended",
+                "color": "warning"
+            }
+        ]
+    }
+]
