@@ -83,6 +83,7 @@ Endpoints currently implemented:
 
 - `GET /lpos`
 - `GET /lpos/{lpo}`
+- `PUT /lpos/{lpo}/review`
 
 Notes:
 
@@ -99,6 +100,35 @@ List query support:
   - `include=items`
 - Fields: not supported
 
+### Review submitted LPO document
+
+`PUT /api/v1/app/{company}/property-management/procurement/lpos/{lpo}/review`
+
+Purpose:
+
+- Used by App users to approve or reject a vendor-submitted LPO delivery document.
+
+Request body (intended contract):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `status` | Yes | string | `approved`, `rejected` |
+| `comments` | Conditional | string | Recommended and typically required when `status=rejected` |
+
+Suggested responses:
+
+- Approve success:
+  - `message`: `LPO document approved successfully.`
+  - `lpo.status.value`: expected transition to delivered/approved workflow state
+- Reject success:
+  - `message`: `LPO document rejected successfully.`
+  - `lpo.status.value`: expected transition to review/rejected workflow state
+
+Current backend state:
+
+- Route exists, but the handler is currently a placeholder in `routes/Api/v1/app/property-management.php`.
+- Final payload validation and exact response structure should be confirmed once controller/action is implemented.
+
 ## Contracts
 
 Endpoints:
@@ -108,7 +138,7 @@ Endpoints:
 - `GET /contracts/{contract}`
 - `PUT/PATCH /contracts/{contract}`
 - `DELETE /contracts/{contract}`
-- `PUT /contracts/{contract}/status`
+- `PATCH /contracts/{contract}/status`
 
 List query support:
 

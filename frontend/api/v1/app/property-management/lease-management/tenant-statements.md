@@ -8,29 +8,18 @@ Base route:
 
 ## Endpoints
 
-- `GET /tenant-statements` (list)
+- `GET /tenant-statements` (balance + transactions)
 - `GET /tenant-statements/{tenantStatement}` (show)
 
-## Statement Types
-
-There are two statement modes on the list endpoint:
-
-1. User-level statement summary
-   - Filter using `filter[tenant_id]`
-   - Returns statement balance grouped at user level
-2. Lease-level statement summary
-   - Filter using `filter[user_id]`
-   - Returns statement balance for a specific lease context
-
-## List Statements
+## List Statements (Balance + Transactions)
 
 `GET /api/v1/app/{company}/property-management/lease-management/tenant-statements`
 
 Supported query params:
 
 - Filters:
-  - `filter[tenant_id]`
-  - `filter[user_id]`
+  - `filter[tenant_id]` (required)
+  - `filter[lease_id]` (optional)
 - Pagination:
   - `per_page`
   - `page`
@@ -38,23 +27,28 @@ Supported query params:
 Example requests:
 
 - `GET /api/v1/app/12/property-management/lease-management/tenant-statements?filter[tenant_id]=77`
-- `GET /api/v1/app/12/property-management/lease-management/tenant-statements?filter[user_id]=77`
+- `GET /api/v1/app/12/property-management/lease-management/tenant-statements?filter[tenant_id]=77&filter[lease_id]=101`
 
 Example list response:
 
 ```json
 {
-  "data": [
-    {
-      "tenant": {
-        "id": 77,
-        "name": "Jane Tenant"
-      },
-      "balance": "14500"
+  "data": {
+    "balance": 14500,
+    "transactions": {
+      "data": [
+        {
+          "id": 3201,
+          "tenant": {
+            "id": 77,
+            "name": "Jane Tenant"
+          }
+        }
+      ],
+      "links": {},
+      "meta": {}
     }
-  ],
-  "links": {},
-  "meta": {}
+  }
 }
 ```
 
@@ -75,4 +69,3 @@ Example show response:
   }
 }
 ```
-
