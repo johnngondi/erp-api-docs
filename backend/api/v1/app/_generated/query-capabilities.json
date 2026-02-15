@@ -1,0 +1,408 @@
+[
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Asset\\AssetController.php",
+        "Filters":  "[\u0027id\u0027, \u0027name\u0027, \u0027facility_id\u0027, \u0027asset_type_id\u0027, \u0027created_at\u0027, \u0027status\u0027, \u0027warranty_status\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027created_at\u0027, \u0027purchase_price\u0027, \u0027warranty_status\u0027, \u0027warranty_expiration_at\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Asset\\Insurance\\InsurancePolicyController.php",
+        "Filters":  "[\u0027id\u0027, \u0027policy_number\u0027, \u0027start_date\u0027, \u0027end_date\u0027, \u0027owner_id\u0027]",
+        "Sorts":  "[\u0027start_date\u0027, \u0027end_date\u0027, \u0027created_at\u0027, \u0027premium_pa\u0027, \u0027coverage_amount\u0027]",
+        "Includes":  "[\u0027assets\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Asset\\Insurance\\InsuranceProviderController.php",
+        "Filters":  "[\u0027name\u0027, \u0027insurance_company_name\u0027, \u0027contact_person\u0027]",
+        "Sorts":  "",
+        "Includes":  "[\u0027insurancePolicies\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Fleet\\Booking\\BookingController.php",
+        "Filters":  "[\r\n                \u0027id\u0027, \u0027trip_id\u0027, \u0027user_id\u0027, \u0027pickup_city_id\u0027, \u0027status\u0027, \u0027pickup_at\u0027,\r\n                \u0027luggage_size\u0027, \u0027has_luggage\u0027, \u0027trip.driver_id\u0027\r\n            ]",
+        "Sorts":  "[\u0027id\u0027, \u0027pickup_at\u0027, \u0027status\u0027]",
+        "Includes":  "[\u0027trip.vehicle\u0027, \u0027trip.driver\u0027, \u0027user\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Fleet\\Driver\\DriverController.php",
+        "Filters":  "[\u0027id\u0027, \u0027user.name\u0027, \u0027user.email\u0027, \u0027user.phone\u0027, \u0027facility_id\u0027, \u0027facility.name\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027name\u0027, \u0027experience\u0027]",
+        "Includes":  "[\u0027vehicles\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Fleet\\Trip\\TripController.php",
+        "Filters":  "[\r\n                \u0027id\u0027, \u0027departure.name\u0027, \u0027destination.name\u0027, \u0027vehicle_id\u0027, \u0027vehicle.license_plate\u0027,\r\n                \u0027driver_id\u0027, \u0027driver.name\u0027, \u0027departure_city_id\u0027, \u0027destination_city_id\u0027,\r\n                \u0027depart_at\u0027, \u0027arrive_at\u0027, \u0027status\u0027, \u0027stops.city_id\u0027\r\n            ]",
+        "Sorts":  "[\u0027id\u0027, \u0027depart_at\u0027, \u0027arrive_at\u0027, \u0027status\u0027]",
+        "Includes":  "[\u0027bookings\u0027,\u0027stops\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Fleet\\Trip\\TripStopController.php",
+        "Filters":  "[\u0027city.name\u0027, \u0027city_id\u0027]",
+        "Sorts":  "",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Fleet\\Vehicle\\VehicleController.php",
+        "Filters":  "[\r\n                \u0027id\u0027, \u0027license_plate\u0027, \u0027description\u0027, \u0027vehicle_type\u0027, \u0027ownership_type\u0027, \u0027vehicle_make_id\u0027,\r\n                \u0027vehicle_category_id\u0027, \u0027facility_id\u0027, \u0027facility.name\u0027\r\n            ]",
+        "Sorts":  "[\u0027id\u0027, \u0027license_plate\u0027]",
+        "Includes":  "[\u0027drivers\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\PowerManagement\\PowerSourceActivityLogController.php",
+        "Filters":  "[\u0027id\u0027, \u0027power_source_id\u0027, \u0027start_at\u0027, \u0027stop_at\u0027, \u0027power_generated\u0027 ]",
+        "Sorts":  "[\u0027id\u0027, \u0027power_source_id\u0027, \u0027start_at\u0027, \u0027stop_at\u0027, \u0027power_generated\u0027]",
+        "Includes":  "",
+        "Fields":  "[\u0027id\u0027, \u0027power_source_id\u0027, \u0027start_at\u0027, \u0027stop_at\u0027, \u0027power_generated\u0027]"
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\PowerManagement\\PowerSourceController.php",
+        "Filters":  "\u0027power_source_type_id\u0027, \u0027name\u0027, \u0027co2_per_kwh\u0027, \u0027max_generation_capacity\u0027, \u0027commissioned_at\u0027,\r\n                \u0027asset_id\u0027, \u0027has_maintenance_contract\u0027, \u0027maintenance_contract_id\u0027, \u0027status\u0027, \u0027activity_status\u0027, \u0027created_at\u0027",
+        "Sorts":  "\u0027created_at\u0027, \u0027co2_per_kwh\u0027, \u0027max_generation_capacity\u0027, \u0027activity_status\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Sensor\\SensorActionController.php",
+        "Filters":  "[\u0027action_trigger\u0027, \u0027action_to_take\u0027]",
+        "Sorts":  "",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Sensor\\SensorController.php",
+        "Filters":  "[\u0027asset_id\u0027, \u0027facility_id\u0027, \u0027facility_space_id\u0027, \u0027type\u0027, \u0027current_status\u0027]",
+        "Sorts":  "",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Sensor\\SensorServerDeviceController.php",
+        "Filters":  "[\u0027facility_id\u0027]",
+        "Sorts":  "",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Settings\\UtilityManagement\\UtilityController.php",
+        "Filters":  "\u0027id\u0027, \u0027name\u0027, \u0027description\u0027, \u0027utility_type\u0027, \u0027stock_keeping_unit_id\u0027,\r\n                     \u0027is_regulated\u0027, \u0027default_price_per_unit\u0027, \u0027created_at\u0027",
+        "Sorts":  "\u0027id\u0027, \u0027name\u0027, \u0027description\u0027,\u0027utility_type\u0027, \u0027stock_keeping_unit_id\u0027,\u0027is_regulated\u0027,\r\n                        \u0027default_price_per_unit\u0027, \u0027created_at\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\Settings\\UtilityManagement\\UtilityPriceController.php",
+        "Filters":  "\u0027currency_id\u0027, \u0027price_per_unit\u0027, \u0027facility_id\u0027, \u0027created_at\u0027",
+        "Sorts":  "\u0027currency_id\u0027, \u0027price_per_unit\u0027, \u0027facility_id\u0027, \u0027created_at\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\UtilityManagement\\UtilityMeterController.php",
+        "Filters":  "\u0027meter_number\u0027, \u0027meter_serial_number\u0027, \u0027name\u0027, \u0027utility_id\u0027, \u0027reading_unit\u0027, \u0027status\u0027, \u0027created_at\u0027",
+        "Sorts":  "\u0027meter_number\u0027, \u0027meter_serial_number\u0027, \u0027name\u0027, \u0027utility_id\u0027, \u0027reading_unit\u0027, \u0027status\u0027, \u0027created_at\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\FacilityManagement\\UtilityManagement\\UtilityMeterReadingController.php",
+        "Filters":  "\u0027current_reading\u0027, \u0027utility_meter_id\u0027, \u0027created_at\u0027",
+        "Sorts":  "\u0027current_reading\u0027, \u0027utility_meter_id\u0027, \u0027created_at\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\ProjectManagement\\ProjectController.php",
+        "Filters":  "[\r\n                \u0027id\u0027,\u0027title\u0027, \u0027status\u0027, \u0027facility_id\u0027, \u0027total_budget\u0027,\r\n                \u0027created_at\u0027, \u0027initiated_at\u0027, \u0027estimated_start_date\u0027,\r\n                \u0027completed_at\u0027, \u0027estimated_end_date\u0027\r\n            ]",
+        "Sorts":  "[\r\n                \u0027id\u0027, \u0027title\u0027, \u0027total_budget\u0027, \u0027created_at\u0027, \u0027initiated_at\u0027,\r\n                \u0027estimated_start_date\u0027, \u0027completed_at\u0027, \u0027estimated_end_date\u0027\r\n            ]",
+        "Includes":  "[]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\ProjectManagement\\ProjectMilestoneController.php",
+        "Filters":  "[\u0027title\u0027, \u0027status\u0027]",
+        "Sorts":  "[\u0027title\u0027, \u0027status\u0027, \u0027estimated_start_date\u0027, \u0027started_at\u0027, \u0027completed_at\u0027, \u0027created_at\u0027]",
+        "Includes":  "[\u0027projectTasks\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\ProjectManagement\\ProjectTaskController.php",
+        "Filters":  "[\u0027title\u0027, \u0027status\u0027, \u0027priority\u0027, \u0027assigned_to_id\u0027, \u0027estimated_duration_in_days\u0027]",
+        "Sorts":  "[\u0027title\u0027, \u0027status\u0027, \u0027estimated_start_date\u0027, \u0027started_at\u0027, \u0027completed_at\u0027, \u0027created_at\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\ProjectManagement\\ProjectUpdateController.php",
+        "Filters":  "[\u0027title\u0027, \u0027description\u0027]",
+        "Sorts":  "[\u0027created_at\u0027, \u0027updated_at\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Facility\\FacilityBlockController.php",
+        "Filters":  "[\u0027id\u0027, \u0027name\u0027, \u0027created_at\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027name\u0027, \u0027created_at\u0027]",
+        "Includes":  "",
+        "Fields":  "[\r\n                \u0027id\u0027, \u0027name\u0027, \u0027has_wings\u0027, \u0027leasable_space\u0027, \u0027common_space\u0027, \u0027landlord_space\u0027,\r\n                \u0027allocated_leasable_space\u0027, \u0027allocated_common_space\u0027, \u0027allocated_landlord_space\u0027\r\n            ]"
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Facility\\FacilityController.php",
+        "Filters":  "[\u0027id\u0027, \u0027name\u0027, \u0027landlord_id\u0027, \u0027landlord.name\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027name\u0027, \u0027created_at\u0027]",
+        "Includes":  "[\u0027landlord\u0027, \u0027facilityType\u0027, \u0027country\u0027, \u0027city\u0027]; []",
+        "Fields":  "[\r\n                    \u0027id\u0027,\u0027name\u0027, \u0027landlord_id\u0027, \u0027facility_type_id\u0027, \u0027description\u0027, \u0027common_space\u0027, \u0027leasable_space\u0027,\r\n                    \u0027landlord_space\u0027, \u0027total_space\u0027, \u0027space_unit\u0027, \u0027country_id\u0027, \u0027status\u0027, \u0027created_at\u0027,\r\n                    \u0027country_id\u0027, \u0027city_id\u0027, \u0027construction_date\u0027\r\n                ]"
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Facility\\FacilitySpacesController.php",
+        "Filters":  "[\r\n                // filter[status]=occupied\r\n                AllowedFilter::exact(\u0027status\u0027",
+        "Sorts":  "[\u0027name\u0027, \u0027size\u0027, \u0027status\u0027, \u0027space_type\u0027, \u0027created_at\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Facility\\FacilityUtilityMeterController.php",
+        "Filters":  "\u0027meter_number\u0027, \u0027meter_serial_number\u0027, \u0027name\u0027, \u0027utility_id\u0027, \u0027reading_unit\u0027, \u0027status\u0027, \u0027created_at\u0027",
+        "Sorts":  "\u0027meter_number\u0027, \u0027meter_serial_number\u0027, \u0027name\u0027, \u0027utility_id\u0027, \u0027reading_unit\u0027, \u0027status\u0027, \u0027created_at\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Facility\\FacilityUtilityPriceController.php",
+        "Filters":  "[\u0027utility_id\u0027, \u0027currency_id\u0027, \u0027price_per_unit\u0027, \u0027created_at\u0027]",
+        "Sorts":  "[\u0027utility_id\u0027, \u0027currency_id\u0027, \u0027price_per_unit\u0027, \u0027created_at\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Facility\\Space\\FacilitySpaceController.php",
+        "Filters":  "[\u0027id\u0027, \u0027name\u0027, \u0027space_type\u0027, \u0027size\u0027, \u0027status\u0027, \u0027created_at\u0027, \u0027facility_floor_id\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027name\u0027, \u0027size\u0027, \u0027status\u0027, \u0027created_at\u0027]",
+        "Includes":  "",
+        "Fields":  "[\r\n                \u0027id\u0027, \u0027name\u0027, \u0027space_type\u0027, \u0027size\u0027, \u0027status\u0027, \u0027created_at\u0027\r\n            ]"
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Finance\\Bills\\BillController.php",
+        "Filters":  "[\r\n                \u0027id\u0027, \u0027invoice_number\u0027, \u0027tax_invoice_number\u0027, \u0027type\u0027, \u0027status\u0027,\r\n                \u0027facility_id\u0027, \u0027expense_type_id\u0027, \u0027vendor_id\u0027\r\n            ]",
+        "Sorts":  "[\u0027id\u0027, \u0027invoice_number\u0027, \u0027invoice_date\u0027]",
+        "Includes":  "[\u0027items\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Finance\\Expenses\\ExpenseController.php",
+        "Filters":  "[\u0027id\u0027, \u0027invoice_number\u0027, \u0027notes\u0027, \u0027facility_id\u0027, \u0027vendor_id\u0027, \u0027created_at\u0027, \u0027transaction_at\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027transaction_at\u0027, \u0027amount\u0027, \u0027created_at\u0027]",
+        "Includes":  "[\u0027taxType\u0027, \u0027invoiceUpload\u0027, \u0027creatingUser\u0027, \u0027bill\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Finance\\PaymentVouchers\\PaymentVoucherController.php",
+        "Filters":  "[\r\n                \u0027id\u0027, \u0027status\u0027, \u0027payable_as\u0027, \u0027payable_user_id\u0027, \u0027created_at\u0027\r\n            ]",
+        "Sorts":  "[\u0027id\u0027, \u0027amount\u0027, \u0027paid_at\u0027, \u0027released_at\u0027, \u0027created_at\u0027]",
+        "Includes":  "[\u0027paymentVoucherItems\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Finance\\Remittances\\RemittanceController.php",
+        "Filters":  "[\u0027id\u0027, \u0027status\u0027, \u0027facility_id\u0027, \u0027landlord_id\u0027, \u0027period_from\u0027, \u0027period_to\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027period_from\u0027, \u0027period_to\u0027]",
+        "Includes":  "[\u0027collections\u0027, \u0027expenses\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Finance\\Settlement\\SettlementController.php",
+        "Filters":  "[\u0027id\u0027, \u0027status\u0027, \u0027debit_bank_account_id\u0027, \u0027created_at\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027created_at\u0027]",
+        "Includes":  "[\u0027paymentVouchers\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseApplications\\LeaseApplicationController.php",
+        "Filters":  "[\u0027applicant_type\u0027, \u0027applicant_name\u0027, \u0027status\u0027, \u0027id\u0027, \u0027user_id\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027applicant_name\u0027, \u0027status\u0027]",
+        "Includes":  "[\u0027guarantors\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\Billing\\CreditNoteController.php",
+        "Filters":  "\u0027id\u0027, \u0027lease_id\u0027, \u0027invoice_id\u0027, \u0027credit_note_id\u0027, \u0027due_at\u0027, \u0027cu_reference_number\u0027, \u0027is_credit\u0027, \u0027paid\u0027, \u0027cu_invoice_number\u0027, \u0027status\u0027",
+        "Sorts":  "\u0027lease_id\u0027, \u0027invoice_id\u0027, \u0027credit_note_id\u0027, \u0027due_at\u0027, \u0027cu_reference_number\u0027, \u0027is_credit\u0027, \u0027paid\u0027, \u0027cu_invoice_number\u0027, \u0027status\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\Billing\\InvoiceController.php",
+        "Filters":  "[\r\n                \u0027lease_id\u0027,\r\n                \u0027due_at\u0027,\r\n                \u0027cu_reference_number\u0027,\r\n                \u0027is_credit\u0027,\r\n                \u0027paid\u0027,\r\n                \u0027cu_invoice_number\u0027,\r\n                \u0027cu_serial_number\u0027,\r\n                \u0027id\u0027,\r\n                \u0027status\u0027,\r\n                AllowedFilter::exact(\u0027user_id\u0027, \u0027lease.user_id\u0027",
+        "Sorts":  "\u0027lease_id\u0027, \u0027due_at\u0027, \u0027cu_reference_number\u0027, \u0027is_credit\u0027, \u0027paid\u0027, \u0027cu_invoice_number\u0027, \u0027cu_serial_number\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\Billing\\LeaseBillingController.php",
+        "Filters":  "\u0027lease_id\u0027, \u0027invoice_id\u0027, \u0027lease_component_id\u0027, \u0027amount\u0027, \u0027tax\u0027, \u0027total\u0027, \u0027transaction_date\u0027",
+        "Sorts":  "\u0027lease_id\u0027, \u0027invoice_id\u0027, \u0027lease_component_id\u0027, \u0027amount\u0027, \u0027tax\u0027, \u0027total\u0027, \u0027transaction_date\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\Billing\\TenantStatementController.php",
+        "Filters":  "[\r\n                AllowedFilter::exact(\u0027tenant_id\u0027, \u0027lease_id\u0027",
+        "Sorts":  "",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\LeaseCollection\\LeaseCollectionController.php",
+        "Filters":  "[\u0027id\u0027, \u0027lease_id\u0027, \u0027receipt_allocation_id\u0027, \u0027lease_item_component_id\u0027, \u0027amount\u0027, \u0027tax\u0027, \u0027total\u0027, \u0027transaction_date\u0027, \u0027invoice_item_id\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027lease_id\u0027, \u0027receipt_allocation_id\u0027, \u0027lease_item_component_id\u0027, \u0027amount\u0027, \u0027tax\u0027, \u0027total\u0027, \u0027transaction_date\u0027, \u0027invoice_item_id\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\LeaseController.php",
+        "Filters":  "\u0027user_id\u0027, \u0027status\u0027, \u0027created_at\u0027, \u0027start_at\u0027, \u0027end_at\u0027, \u0027next_due_at\u0027, \u0027billing_cycle\u0027",
+        "Sorts":  "\u0027user_id\u0027, \u0027status\u0027, \u0027created_at\u0027, \u0027start_at\u0027, \u0027end_at\u0027, \u0027next_due_at\u0027, \u0027billing_cycle\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\LeaseDeposit\\LeaseDepositController.php",
+        "Filters":  "\u0027id\u0027, \u0027lease_item_component_id\u0027, \u0027created_at\u0027",
+        "Sorts":  "\u0027id\u0027, \u0027lease_item_component_id\u0027, \u0027created_at\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\LeaseEscalation\\LeaseEscalationController.php",
+        "Filters":  "[\u0027id\u0027, \u0027lease_id\u0027, \u0027lease_component_id\u0027, \u0027start_at\u0027, \u0027cycle\u0027, \u0027period\u0027, \u0027rate\u0027, \u0027next_due\u0027, \u0027created_at\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027lease_id\u0027, \u0027lease_component_id\u0027, \u0027start_at\u0027, \u0027cycle\u0027, \u0027period\u0027, \u0027rate\u0027, \u0027next_due\u0027, \u0027created_at\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\LeaseItem\\LeaseItemComponentController.php",
+        "Filters":  "[\u0027lease_item_id\u0027, \u0027lease_component_id\u0027, \u0027cost_per_sqft\u0027,\r\n                \u0027cost_per_month\u0027, \u0027tax_id\u0027, \u0027hs_code\u0027]",
+        "Sorts":  "[\u0027lease_item_id\u0027, \u0027lease_component_id\u0027, \u0027cost_per_sqft\u0027,\r\n                \u0027cost_per_month\u0027, \u0027tax_id\u0027, \u0027hs_code\u0027]",
+        "Includes":  "",
+        "Fields":  "[\u0027id\u0027,\u0027lease_item_id\u0027, \u0027lease_component_id\u0027, \u0027cost_per_sqft\u0027,\r\n                \u0027cost_per_month\u0027, \u0027tax_id\u0027, \u0027hs_code\u0027]"
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\LeaseItem\\LeaseItemController.php",
+        "Filters":  "[\u0027lease_id\u0027, \u0027facility_space_id\u0027]",
+        "Sorts":  "[\u0027lease_id\u0027, \u0027facility_space_id\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\LeaseOpeningBalance\\LeaseOpeningBalanceController.php",
+        "Filters":  "\u0027id\u0027, \u0027lease_component_id\u0027, \u0027opening_balance_at\u0027, \u0027created_at\u0027",
+        "Sorts":  "\u0027id\u0027, \u0027lease_component_id\u0027, \u0027opening_balance_at\u0027, \u0027created_at\u0027, \u0027amount\u0027, \u0027billed_amount\u0027",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\LeaseManagement\\Receipting\\ReceiptController.php",
+        "Filters":  "[\u0027id\u0027, \u0027receiving_account_id\u0027, \u0027transaction_number\u0027, \u0027transaction_date\u0027, \u0027payment_method_id\u0027, \u0027paying_user_id\u0027, \u0027amount\u0027, \u0027allocated\u0027, \u0027balance\u0027, \u0027receiving_user_id\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027receiving_account_id\u0027, \u0027transaction_number\u0027, \u0027transaction_date\u0027, \u0027payment_method_id\u0027, \u0027paying_user_id\u0027, \u0027amount\u0027, \u0027allocated\u0027, \u0027balance\u0027, \u0027receiving_user_id\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Procurement\\Contract\\ContractController.php",
+        "Filters":  "[\r\n                    \u0027id\u0027, \u0027title\u0027, \u0027status\u0027, \u0027start_at\u0027, \u0027end_at\u0027, \u0027created_at\u0027,\r\n                    \u0027facility_id\u0027, \u0027expense_type_id\u0027, \u0027expense_sub_type_id\u0027, \u0027asset_id\u0027\r\n                ]",
+        "Sorts":  "[\u0027id\u0027, \u0027title\u0027, \u0027status\u0027, \u0027start_at\u0027, \u0027end_at\u0027, \u0027created_at\u0027]",
+        "Includes":  "[\u0027bills\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Procurement\\Inventory\\InventoryController.php",
+        "Filters":  "[\r\n                    \u0027facility_id\u0027, \u0027inventory_category_id\u0027,\r\n                    \u0027name\u0027, \u0027current_stock\u0027, \u0027storage_room_id\u0027,\r\n                    \u0027shelf_id\u0027\r\n                ]",
+        "Sorts":  "",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Procurement\\Inventory\\PurchaseItemController.php",
+        "Filters":  "[\r\n                    \u0027id\u0027, \u0027inventory_category_id\u0027,\r\n                    \u0027name\u0027, \u0027currency_id\u0027, \u0027tax_id\u0027,\r\n                    \u0027base_price\u0027\r\n                ]",
+        "Sorts":  "",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Procurement\\LPO\\ProcurementLpoController.php",
+        "Filters":  "[\r\n                \u0027id\u0027, \u0027procurement_request_id\u0027, \u0027assigned_technician_id\u0027, \u0027created_at\u0027, \u0027delivery_at\u0027, \u0027delivered_at\u0027, \u0027rating\u0027\r\n            ]",
+        "Sorts":  "[\u0027id\u0027, \u0027created_at\u0027, \u0027amount\u0027, \u0027delivery_at\u0027]",
+        "Includes":  "[\u0027items\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Procurement\\Request\\ProcurementRequestController.php",
+        "Filters":  "[\r\n                \u0027id\u0027, \u0027title\u0027, \u0027ticket_id\u0027, \u0027facility_id\u0027, \u0027asset_id\u0027, \u0027expense_type_id\u0027, \u0027expense_sub_type_id\u0027, \u0027created_at\u0027,\r\n                \u0027priority\u0027, \u0027type\u0027\r\n            ]",
+        "Sorts":  "[\u0027id\u0027, \u0027title\u0027, \u0027type\u0027, \u0027created_at\u0027, \u0027priority\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Procurement\\Request\\ProcurementRequestItemController.php",
+        "Filters":  "[\u0027id\u0027, \u0027inventory_id\u0027, \u0027quantity\u0027, \u0027selected_vendor_id\u0027]",
+        "Sorts":  "",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Settings\\Finance\\Bank\\BankAccountController.php",
+        "Filters":  "[\u0027type\u0027, \u0027account_name\u0027, \u0027account_number\u0027, \u0027status\u0027, \u0027user_group_id\u0027, \u0027user_id\u0027, \u0027bank_branch_id\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027account_name\u0027, \u0027status\u0027]",
+        "Includes":  "[\u0027userGroup\u0027, \u0027user\u0027, \u0027bankBranch\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Settings\\Finance\\ExpenseTypes\\ExpenseTypeController.php",
+        "Filters":  "[\r\n                    \u0027id\u0027, \u0027name\u0027, \u0027description\u0027, \u0027expense_category_id\u0027, \u0027is_procurable\u0027,\r\n                    \u0027can_have_default_vendor\u0027, \u0027can_have_preferred_vendor\u0027, \u0027created_at\u0027\r\n                ]",
+        "Sorts":  "",
+        "Includes":  "[\u0027expenseSubTypes\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Settings\\LeaseManagement\\LeaseComponentsPaymentPriorityController.php",
+        "Filters":  "[\u0027lease_component_id\u0027, \u0027facility_id\u0027]",
+        "Sorts":  "[\u0027lease_component_id\u0027, \u0027facility_id\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Settings\\Procurement\\RequestStepTemplateGroupController.php",
+        "Filters":  "[\u0027description\u0027, \u0027title\u0027, \u0027created_at\u0027, \u0027is_default\u0027, \u0027facilities\u0027]",
+        "Sorts":  "",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Ticket\\TicketController.php",
+        "Filters":  "[\u0027id\u0027, \u0027title\u0027, \u0027facility_id\u0027, \u0027asset_id\u0027, \u0027ticket_category_id\u0027, \u0027status\u0027, \u0027priority\u0027, \u0027created_at\u0027]",
+        "Sorts":  "[\u0027id\u0027, \u0027priority\u0027, \u0027created_at\u0027, \u0027status\u0027]",
+        "Includes":  "",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\Users\\RoleController.php",
+        "Filters":  "[\u0027name\u0027, \u0027created_at\u0027, \u0027description\u0027, \u0027user_group_id\u0027]",
+        "Sorts":  "",
+        "Includes":  "[\u0027permissions\u0027]",
+        "Fields":  ""
+    },
+    {
+        "File":  "app\\Http\\Controllers\\Api\\V1\\App\\Users\\UserGroupController.php",
+        "Filters":  "[\u0027id\u0027, \u0027title\u0027, \u0027description\u0027]",
+        "Sorts":  "",
+        "Includes":  "[\u0027users\u0027]",
+        "Fields":  ""
+    }
+]

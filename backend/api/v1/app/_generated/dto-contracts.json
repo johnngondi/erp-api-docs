@@ -1,0 +1,3731 @@
+[
+    {
+        "class": "AssetData",
+        "fqcn": "App\\Data\\AssetData",
+        "fields": [
+            {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "facility_space_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "asset_type_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "purchased_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "currency",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "purchase_price",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "value_change_type",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "appreciate",
+                    "depreciate"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "value_change_rate",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "value_change_duration",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "last_maintenance_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "current_value",
+                "type": "Spatie\\LaravelData\\Optional|float",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "last_value_change_at",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date",
+                    "RequiredUnless"
+                ]
+            },
+            {
+                "name": "warranty_status",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [
+                    "active",
+                    "inactive"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "warranty_period_in_days",
+                "type": "Spatie\\LaravelData\\Optional|float|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "has_inventory",
+                "type": "Spatie\\LaravelData\\Optional|bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "description",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "photo",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "BankAccountData",
+        "fqcn": "App\\Data\\BankAccountData",
+        "fields": [
+            {
+                "name": "bank_branch_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "account_name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "account_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "type",
+                "type": "?string",
+                "required": false,
+                "enum": [
+                    "system",
+                    "user"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "user_group_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "user_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "alias",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "status",
+                "type": "string",
+                "required": false,
+                "enum": [
+                    "active",
+                    "inactive"
+                ],
+                "rules": [
+                    "In"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "BillData",
+        "fqcn": "App\\Data\\BillData",
+        "fields": [
+            {
+                "name": "vendor_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "expense_type_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "currency_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "type",
+                "type": "string",
+                "required": false,
+                "enum": [
+                    "lpo",
+                    "contract",
+                    "liability",
+                    "other"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "billable_type",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "billable_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "notes",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "invoice_number",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "invoice_date",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "invoice_upload_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "tax_invoice_number",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "invoice_uploaded_at",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "expense_posted_at",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "tax_regime",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "items",
+                "type": "array",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "BookingData",
+        "fqcn": "App\\Data\\BookingData",
+        "fields": [
+            {
+                "name": "trip_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "user_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "exact_pickup_location",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Max"
+                ]
+            },
+            {
+                "name": "pickup_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date",
+                    "AfterOrEqual"
+                ]
+            },
+            {
+                "name": "seats",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "has_luggage",
+                "type": "bool",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "pickup_city_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "luggage_size",
+                "type": "?string",
+                "required": false,
+                "enum": [
+                    "small",
+                    "medium",
+                    "large",
+                    "huge"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "description",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "ContractData",
+        "fqcn": "App\\Data\\ContractData",
+        "fields": [
+            {
+                "name": "title",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Nullable"
+                ]
+            },
+            {
+                "name": "notes",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Nullable"
+                ]
+            },
+            {
+                "name": "vendor_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "start_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "period_in_days",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "type",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "fixed",
+                    "on-demand"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "amount",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "end_at",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Computed"
+                ]
+            },
+            {
+                "name": "currency_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "expense_type_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "expense_sub_type_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "asset_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "agreement_upload_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "has_tax",
+                "type": "bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "tax_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "creator_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "approver_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "status",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [
+                    "pending",
+                    "active",
+                    "suspended",
+                    "expired",
+                    "inactive"
+                ],
+                "rules": [
+                    "In"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "CreditNoteData",
+        "fqcn": "App\\Data\\CreditNoteData",
+        "fields": [
+            {
+                "name": "lease_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "due_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Date"
+                ]
+            },
+            {
+                "name": "notes",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "items",
+                "type": "array",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "invoice_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "cu_reference_number",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "is_credit",
+                "type": "Spatie\\LaravelData\\Optional|bool|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "paid",
+                "type": "Spatie\\LaravelData\\Optional|float|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "cu_invoice_number",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "cu_serial_number",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "cu_credit_note_verify_url",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "DriverData",
+        "fqcn": "App\\Data\\DriverData",
+        "fields": [
+            {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "phone",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "email",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "experience",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "license_upload_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "can_drive_manual",
+                "type": "?bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "qualified_vehicle_categories",
+                "type": "?array",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "ExpenseData",
+        "fqcn": "App\\Data\\ExpenseData",
+        "fields": [
+            {
+                "name": "vendor_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "creating_user_id",
+                "type": "?int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "notes",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "bill_id",
+                "type": "?int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "transaction_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "expense_type_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "invoice_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "invoice_upload_id",
+                "type": "?int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "tax_invoice_number",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "currency_id",
+                "type": "?int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "amount",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "tax_id",
+                "type": "?int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "paid",
+                "type": "?float",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "status",
+                "type": "string",
+                "required": false,
+                "enum": [
+                    "pending",
+                    "unpaid",
+                    "partially-paid",
+                    "paid",
+                    "cancelled"
+                ],
+                "rules": [
+                    "In"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "FacilityBlockData",
+        "fqcn": "App\\Data\\FacilityBlockData",
+        "fields": [
+            {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "has_wings",
+                "type": "Spatie\\LaravelData\\Optional|bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "leasable_space",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "common_space",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "landlord_space",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "FacilitySpaceData",
+        "fqcn": "App\\Data\\FacilitySpaceData",
+        "fields": [
+            {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "facility_floor_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "space_type",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "size",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Min"
+                ]
+            },
+            {
+                "name": "is_parking",
+                "type": "?bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "is_signage",
+                "type": "?bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "InsurancePolicyData",
+        "fqcn": "App\\Data\\InsurancePolicyData",
+        "fields": [
+            {
+                "name": "policy_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "provider_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "owner_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "negotiated_by",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "currency",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "premium_pa",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "coverage_amount",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "start_date",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "duration_in_days",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "signed_by",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "upload_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "covered_assets",
+                "type": "Spatie\\LaravelData\\Optional|array|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "InsuranceProviderData",
+        "fqcn": "App\\Data\\InsuranceProviderData",
+        "fields": [
+            {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "contact_person",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "contact_phone",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "insurance_company_name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "claim_email",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "claim_phone",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "email",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "phone",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "contact_email",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "InvoiceData",
+        "fqcn": "App\\Data\\InvoiceData",
+        "fields": [
+            {
+                "name": "lease_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "due_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Date"
+                ]
+            },
+            {
+                "name": "cu_reference_number",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "is_credit",
+                "type": "Spatie\\LaravelData\\Optional|bool|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "paid",
+                "type": "Spatie\\LaravelData\\Optional|float|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "notes",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "cu_invoice_number",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "cu_serial_number",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "cu_invoice_verify_url",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "items",
+                "type": "array",
+                "required": true,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "LeaseApplicationReviewData",
+        "fqcn": "App\\Data\\LeaseApplicationReviewData",
+        "fields": [
+            {
+                "name": "status",
+                "type": "?string",
+                "required": false,
+                "enum": [
+                    "pending",
+                    "approved",
+                    "review",
+                    "rejected"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "comments",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf"
+                ]
+            },
+            {
+                "name": "signed_agreement_upload_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists",
+                    "RequiredIf"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "LeaseComponentsPaymentPriorityData",
+        "fqcn": "App\\Data\\LeaseComponentsPaymentPriorityData",
+        "fields": [
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Numeric",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "lease_component_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Numeric",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "priority",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Numeric"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "LeaseData",
+        "fqcn": "App\\Data\\LeaseData",
+        "fields": [
+            {
+                "name": "user_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "start_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Date"
+                ]
+            },
+            {
+                "name": "period_in_years",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "period_in_months",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "billing_cycle",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "biennial",
+                    "annually",
+                    "biannual",
+                    "quarterly",
+                    "monthly",
+                    "weekly",
+                    "daily",
+                    "hourly"
+                ],
+                "rules": [
+                    "Required",
+                    "In"
+                ]
+            },
+            {
+                "name": "next_due_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Date"
+                ]
+            },
+            {
+                "name": "status",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [
+                    "active",
+                    "suspended",
+                    "terminated"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "end_at",
+                "type": "string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "currency_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "LeaseDepositData",
+        "fqcn": "App\\Data\\LeaseDepositData",
+        "fields": [
+            {
+                "name": "lease_item_component_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "amount",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "billed",
+                "type": "?bool",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "LeaseEscalationData",
+        "fqcn": "App\\Data\\LeaseEscalationData",
+        "fields": [
+            {
+                "name": "lease_component_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "start_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Date"
+                ]
+            },
+            {
+                "name": "cycle",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "days",
+                    "weeks",
+                    "months",
+                    "years"
+                ],
+                "rules": [
+                    "Required",
+                    "In"
+                ]
+            },
+            {
+                "name": "period",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "rate",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "next_due",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Date"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "LeaseItemComponentData",
+        "fqcn": "App\\Data\\LeaseItemComponentData",
+        "fields": [
+            {
+                "name": "lease_component_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "tax_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "cost_per_sqft",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "cost_per_month",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "hs_code",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "LeaseItemData",
+        "fqcn": "App\\Data\\LeaseItemData",
+        "fields": [
+            {
+                "name": "facility_space_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "components",
+                "type": "array",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "LeaseOpeningBalanceData",
+        "fqcn": "App\\Data\\LeaseOpeningBalanceData",
+        "fields": [
+            {
+                "name": "lease_component_id",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "amount",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "opening_balance_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Date"
+                ]
+            },
+            {
+                "name": "notes",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "PaymentAdviceData",
+        "fqcn": "App\\Data\\PaymentAdviceData",
+        "fields": [
+            {
+                "name": "payment_advice_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "payment_advice_upload_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "PaymentVoucherData",
+        "fqcn": "App\\Data\\PaymentVoucherData",
+        "fields": [
+            {
+                "name": "payable_user_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "payable_as",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "vendor",
+                    "landlord",
+                    "tenant",
+                    "other"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "credit_bank_account_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "currency_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "items",
+                "type": "array",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "PowerSourceActivityLogData",
+        "fqcn": "App\\Data\\PowerSourceActivityLogData",
+        "fields": [
+            {
+                "name": "power_source_id",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "start_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "stop_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "power_generated",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "PowerSourceData",
+        "fqcn": "App\\Data\\PowerSourceData",
+        "fields": [
+            {
+                "name": "name",
+                "type": "Spatie\\LaravelData\\Optional|string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "power_source_type_id",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "facility_id",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "co2_per_kwh",
+                "type": "Spatie\\LaravelData\\Optional|float",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "max_generation_capacity",
+                "type": "Spatie\\LaravelData\\Optional|float",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "commissioned_at",
+                "type": "Spatie\\LaravelData\\Optional|string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "description",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "is_asset",
+                "type": "Spatie\\LaravelData\\Optional|bool|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "asset_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "has_maintenance_contract",
+                "type": "Spatie\\LaravelData\\Optional|bool|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "maintenance_contract_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "status",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "activity_status",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "suspended_by",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "suspended_at",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "suspension_reason",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "decommissioned_by",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "decommissioned_at",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "decommission_reason",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "ProcurementRequestData",
+        "fqcn": "App\\Data\\ProcurementRequestData",
+        "fields": [
+            {
+                "name": "title",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "description",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "type",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "purchase",
+                    "work"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "expense_type_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "expense_sub_type_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "ticket_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "asset_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "owner_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "items",
+                "type": "Spatie\\LaravelData\\Optional|array|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "DataCollectionOf",
+                    "RequiredIf"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "ProcurementRequestItemData",
+        "fqcn": "App\\Data\\ProcurementRequestItemData",
+        "fields": [
+            {
+                "name": "purchase_item_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "quantity",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Min"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "ProcurementRequestStepData",
+        "fqcn": "App\\Data\\ProcurementRequestStepData",
+        "fields": [
+            {
+                "name": "status",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "preferred_vendor_id",
+                "type": "?int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "selected_option",
+                "type": "?int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "deadline",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "vendors",
+                "type": "?array",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "comment",
+                "type": "?string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "has_preferred_vendor",
+                "type": "bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "override",
+                "type": "bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "ProcurementRequestStepTemplateData",
+        "fqcn": "App\\Data\\ProcurementRequestStepTemplateData",
+        "fields": [
+            {
+                "name": "title",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "role_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "description",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "select_preferred_vendor",
+                "type": "Spatie\\LaravelData\\Optional|bool|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "handle_procurement",
+                "type": "Spatie\\LaravelData\\Optional|bool|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "ProcurementRequestStepTemplateGroupData",
+        "fqcn": "App\\Data\\ProcurementRequestStepTemplateGroupData",
+        "fields": [
+            {
+                "name": "title",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "description",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "is_default",
+                "type": "Spatie\\LaravelData\\Optional|bool|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "facilities",
+                "type": "Spatie\\LaravelData\\Optional|array|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "ProjectData",
+        "fqcn": "App\\Data\\ProjectData",
+        "fields": [
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "title",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "description",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "estimated_start_date",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "estimated_duration_in_days",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "currency_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "total_budget",
+                "type": "float",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "project_manager_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "initiated_at",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "completed_at",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "status",
+                "type": "string",
+                "required": false,
+                "enum": [
+                    "pending",
+                    "in-progress",
+                    "completed",
+                    "stalled",
+                    "cancelled"
+                ],
+                "rules": [
+                    "In"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "ProjectMilestoneData",
+        "fqcn": "App\\Data\\ProjectMilestoneData",
+        "fields": [
+            {
+                "name": "title",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "description",
+                "type": "Spatie\\LaravelData\\Optional|string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "percentage_of_budget",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "estimated_start_date",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "estimated_duration_in_days",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "responsible_person_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "started_at",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "completed_at",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "ProjectTaskData",
+        "fqcn": "App\\Data\\ProjectTaskData",
+        "fields": [
+            {
+                "name": "title",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "estimated_start_date",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "estimated_duration_in_days",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Numeric"
+                ]
+            },
+            {
+                "name": "description",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "priority",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [
+                    "low",
+                    "normal",
+                    "high"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "assigned_to_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "ProjectUpdateData",
+        "fqcn": "App\\Data\\ProjectUpdateData",
+        "fields": [
+            {
+                "name": "description",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "title",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "attachment_upload_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "added_by",
+                "type": "string",
+                "required": false,
+                "enum": [
+                    "user",
+                    "system"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "added_by_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "project_item_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "project_item_type",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "PurchaseItemData",
+        "fqcn": "App\\Data\\PurchaseItemData",
+        "fields": [
+            {
+                "name": "type",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "service",
+                    "product"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Unique"
+                ]
+            },
+            {
+                "name": "inventory_category_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "stock_keeping_unit_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "tax_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "currency_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "is_regulated",
+                "type": "?bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "base_price",
+                "type": "?float",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "vendors",
+                "type": "Spatie\\LaravelData\\Optional|array",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "PurchaseItemPriceData",
+        "fqcn": "App\\Data\\PurchaseItemPriceData",
+        "fields": [
+            {
+                "name": "price",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "ReceiptData",
+        "fqcn": "App\\Data\\ReceiptData",
+        "fields": [
+            {
+                "name": "transaction_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "receiving_account_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "transaction_date",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Date"
+                ]
+            },
+            {
+                "name": "payment_method_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "paying_user_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "amount",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "currency_id",
+                "type": "?int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "allocations",
+                "type": "array",
+                "required": true,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "ReceiptUpdateData",
+        "fqcn": "App\\Data\\ReceiptUpdateData",
+        "fields": [
+            {
+                "name": "transaction_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "receiving_account_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "transaction_date",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Date"
+                ]
+            },
+            {
+                "name": "payment_method_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "paying_user_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "receiving_user_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Exists"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "RoleData",
+        "fqcn": "App\\Data\\RoleData",
+        "fields": [
+            {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "user_group_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "description",
+                "type": "Illuminate\\Support\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "guard_name",
+                "type": "Illuminate\\Support\\Optional|string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "enforce_on_facility",
+                "type": "Illuminate\\Support\\Optional|bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "permissions",
+                "type": "Illuminate\\Support\\Optional|array",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "SensorActionData",
+        "fqcn": "App\\Data\\SensorActionData",
+        "fields": [
+            {
+                "name": "action_trigger",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "warning",
+                    "critical"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "action_to_take",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "notify",
+                    "ticket",
+                    "request"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "notifiable",
+                "type": "?array",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf"
+                ]
+            },
+            {
+                "name": "priority",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [
+                    "high",
+                    "normal",
+                    "low"
+                ],
+                "rules": [
+                    "RequiredUnless",
+                    "In"
+                ]
+            },
+            {
+                "name": "issue_category_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "request_type",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [
+                    "work",
+                    "purchase"
+                ],
+                "rules": [
+                    "RequiredIf",
+                    "In"
+                ]
+            },
+            {
+                "name": "expense_type_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "expense_sub_type_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "purchase_item_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "purchase_item_quantity",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "SensorData",
+        "fqcn": "App\\Data\\SensorData",
+        "fields": [
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "sensor_unique_identifier",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists",
+                    "Unique"
+                ]
+            },
+            {
+                "name": "type",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "asset",
+                    "space"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "facility_space_id",
+                "type": "Illuminate\\Support\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists",
+                    "RequiredIf"
+                ]
+            },
+            {
+                "name": "asset_id",
+                "type": "Illuminate\\Support\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "SettlementData",
+        "fqcn": "App\\Data\\SettlementData",
+        "fields": [
+            {
+                "name": "debit_bank_account_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "payment_advice_number",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "payment_advice_upload_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "payment_vouchers",
+                "type": "?array",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "TicketData",
+        "fqcn": "App\\Data\\TicketData",
+        "fields": [
+            {
+                "name": "title",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "description",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "ticket_type",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "asset",
+                    "facility",
+                    "other"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "ticket_category_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "facility_space_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "asset_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "RequiredIf",
+                    "Exists"
+                ]
+            },
+            {
+                "name": "owner_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "user_group_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "TripData",
+        "fqcn": "App\\Data\\TripData",
+        "fields": [
+            {
+                "name": "vehicle_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "driver_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "departure_city_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "destination_city_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "depart_at",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date",
+                    "AfterOrEqual"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "TripStopData",
+        "fqcn": "App\\Data\\TripStopData",
+        "fields": [
+            {
+                "name": "city_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "stop_duration",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "order",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "UpdateBillData",
+        "fqcn": "App\\Data\\UpdateBillData",
+        "fields": [
+            {
+                "name": "invoice_number",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "invoice_date",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "invoice_upload_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "tax_invoice_number",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "notes",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "UploadInvoiceBillData",
+        "fqcn": "App\\Data\\UploadInvoiceBillData",
+        "fields": [
+            {
+                "name": "invoice_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "invoice_date",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "tax_invoice_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "invoice_upload_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "notes",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    },
+    {
+        "class": "UtilityData",
+        "fqcn": "App\\Data\\UtilityData",
+        "fields": [
+            {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "description",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "utility_type",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "electricity",
+                    "water",
+                    "gas",
+                    "other"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "stock_keeping_unit_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "is_regulated",
+                "type": "Spatie\\LaravelData\\Optional|bool|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "default_price_per_unit",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "UtilityMeterData",
+        "fqcn": "App\\Data\\UtilityMeterData",
+        "fields": [
+            {
+                "name": "meter_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "meter_serial_number",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required",
+                    "Unique"
+                ]
+            },
+            {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "description",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "utility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "reading_unit",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "initial_reading",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Required"
+                ]
+            },
+            {
+                "name": "status",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [
+                    "active",
+                    "inactive"
+                ],
+                "rules": [
+                    "In"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "UtilityMeterReadingData",
+        "fqcn": "App\\Data\\UtilityMeterReadingData",
+        "fields": [
+            {
+                "name": "current_reading",
+                "type": "float",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "reading_image_id",
+                "type": "Spatie\\LaravelData\\Optional|int|null",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "UtilityPriceData",
+        "fqcn": "App\\Data\\UtilityPriceData",
+        "fields": [
+            {
+                "name": "facility_id",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "currency_id",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "price_per_unit",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "utility_id",
+                "type": "Spatie\\LaravelData\\Optional|int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            }
+        ]
+    },
+    {
+        "class": "VehicleData",
+        "fqcn": "App\\Data\\VehicleData",
+        "fields": [
+            {
+                "name": "facility_id",
+                "type": "int",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "license_plate",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": [
+                    "Unique"
+                ]
+            },
+            {
+                "name": "color",
+                "type": "string",
+                "required": true,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "vehicle_type",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "personal",
+                    "passengers",
+                    "cargo"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "ownership_type",
+                "type": "string",
+                "required": true,
+                "enum": [
+                    "own",
+                    "lease"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "transmission_type",
+                "type": "?string",
+                "required": false,
+                "enum": [
+                    "auto",
+                    "manual"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "passengers",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "description",
+                "type": "Spatie\\LaravelData\\Optional|string|null",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "vehicle_photo_upload_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "document_upload_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "vehicle_category_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "vehicle_make_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "manage_as_asset",
+                "type": "?bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "allow_scheduling",
+                "type": "?bool",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "asset_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "creator_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "purchased_at",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Date"
+                ]
+            },
+            {
+                "name": "currency_id",
+                "type": "?string",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "gps_tracker_id",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": [
+                    "Exists"
+                ]
+            },
+            {
+                "name": "purchase_price",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "current_value",
+                "type": "?int",
+                "required": false,
+                "enum": [],
+                "rules": []
+            },
+            {
+                "name": "status",
+                "type": "?string",
+                "required": false,
+                "enum": [
+                    "in use",
+                    "decommissioned",
+                    "suspended"
+                ],
+                "rules": [
+                    "In"
+                ]
+            },
+            {
+                "name": "drivers",
+                "type": "?array",
+                "required": false,
+                "enum": [],
+                "rules": []
+            }
+        ]
+    }
+]
