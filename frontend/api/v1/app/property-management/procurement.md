@@ -200,9 +200,9 @@ Purchase items:
   - `GET /inventories/purchase-items`
   - `POST /inventories/purchase-items`
   - `GET /inventories/purchase-items/{purchase_item}`
+  - `PUT/PATCH /inventories/purchase-items/{purchase_item}`
+  - `DELETE /inventories/purchase-items/{purchase_item}`
   - `PUT/PATCH /inventories/purchase-items/{item}/prices/{price}`
-- Note:
-  - `PUT/PATCH /inventories/purchase-items/{purchase_item}` and `DELETE /.../{purchase_item}` exist in routes but are currently not implemented.
 
 Purchase item create payload:
 
@@ -217,6 +217,17 @@ Purchase item create payload:
 | `is_regulated` | No | boolean | Default `false` |
 | `base_price` | No | number | Default `0` |
 | `vendors` | No | array | Optional |
+
+Purchase item update payload:
+
+- Same shape and validation rules as create payload.
+- Success response message: `Purchase Item updated successfully.`
+- Error message (server error): `Error updating Purchase Item`
+
+Purchase item delete response:
+
+- Success response message: `Purchase Item deleted successfully.`
+- Error message (server error): `Error deleting Purchase Item`
 
 Purchase item price update payload:
 

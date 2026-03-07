@@ -7,6 +7,7 @@ Base route:
 ## Endpoint
 
 - `POST /billing/invoices/{invoice}/protest`
+- `DELETE /billing/invoices/{invoice}/protest`
 
 Allows tenant to protest an invoice and open a support ticket.
 
@@ -52,3 +53,23 @@ Allows tenant to protest an invoice and open a support ticket.
 - Tenant can only protest invoices from tenant-owned leases.
 - Cross-tenant invoice protest returns `404`.
 
+## Withdraw Protest
+
+`DELETE /billing/invoices/{invoice}/protest`
+
+Withdraws an existing protest for the invoice.
+
+### Behavior
+
+- Clears `protested_at`, `protest_details`, `protested_by`, and `protest_ticket_id` on the invoice.
+- Marks the related protest ticket as `closed`.
+
+### Success Response
+
+```json
+{
+  "data": {
+    "message": "Invoice protest withdrawn successfully."
+  }
+}
+```
