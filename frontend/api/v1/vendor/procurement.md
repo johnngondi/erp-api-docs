@@ -58,6 +58,29 @@ Notes:
 - Returns `404` if request is not an open job (`status != order` or `type != work`).
 - Includes `uploads` in addition to list fields.
 
+### Assign technician
+
+`POST /procurement/rfq/open-jobs/{openJob}/assign-technician`
+
+Request body:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `technician_id` | integer | Yes | Must exist in `vendor_users.id` |
+
+Rules:
+
+- Open job must be open for quotation (`status=order`).
+- Assignment supports any open-job type (`work` and `purchase`).
+- Selected `technician_id` must belong to authenticated vendor.
+- Selected vendor user must have `is_technician=true`.
+
+Success response (`DataResource`):
+
+- `message`: `Technician assigned successfully.`
+- `open_job_id`
+- `technician` (`VendorUserResource`)
+
 ## RFQ Quotes
 
 ### List quotes
