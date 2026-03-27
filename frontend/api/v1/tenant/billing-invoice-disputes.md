@@ -1,4 +1,4 @@
-# Tenant Invoice Protest API
+# Tenant Invoice Dispute API
 
 Base route:
 
@@ -6,16 +6,16 @@ Base route:
 
 ## Endpoint
 
-- `POST /billing/invoices/{invoice}/protest`
-- `DELETE /billing/invoices/{invoice}/protest`
+- `POST /billing/invoices/{invoice}/dispute`
+- `DELETE /billing/invoices/{invoice}/dispute`
 
-Allows tenant to protest an invoice and open a support ticket.
+Allows tenant to dispute an invoice and open a support ticket.
 
 ## Request Body
 
 | Field | Required | Type | Notes |
 |---|---|---|---|
-| `details` | Yes | string | Protest description |
+| `details` | Yes | string | Dispute description |
 | `ticket_upload_id` | No | integer | Optional attachment upload id (`uploads.id`) |
 
 ## Behavior
@@ -39,10 +39,10 @@ Allows tenant to protest an invoice and open a support ticket.
 ```json
 {
   "data": {
-    "message": "Invoice protest submitted successfully.",
+    "message": "Invoice dispute submitted successfully.",
     "ticket": {
       "id": 25,
-      "title": "Invoice Protest: INV-1001"
+      "title": "Invoice Dispute: INV-1001"
     }
   }
 }
@@ -50,26 +50,27 @@ Allows tenant to protest an invoice and open a support ticket.
 
 ## Access Rules
 
-- Tenant can only protest invoices from tenant-owned leases.
-- Cross-tenant invoice protest returns `404`.
+- Tenant can only dispute invoices from tenant-owned leases.
+- Cross-tenant invoice dispute returns `404`.
 
-## Withdraw Protest
+## Withdraw Dispute
 
-`DELETE /billing/invoices/{invoice}/protest`
+`DELETE /billing/invoices/{invoice}/dispute`
 
-Withdraws an existing protest for the invoice.
+Withdraws an existing dispute for the invoice.
 
 ### Behavior
 
-- Clears `protested_at`, `protest_details`, `protested_by`, and `protest_ticket_id` on the invoice.
-- Marks the related protest ticket as `closed`.
+- Clears `disputed_at`, `dispute_details`, `disputed_by`, and `dispute_ticket_id` on the invoice.
+- Marks the related dispute ticket as `closed`.
 
 ### Success Response
 
 ```json
 {
   "data": {
-    "message": "Invoice protest withdrawn successfully."
+    "message": "Invoice dispute withdrawn successfully."
   }
 }
 ```
+

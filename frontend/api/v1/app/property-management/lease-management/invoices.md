@@ -13,6 +13,8 @@ Base route:
 - `GET /invoices/{invoice}`
 - `PUT/PATCH /invoices/{invoice}`
 - `PATCH /invoices/{invoice}/cancel`
+- `POST /invoices/{invoice}/dispute`
+- `DELETE /invoices/{invoice}/dispute`
 - `DELETE /invoices/{invoice}`
 
 ## List Invoices
@@ -135,6 +137,21 @@ Possible status values returned by API resource:
 ## Delete Invoice
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}`
+
+## Dispute Invoice
+
+`POST /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}/dispute`
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `details` | Yes | string | Dispute description |
+| `ticket_upload_id` | No | integer | Optional attachment upload id (`uploads.id`) |
+
+## Withdraw Invoice Dispute
+
+`DELETE /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}/dispute`
 
 ## Frontend Error Handling
 

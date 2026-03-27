@@ -13,6 +13,8 @@ Base route:
 - `GET /receipts/{receipt}`
 - `PUT/PATCH /receipts/{receipt}`
 - `PATCH /receipts/{receipt}/cancel`
+- `POST /receipts/{receipt}/dispute`
+- `DELETE /receipts/{receipt}/dispute`
 - `DELETE /receipts/{receipt}`
 
 ## List Receipts
@@ -129,6 +131,21 @@ Possible status values returned by API resource:
 ## Delete Receipt
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}`
+
+## Dispute Receipt
+
+`POST /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}/dispute`
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `details` | Yes | string | Dispute description |
+| `ticket_upload_id` | No | integer | Optional attachment upload id (`uploads.id`) |
+
+## Withdraw Receipt Dispute
+
+`DELETE /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}/dispute`
 
 ## Frontend Error Handling
 

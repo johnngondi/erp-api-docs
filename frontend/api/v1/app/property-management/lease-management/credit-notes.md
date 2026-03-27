@@ -13,6 +13,8 @@ Base route:
 - `GET /credit-notes/{creditNote}`
 - `PUT/PATCH /credit-notes/{creditNote}`
 - `PATCH /credit-notes/{creditNote}/cancel`
+- `POST /credit-notes/{creditNote}/dispute`
+- `DELETE /credit-notes/{creditNote}/dispute`
 - `DELETE /credit-notes/{creditNote}`
 
 ## List Credit Notes
@@ -130,6 +132,21 @@ Possible status values returned by API resource:
 ## Delete Credit Note
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}`
+
+## Dispute Credit Note
+
+`POST /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}/dispute`
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `details` | Yes | string | Dispute description |
+| `ticket_upload_id` | No | integer | Optional attachment upload id (`uploads.id`) |
+
+## Withdraw Credit Note Dispute
+
+`DELETE /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}/dispute`
 
 ## Frontend Error Handling
 
