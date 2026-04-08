@@ -45,14 +45,25 @@ Selectable status values for dropdown:
 
 `POST /api/v1/app/{company}/access-management/companies`
 
-Key fields:
+Create payload table:
 
-- `name` (required)
-- `tax_pin`, `has_vat`, `service_managed`, `address`
-- `withholds` (array of `withholding_taxes.id`)
-- `type_of_properties`, `collection_contract`
-- `registration_type`, `registration_number`
-- `registration_upload_id`, `tax_pin_cert_upload_id`, `other_docs_upload_id`
+| Field | Type | Required | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `name` | string | Yes | - | Company name |
+| `tax_pin` | string&#124;null | No | `null` | Tax PIN |
+| `withholds` | array[int]&#124;null | No | `null` | IDs from `withholding_taxes` |
+| `has_vat` | boolean&#124;null | No | `false` | VAT enabled flag |
+| `service_managed` | string&#124;null | No | `null` | `rent` or `sc` or `both` |
+| `address` | string&#124;null | No | `null` | Address text |
+| `profile_photo_path` | string&#124;null | No | `null` | Optional image path |
+| `type_of_properties` | array&#124;null | No | `null` | Optional array |
+| `collection_contract` | boolean | No | `false` | Collection contract enabled flag |
+| `registration_type` | string&#124;null | No | `null` | `national_id` or `business_license` or `passport` |
+| `registration_number` | string&#124;null | No | `null` | Registration number |
+| `registration_upload_id` | int&#124;null | No | `null` | Upload ID |
+| `tax_pin_cert_upload_id` | int&#124;null | No | `null` | Upload ID |
+| `other_docs_upload_id` | int&#124;null | No | `null` | Upload ID |
+| `status` | string | No | `active` | `active` or `inactive` |
 
 Compatibility alias:
 

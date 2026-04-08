@@ -40,16 +40,16 @@ Supported query params:
 
 `POST /api/v1/app/{company}/access-management/roles`
 
-Request fields:
+Create payload table:
 
-| Field                 | Required    | Type       | Notes                                               |
-| --------------------- | ----------- | ---------- | --------------------------------------------------- |
-| `name`                | Yes         | string     | Role name                                           |
-| `permissions`         | Yes         | array      | Permission names                                    |
-| `company_ids`         | Yes         | array[int] | Company ids where role is created                   |
-| `description`         | No          | string     | Optional                                            |
-| `guard_name`          | No          | string     | Defaults to `web`                                   |
-| `enforce_on_facility` | No          | boolean    | Optional                                            |
+| Field | Type | Required | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `name` | string | Yes | - | Unique per selected company scope and app user group |
+| `permissions` | array[string] | Yes | `[]` | Permission names for app user group |
+| `company_ids` | array[int] | Yes | `[]` | Target companies to create same role in |
+| `description` | string&#124;null | No | `null` | Optional |
+| `guard_name` | string | No | `web` | Guard used for role |
+| `enforce_on_facility` | boolean | No | `false` | Optional flag |
 
 Server-side inference:
 

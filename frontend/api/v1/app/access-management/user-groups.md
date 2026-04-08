@@ -17,6 +17,14 @@ Routes exist but are not implemented in controller:
 - `PUT/PATCH /user-groups/{user_group}`
 - `DELETE /user-groups/{user_group}`
 
+## Create Payload
+
+`POST /api/v1/app/{company}/access-management/user-groups`
+
+| Field | Type | Required | Default | Notes |
+| --- | --- | --- | --- | --- |
+| N/A | N/A | N/A | N/A | Create endpoint is not implemented in backend yet |
+
 ## List User Groups
 
 `GET /api/v1/app/{company}/access-management/user-groups`
