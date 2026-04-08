@@ -89,13 +89,13 @@ Treat `5xx` as backend/system failure:
 - Log endpoint + request correlation info client-side for support.
 - Do not show raw exception text to users.
 
-## Known API Caveats (As of February 11, 2026)
+## Known API Caveats (As of April 8, 2026)
 
 - `Facility Management > Sensors > Entries` routes exist but backend controller is not implemented yet.
   - Endpoints: `/api/v1/app/{company}/facility-management/sensors/{sensor}/entries...`
-- `Users` module has partial CRUD coverage on some resources.
-  - `roles`: only list/create are implemented.
+- `Access Management` has partial coverage on `user-groups`.
   - `user-groups`: only list is implemented.
+- `Users` module has partial CRUD coverage on some resources.
   - `landlords`, `tenants`, `vendors`: update routes exist but are not implemented.
   - `tenants` delete route responds, but deletion logic is not fully wired.
 - Integrate frontend for these caveats with graceful fallbacks:
@@ -153,6 +153,21 @@ Treat `5xx` as backend/system failure:
 - Projects:
   - `docs/frontend/app/project-management/projects.md`
 
+## Access Management Docs
+
+- Overview:
+  - `docs/frontend/api/v1/app/access-management/README.md`
+- User Groups:
+  - `docs/frontend/api/v1/app/access-management/user-groups.md`
+- Permissions:
+  - `docs/frontend/api/v1/app/access-management/permissions.md`
+- Roles:
+  - `docs/frontend/api/v1/app/access-management/roles.md`
+- Companies:
+  - `docs/frontend/api/v1/app/access-management/companies.md`
+- Company Users:
+  - `docs/frontend/api/v1/app/access-management/company-users.md`
+
 ## Users Docs
 
 - Overview:
@@ -163,9 +178,5 @@ Treat `5xx` as backend/system failure:
   - `docs/frontend/app/users/tenants.md`
 - Vendors:
   - `docs/frontend/app/users/vendors.md`
-- User Groups:
-  - `docs/frontend/app/users/user-groups.md`
-- Roles:
-  - `docs/frontend/app/users/roles.md`
-- Permissions:
-  - `docs/frontend/app/users/permissions.md`
+- User group/role/permission docs:
+  - See `Access Management Docs` section above.
