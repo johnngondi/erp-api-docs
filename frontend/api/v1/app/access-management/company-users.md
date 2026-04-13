@@ -21,12 +21,13 @@ Implemented:
 
 `GET /api/v1/app/{company}/access-management/company-users`
 
-Returns only users for route company `{company}`.
+Default behavior returns only users for route company `{company}`.
 
 Supported query params:
 
 - Filters:
   - `filter[search]` (Scout search; supports CSV company-user ids e.g. `101,104`)
+  - `filter[company_id]` (single, CSV, or array of accessible company ids)
   - `filter[role]`
   - `filter[status]`
   - `filter[company_office_id]`
@@ -37,6 +38,12 @@ Supported query params:
   - `sort=role`, `sort=status`, `sort=created_at`
 - Pagination:
   - `per_page`, `page`
+
+`filter[company_id]` notes:
+
+- Omitted: defaults to route `{company}`.
+- Present: returns users across the selected accessible companies.
+- Inaccessible company ids return `422`.
 
 Selectable dropdown values:
 

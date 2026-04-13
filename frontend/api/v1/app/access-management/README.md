@@ -24,6 +24,12 @@ Base prefix:
   - `docs/frontend/api/v1/app/access-management/company-department-divisions.md`
 - Company Users:
   - `docs/frontend/api/v1/app/access-management/company-users.md`
+- Approval Templates:
+  - `docs/frontend/api/v1/app/access-management/approval-templates.md`
+- Approvable Models:
+  - `docs/frontend/api/v1/app/access-management/approvable-models.md`
+- Approval Steps:
+  - `docs/frontend/api/v1/app/access-management/approvals.md`
 
 Apply shared auth, tenancy, query, and error handling guidance from:
 
@@ -41,3 +47,22 @@ Apply shared auth, tenancy, query, and error handling guidance from:
 | Company Departments | `POST /company-departments` | `company-departments.md` |
 | Company Department Divisions | `POST /company-departments/{companyDepartment}/divisions` | `company-department-divisions.md` |
 | Company Users | `POST /company-users` | `company-users.md` |
+| Approval Templates | `POST /approval-templates` | `approval-templates.md` |
+| Approval Steps (Action) | `POST /approval-steps/{approvalStep}` | `approvals.md` |
+
+## Frontend Notes (Approvals)
+
+Suggested settings UI sections:
+
+1. Approvable Resources list
+2. Approval Templates CRUD
+3. Approval Queue filtered by user role and `can_act`
+
+Template form controls:
+
+- Model selector from `GET /approvable-models`
+- Toggle `always_requires_approval`
+- Bypass roles multi-select (when toggle is off)
+- Initial/final status selectors from selected model statuses
+- Optional post-approval event class input
+- Ordered step builder (`step_order`, `role_id`)

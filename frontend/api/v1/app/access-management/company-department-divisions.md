@@ -16,7 +16,8 @@ Implemented (nested under department):
 
 ## Scope Rules
 
-- `{companyDepartment}` must belong to route `{company}`.
+- Default index behavior requires `{companyDepartment}` to belong to route `{company}`.
+- With `filter[company_id]`, index allows accessible company scopes, and `{companyDepartment}` must belong to one of filtered company ids.
 - Division is always scoped to its parent department.
 - Do not send `company_id` or `company_department_id` in create/update payload.
 
@@ -28,12 +29,18 @@ Supported query params:
 
 - Filters:
   - `filter[search]` (Scout search; supports CSV division ids e.g. `10,21`)
+  - `filter[company_id]` (single, CSV, or array of accessible company ids)
   - `filter[status]`
   - `filter[created_at]` (date: `YYYY-MM-DD`)
 - Sort:
   - `sort=name`, `sort=code`, `sort=status`, `sort=created_at`
 - Pagination:
   - `per_page`, `page`
+
+`filter[company_id]` notes:
+
+- Omitted: defaults to route `{company}` behavior.
+- Inaccessible company ids return `422`.
 
 Selectable dropdown values:
 

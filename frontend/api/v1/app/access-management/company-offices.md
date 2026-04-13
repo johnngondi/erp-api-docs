@@ -18,6 +18,9 @@ Implemented:
 
 - `company_id` is resolved from route `{company}`.
 - Do not send `company_id` in create/update payload.
+- For `index` only:
+  - Without `filter[company_id]`: results are scoped to route `{company}`.
+  - With `filter[company_id]`: results can include accessible companies.
 
 ## List Company Offices
 
@@ -27,6 +30,7 @@ Supported query params:
 
 - Filters:
   - `filter[search]` (Scout search; supports CSV office ids e.g. `12,18`)
+  - `filter[company_id]` (single, CSV, or array of accessible company ids)
   - `filter[country_id]`
   - `filter[city_id]`
   - `filter[status]`
@@ -35,6 +39,11 @@ Supported query params:
   - `sort=name`, `sort=code`, `sort=status`, `sort=created_at`
 - Pagination:
   - `per_page`, `page`
+
+`filter[company_id]` notes:
+
+- Omitted: defaults to route `{company}`.
+- Inaccessible company ids return `422`.
 
 Selectable dropdown values:
 

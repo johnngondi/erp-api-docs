@@ -17,7 +17,8 @@ Implemented:
 ## Role Scope Rules
 
 - `app` user-group roles are company scoped.
-- For `app` roles, the backend only exposes roles where `roles.company_id == {company}`.
+- Default listing (without `filter[company_id]`) exposes `app` roles where `roles.company_id == {company}`.
+- With `filter[company_id]`, you can query `app` roles across accessible companies (single, CSV, or array values).
 - Non-`app` roles are treated as global (non-company-scoped).
 
 ## List Roles
@@ -36,6 +37,12 @@ Supported query params:
 - Pagination:
   - `per_page`, `page`
 
+`filter[company_id]` notes:
+
+- Omitted: defaults to route `{company}`.
+- Present: must contain only companies accessible to the authenticated user.
+- Inaccessible company ids return `422`.
+
 ## Create Roles (Single Request, Multi-Company)
 
 `POST /api/v1/app/{company}/access-management/roles`
@@ -45,24 +52,27 @@ Create payload table:
 | Field | Type | Required | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `name` | string | Yes | - | Unique per selected company scope and app user group |
-| `permissions` | array[string] | Yes | `[]` | Permission names for app user group |
-| `company_ids` | array[int] | Yes | `[]` | Target companies to create same role in |
+| `user_group_id` | int | No | `app` group id | Target role user group |
+| `permissions` | array[int] | Yes | `[]` | Permission IDs for selected `user_group_id` |
+| `company_ids` | array[int] | Conditional | `[]` | Required for `app` user group; not allowed for non-app groups |
 | `description` | string&#124;null | No | `null` | Optional |
 | `guard_name` | string | No | `web` | Guard used for role |
 | `enforce_on_facility` | boolean | No | `false` | Optional flag |
 
 Server-side inference:
 
-- `user_group_id` is inferred from the current app user-group context.
-- Sending `user_group_id` in payload returns `422`.
+- If `user_group_id` is omitted, it defaults to `app` group.
+- For `app` user-group roles, `company_ids` must be provided and must be accessible.
+- For non-app user-group roles, role is created as global (`company_id = null`).
 
 Example request:
 
 ```json
 {
   "name": "company-manager",
+  "user_group_id": 3,
   "description": "Manager role",
-  "permissions": ["view-lease", "create-lease"],
+  "permissions": [17, 21],
   "company_ids": [12, 13]
 }
 ```
@@ -98,6 +108,7 @@ Updatable fields:
 - `name`
 - `description`
 - `permissions`
+- `enforce_on_facility`
 
 Prohibited fields:
 
@@ -105,7 +116,6 @@ Prohibited fields:
 - `company_id`
 - `company_ids`
 - `guard_name`
-- `enforce_on_facility`
 
 ## Delete Role
 
