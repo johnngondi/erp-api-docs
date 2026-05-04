@@ -34,6 +34,29 @@ List query support:
 - Pagination:
   - `per_page` (defaults to `config('app.query.default_per_page')`)
 
+Frontend metadata fields returned by `SettingResource`:
+
+- `type`: frontend input type hint (examples: `select`, `number`, `date`, `text`, )
+- `options`: input options source or static options
+- `dependency_key`: setting key this field depends on
+- `dependency_value`: value required on `dependency_key` for this setting to be active/visible
+
+Frontend behavior for `options`:
+
+- If `options` is `null`, no selectable options are required.
+- If `options` is a key-value object (example: `{ "yes": "Yes", "no": "No" }`), render those as static select options.
+- If `options` is an array with exactly one element and that element is a link/URI, treat it as a remote options endpoint.
+- For remote options endpoint behavior:
+  - Send an authenticated request to that URI using the currently authenticated user's API key/token (same `Authorization` context as the logged-in user).
+  - You may add a new endpoint inside src\api\endpoints\portals\app\property-management\settings.api.js which will be receiving the endpoint and then transforming the response to proper data consumable by options renderer use searchable select for all options
+  - Use the returned payload to populate selectable options in the UI.
+  - Do not call the URI anonymously.
+
+Dependency behavior:
+
+- If both `dependency_key` and `dependency_value` are set, only show that setting when the setting identified by `dependency_key` currently equals `dependency_value`.
+- If both are `null`, the setting is always available.
+
 Update payload (`PATCH /general/{setting}`):
 
 | Field | Required | Type | Allowed Values / Notes |
@@ -42,14 +65,14 @@ Update payload (`PATCH /general/{setting}`):
 
 Seeded Procurement General settings:
 
-| Key | Default Value | Description |
-|---|---|---|
-| `rfq_default_deadline_days` | `7` | Number of days added to RFQ issue date to compute default deadline. |
-| `emergency_rfq_auto_send_enabled` | `no` | Whether emergency RFQs should be auto-sent when default vendor conditions are not met. Allowed values: `yes`, `no`. |
-| `emergency_rfq_send_after_hours` | `24` | Hours to wait before sending emergency RFQs if default vendor has not submitted a bid. Applied when `emergency_rfq_auto_send_enabled=yes`. |
-| `rfq_prioritize_default_vendor` | `yes` | Whether default vendor gets first chance to bid before RFQ is broadcast to other vendors. Allowed values: `yes`, `no`. |
-| `rfq_default_vendor_exclusive_window_hours` | `24` | Hours granted to default vendor before RFQ is sent to other vendors. Applied when `rfq_prioritize_default_vendor=yes`. |
-| `rfq_default_vendor_auto_accept_max_amount` | `0` | Maximum default-vendor bid amount that can be accepted directly without sending to additional vendors. |
+| Key | Default Value | Type | Options | Dependency | Description |
+|---|---|---|---|---|---|
+| `rfq_default_deadline_days` | `3` | `number` | `null` | none | Number of days added to RFQ issue date to compute default deadline. |
+| `emergency_rfq_auto_send_enabled` | `no` | `select` | static: `yes/no` | none | Whether emergency RFQs should be auto-sent when default vendor does not respond. |
+| `emergency_rfq_send_after_hours` | `24` | `number` | `null` | `emergency_rfq_auto_send_enabled=yes` | Hours to wait before sending emergency RFQs when default vendor has not submitted a bid. |
+| `rfq_prioritize_default_vendor` | `yes` | `select` | static: `yes/no` | none | Whether default vendor gets first chance to bid before RFQ is sent to other vendors. |
+| `rfq_default_vendor_exclusive_window_hours` | `24` | `number` | `null` | `rfq_prioritize_default_vendor=yes` | Hours granted to default vendor before RFQ goes to other vendors. |
+| `rfq_default_vendor_auto_accept_max_amount` | `50000` | `number` | `null` | `rfq_prioritize_default_vendor=yes` | Maximum default-vendor bid amount that can be accepted directly. |
 
 ### Request Step Template Groups
 
@@ -230,8 +253,17 @@ Examples:
 | `description` | string|null | Help text |
 | `value` | string|null | Current value |
 | `group` | array|string|null | Group used for SettingsPage grouping |
+| `type` | string|null | Frontend input type hint (`select`, `number`, etc.) |
+| `options` | array|object|string|null | Static options or remote options URI container |
+| `dependency_key` | string|null | Key of controlling setting |
+| `dependency_value` | string|null | Required controlling value to show this setting |
 | `created_at` | object | `{ raw, formatted, diff }` |
 | `updated_at` | object | `{ raw, formatted, diff }` |
+
+`options` handling rule (applies to all general settings groups):
+
+- When `options` is an array containing only one URI/link value, the frontend must call that URI to fetch option values.
+- That request must use the authenticated user's API key/token (`Authorization` header), not an anonymous request.
 
 Update payload (`PATCH /general/{setting}`):
 
@@ -247,11 +279,11 @@ Update response:
 
 PM seeded general settings starter catalog:
 
-| Key | Group | Module | Description |
-|---|---|---|---|
-| `default_tax` | `finance`, `tax` | `pm`, `finance` | Default tax for PM financial transactions |
-| `default_management_fee_expense_type` | `finance` | `pm` | Default expense type for management fees |
-| `default_letting_fee_expense_type` | `finance` | `pm` | Default expense type for letting/reletting fees |
+| Key | Group | Type | Options | Dependency | Description |
+|---|---|---|---|---|---|
+| `default_tax` | `finance`, `tax` | `select` | remote URI array (taxes endpoint) | none | Default tax for PM financial transactions |
+| `default_management_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for management fees |
+| `default_letting_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for letting/reletting fees |
 
 <!-- ### Bank Accounts
 
