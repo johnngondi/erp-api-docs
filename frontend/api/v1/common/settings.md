@@ -55,13 +55,6 @@ All endpoints in this document require `auth:sanctum`.
 - `GET|POST /settings/fleet/vehicle-makes`
 - `GET|PUT|PATCH|DELETE /settings/fleet/vehicle-makes/{vehicleMake}`
 
-## Lease Management
-
-- `GET|POST /settings/lease-management/lease-components`
-- `GET|PUT|PATCH|DELETE /settings/lease-management/lease-components/{leaseComponent}`
-- `PATCH /settings/lease-management/lease-components/{leaseComponent}/activate`
-- `PATCH /settings/lease-management/lease-components/{leaseComponent}/deactivate`
-
 ## File Management
 
 - `GET|POST /settings/file-management/uploads`

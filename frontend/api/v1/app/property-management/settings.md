@@ -6,7 +6,50 @@ Base prefix:
 
 `/api/v1/app/{company}/property-management/settings`
 
+
 ## Procurement Settings
+
+### General
+
+UI placement:
+
+- `SettingsPage > Group Tab (Procurement) > General Tab`
+
+Endpoints:
+
+- `GET /general`
+- `PATCH /general/{setting}`
+
+How to fetch procurement general settings:
+
+- Use `filter[group]=procurement`
+- Example: `GET /general?filter[group]=procurement`
+
+List query support:
+
+- Filters:
+  - `filter[key]`, `filter[name]`, `filter[description]`, `filter[value]`, `filter[group]`
+- Sort:
+  - `sort=id,key,name,created_at,updated_at`
+- Pagination:
+  - `per_page` (defaults to `config('app.query.default_per_page')`)
+
+Update payload (`PATCH /general/{setting}`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `value` | Yes (present) | scalar or null | Only this field is updated |
+
+Seeded Procurement General settings:
+
+| Key | Default Value | Description |
+|---|---|---|
+| `rfq_default_deadline_days` | `7` | Number of days added to RFQ issue date to compute default deadline. |
+| `emergency_rfq_auto_send_enabled` | `no` | Whether emergency RFQs should be auto-sent when default vendor conditions are not met. Allowed values: `yes`, `no`. |
+| `emergency_rfq_send_after_hours` | `24` | Hours to wait before sending emergency RFQs if default vendor has not submitted a bid. Applied when `emergency_rfq_auto_send_enabled=yes`. |
+| `rfq_prioritize_default_vendor` | `yes` | Whether default vendor gets first chance to bid before RFQ is broadcast to other vendors. Allowed values: `yes`, `no`. |
+| `rfq_default_vendor_exclusive_window_hours` | `24` | Hours granted to default vendor before RFQ is sent to other vendors. Applied when `rfq_prioritize_default_vendor=yes`. |
+| `rfq_default_vendor_auto_accept_max_amount` | `0` | Maximum default-vendor bid amount that can be accepted directly without sending to additional vendors. |
 
 ### Request Step Template Groups
 
@@ -60,6 +103,62 @@ Create/Update payload (`ProcurementRequestStepTemplateData`):
 
 ## Lease Management Settings
 
+### Property/Facility Types
+
+UI placement:
+
+- `SettingsPage > Lease Management > Property/Facility Types`
+
+Endpoints:
+
+- `GET /api/v1/app/{company}/property-management/facility-types`
+- `POST /api/v1/app/{company}/property-management/facility-types`
+- `GET /api/v1/app/{company}/property-management/facility-types/{facility_type}`
+- `PUT/PATCH /api/v1/app/{company}/property-management/facility-types/{facility_type}`
+- `DELETE /api/v1/app/{company}/property-management/facility-types/{facility_type}`
+
+List query support:
+
+- Filters:
+  - `filter[id]`, `filter[title]`, `filter[has_tax]`, `filter[division_type]`, `filter[created_at]`
+- Sort:
+  - `sort=id,title,has_tax,division_type,created_at`
+- Pagination:
+  - `per_page` (defaults to `config('app.query.default_per_page')`)
+
+Create/Update payload (`FacilityTypeData`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `title` | Yes | string | Facility type display name |
+| `has_tax` | No | boolean | Defaults to `false` |
+| `division_type` | No | string | `size`, `unit`, `both` (defaults to `both`) |
+
+Response item shape (`FacilityTypeResource`):
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | Record id |
+| `name` | string | Mirrors model field `title` |
+| `has_tax` | boolean | Tax applicability flag |
+| `division_type` | string | One of `size`, `unit`, `both` |
+| `created_at` | datetime string | `Y-m-d H:i:s` |
+| `updated_at` | datetime string | `Y-m-d H:i:s` |
+
+Authorization:
+
+- `GET`: `view-facility-type`
+- `POST`: `create-facility-type`
+- `PUT/PATCH`: `update-facility-type`
+- `DELETE`: `delete-facility-type`
+
+
+### Lease Components
+- `GET|POST /settings/lease-management/lease-components`
+- `GET|PUT|PATCH|DELETE /settings/lease-management/lease-components/{leaseComponent}`
+- `PATCH /settings/lease-management/lease-components/{leaseComponent}/activate`
+- `PATCH /settings/lease-management/lease-components/{leaseComponent}/deactivate`
+
 ### Lease Component Payment Priorities
 
 Endpoints:
@@ -87,7 +186,74 @@ Create/Update payload (`LeaseComponentsPaymentPriorityData`):
 
 ## Finance Settings
 
-### Bank Accounts
+### General Settings
+
+UI placement:
+
+- `SettingsPage > Group Tab (e.g. Finance) > General Tab`
+
+Endpoints:
+
+- `GET /general`
+- `PATCH /general/{setting}`
+
+Notes:
+
+- `GET /general` is always scoped to Property Management settings only.
+- Backend applies a default module constraint of `module contains "pm"`.
+- `module` is not exposed in the API response.
+- This section is intended to grow over time as more PM general settings are added.
+
+List query support:
+
+- Filters:
+  - `filter[key]`, `filter[name]`, `filter[description]`, `filter[value]`
+  - `filter[group]` (single or CSV, e.g. `filter[group]=finance,tax`)
+- Sort:
+  - `sort=id,key,name,created_at,updated_at`
+- Pagination:
+  - `per_page` (defaults to `config('app.query.default_per_page')`)
+
+Examples:
+
+- `GET /general`
+- `GET /general?filter[group]=finance`
+- `GET /general?filter[group]=finance,tax&sort=-updated_at`
+
+`GET /general` response item shape:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | Setting id |
+| `key` | string | Setting key |
+| `name` | string|null | Display name |
+| `description` | string|null | Help text |
+| `value` | string|null | Current value |
+| `group` | array|string|null | Group used for SettingsPage grouping |
+| `created_at` | object | `{ raw, formatted, diff }` |
+| `updated_at` | object | `{ raw, formatted, diff }` |
+
+Update payload (`PATCH /general/{setting}`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `value` | Yes (present) | scalar or null | Only this field is updated |
+
+Update response:
+
+- Wrapped in `DataResource`:
+  - `message`: `Setting updated successfully.`
+  - `setting`: updated setting resource item
+
+PM seeded general settings starter catalog:
+
+| Key | Group | Module | Description |
+|---|---|---|---|
+| `default_tax` | `finance`, `tax` | `pm`, `finance` | Default tax for PM financial transactions |
+| `default_management_fee_expense_type` | `finance` | `pm` | Default expense type for management fees |
+| `default_letting_fee_expense_type` | `finance` | `pm` | Default expense type for letting/reletting fees |
+
+<!-- ### Bank Accounts
 
 Endpoints:
 
@@ -118,7 +284,7 @@ Create/Update payload (`BankAccountData`):
 | `status` | No | string | `active`, `inactive` (defaults to `active`) |
 | `user_group_id` | No | integer | Must exist in `user_groups.id` |
 | `user_id` | No | integer | Must exist in `users.id`; defaults to current user for `type=user` |
-| `alias` | No | string | Optional |
+| `alias` | No | string | Optional | -->
 
 ### Expense Types and Sub-Types
 
