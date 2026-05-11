@@ -17,6 +17,11 @@ Base prefix:
   - `docs/frontend/app/property-management/procurement.md`
 - Finance
   - `docs/frontend/app/property-management/finance.md`
+  - `docs/frontend/app/property-management/finance/bill.md`
+  - `docs/frontend/app/property-management/finance/expense.md`
+  - `docs/frontend/app/property-management/finance/payment-voucher.md`
+  - `docs/frontend/app/property-management/finance/remittance.md`
+  - `docs/frontend/app/property-management/finance/settlement.md`
 - Settings
   - `docs/frontend/app/property-management/settings.md`
 - Lease Management

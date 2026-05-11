@@ -1,16 +1,10 @@
 # Vendor Finance API
 
-Base route:
+Base prefix:
 
 `/api/v1/vendor/finance`
 
-## Bills
+## Resources
 
-- `GET /finance/bills`
-- `GET /finance/bills/{bill}`
-- `POST /finance/bills/{bill}/upload-invoice`
-
-## Payment Vouchers
-
-- Route group exists at `/finance/payment-vouchers` but no concrete endpoints are currently defined.
-
+- [Bills](./finance/bill.md)
+- [Payment Vouchers](./finance/payment-voucher.md)

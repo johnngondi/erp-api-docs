@@ -13,5 +13,6 @@ Authentication:
 
 - `docs/frontend/api/v1/vendor/procurement.md`
 - `docs/frontend/api/v1/vendor/finance.md`
+- `docs/frontend/api/v1/vendor/finance/bill.md`
+- `docs/frontend/api/v1/vendor/finance/payment-voucher.md`
 - `docs/frontend/api/v1/vendor/users-settings.md`
-

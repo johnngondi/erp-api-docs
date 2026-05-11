@@ -165,8 +165,6 @@ Response item shape (`FacilityTypeResource`):
 | `name` | string | Mirrors model field `title` |
 | `has_tax` | boolean | Tax applicability flag |
 | `division_type` | string | One of `size`, `unit`, `both` |
-| `created_at` | datetime string | `Y-m-d H:i:s` |
-| `updated_at` | datetime string | `Y-m-d H:i:s` |
 
 Authorization:
 
@@ -318,19 +316,59 @@ Create/Update payload (`BankAccountData`):
 | `user_id` | No | integer | Must exist in `users.id`; defaults to current user for `type=user` |
 | `alias` | No | string | Optional | -->
 
+### Expense Categories
+
+Expense categories endpoints:
+
+- `GET /finance/expense-categories`
+- `POST /finance/expense-categories`
+- `GET /finance/expense-categories/{category}`
+- `PUT/PATCH /finance/expense-categories/{category}`
+- `DELETE /finance/expense-categories/{category}`
+
+Expense categories list query support:
+
+- Filters:
+  - `filter[id]`, `filter[name]`, `filter[description]`, `filter[created_at]`
+- Sort:
+  - `sort=id,name,created_at`
+- Include:
+  - `include=expenseTypes`
+
+Expense category create/update payload:
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `name` | Yes | string | Expense category name |
+| `description` | No | string/null | Optional |
+
+Response envelope for create/update/delete:
+
+- Wrapped in `DataResource`.
+- Payload key: `category`
+
 ### Expense Types and Sub-Types
 
-Expense types endpoint implemented:
+Expense types endpoints:
 
 - `GET /finance/expense-types`
+- `POST /finance/expense-types`
+- `GET /finance/expense-types/{type}`
+- `PUT/PATCH /finance/expense-types/{type}`
+- `DELETE /finance/expense-types/{type}`
 
-Sub-types endpoint implemented:
+Expense sub-types endpoints:
 
 - `GET /finance/expense-types/{type}/sub-types`
+- `POST /finance/expense-types/{type}/sub-types`
+- `GET /finance/expense-types/{type}/sub-types/{subType}`
+- `PUT/PATCH /finance/expense-types/{type}/sub-types/{subType}`
+- `DELETE /finance/expense-types/{type}/sub-types/{subType}`
 
 Notes:
 
-- Routes for creating/updating/deleting expense types and sub-types exist but are currently not implemented in these controllers.
+- Expense sub-type routes are nested under an expense type.
+- A sub-type must belong to the provided `{type}`; otherwise API returns `404`.
 
 Expense types list query support:
 
@@ -339,6 +377,33 @@ Expense types list query support:
   - `filter[is_procurable]`, `filter[can_have_default_vendor]`, `filter[can_have_preferred_vendor]`, `filter[created_at]`
 - Include:
   - `include=expenseSubTypes`
+
+Expense type create/update payload:
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `name` | Yes | string | Expense type name |
+| `description` | No | string/null | Optional |
+| `expense_category_id` | Yes | integer | Must exist in `expense_categories.id`. |
+| `is_procurable` | No | boolean | Optional |
+| `can_have_default_vendor` | No | boolean | Optional |
+| `can_have_preferred_vendor` | No | boolean | Optional |
+
+Expense sub-type create/update payload:
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `name` | Yes | string | Expense sub-type name |
+| `description` | No | string/null | Optional |
+| `is_procurable` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
+| `can_have_default_vendor` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
+| `can_have_preferred_vendor` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
+
+Response envelope for create/update/delete:
+
+- Wrapped in `DataResource`.
+- Expense type key: `type`
+- Expense sub-type key: `sub_type`
 
 ## Errors
 
