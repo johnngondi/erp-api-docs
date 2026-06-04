@@ -56,6 +56,7 @@ Class: `App\Data\BillData`
 | `vendor_id` | Yes | `int` | - | `Exists` |
 | `facility_id` | Yes | `int` | - | `Exists` |
 | `expense_type_id` | Yes | `int` | - | `Exists` |
+| `expense_category_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `currency_id` | No | `?int` | - | `Exists` |
 | `type` | No | `string` | `lpo`, `contract`, `liability`, `other` | `In` |
 | `billable_type` | No | `?string` | - | - |
@@ -103,6 +104,7 @@ Class: `App\Data\ContractData`
 | `end_at` | No | `?string` | - | `Computed` |
 | `currency_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `expense_type_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
+| `expense_category_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `expense_sub_type_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `asset_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `agreement_upload_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
@@ -166,6 +168,7 @@ Class: `App\Data\ExpenseData`
 | `tax_id` | Yes | `?int` | - | `Exists` |
 | `paid` | No | `?float` | - | - |
 | `status` | No | `string` | `pending`, `unpaid`, `partially-paid`, `paid`, `cancelled` | `In` |
+| `expense_category_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 
 ## FacilityBlockData
 
@@ -404,6 +407,7 @@ Class: `App\Data\ProcurementRequestData`
 | `description` | Yes | `string` | - | `Required` |
 | `type` | Yes | `string` | `purchase`, `work` | `In` |
 | `expense_type_id` | Yes | `int` | - | `Exists` |
+| `expense_category_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `expense_sub_type_id` | Yes | `int` | - | `Exists` |
 | `facility_id` | Yes | `int` | - | `Exists` |
 | `ticket_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
@@ -671,6 +675,7 @@ Class: `App\Data\UpdateBillData`
 | `invoice_date` | No | `?string` | - | `Date` |
 | `invoice_upload_id` | No | `?int` | - | `Exists` |
 | `tax_invoice_number` | No | `?string` | - | - |
+| `expense_category_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `notes` | No | `?string` | - | - |
 
 ## UploadInvoiceBillData
@@ -683,6 +688,7 @@ Class: `App\Data\UploadInvoiceBillData`
 | `invoice_date` | Yes | `string` | - | `Date` |
 | `tax_invoice_number` | Yes | `string` | - | - |
 | `invoice_upload_id` | No | `?int` | - | `Exists` |
+| `expense_category_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `notes` | No | `?string` | - | - |
 
 ## UtilityData
@@ -763,4 +769,3 @@ Class: `App\Data\VehicleData`
 | `current_value` | No | `?int` | - | - |
 | `status` | No | `?string` | `in use`, `decommissioned`, `suspended` | `In` |
 | `drivers` | No | `?array` | - | - |
-

@@ -284,6 +284,7 @@ Query params:
 - `filter[created_at]`
 - `filter[delivery_at]`
 - `filter[delivered_at]`
+- `filter[expense_category_id]`
 - `filter[rating]`
 - `sort=id,created_at,amount,delivery_at`
 - `include=items` (optional)
@@ -299,9 +300,11 @@ Response item shape (`ProcurementLpoResource`):
 - `amount_after_discount`
 - `tax`
 - `total`
+- `expense_category_id`
 - `delivery_at` (`raw`, `formatted`, `diff`)
 - `delivered_at` (`raw`, `formatted`, `diff`)
 - `procurementRequest`
+- `expenseCategory`
 - `currency`
 - `assignedTechnician`
 - `document_number`
@@ -341,10 +344,6 @@ Request body (`CloseLpoData`):
 | `document_number` | string | Yes | Delivery/work document reference |
 | `document_upload_id` | integer | Yes | Must exist in `uploads.id` |
 | `work_advice` | string/null | No | Optional |
-| `quality_rating` | integer | No | Defaults to `0` |
-| `speed_rating` | integer | No | Defaults to `0` |
-| `communication_rating` | integer | No | Defaults to `0` |
-| `comments` | string/null | No | Optional |
 
 Submit behavior:
 
@@ -372,6 +371,7 @@ Query params:
 - `filter[created_at]`
 - `filter[facility_id]`
 - `filter[expense_type_id]`
+- `filter[expense_category_id]`
 - `filter[expense_sub_type_id]`
 - `filter[asset_id]`
 - `sort=id,title,status,start_at,end_at,created_at`
@@ -394,6 +394,7 @@ Response item shape (`ContractResource`):
 - `vendor`
 - `facility`
 - `expenseType`
+- `expenseCategory`
 - `expenseSubType`
 - `asset`
 - `agreementUpload`
@@ -410,6 +411,7 @@ Response item shape (`ContractResource`):
 Includes loaded by controller:
 
 - `expenseType`
+- `expenseCategory`
 - `expenseSubType`
 - `asset`
 - `facility`
@@ -430,3 +432,4 @@ Notes:
 
 - Routes exist on vendor portal.
 - Current vendor controller implements read endpoints only (`index`, `show`).
+- For create/update payload shape in app routes, include optional `expense_category_id` (must exist in `expense_categories.id`); backend derives it from `expense_type_id` when omitted.

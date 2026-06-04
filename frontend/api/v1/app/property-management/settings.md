@@ -283,9 +283,9 @@ PM seeded general settings starter catalog:
 | `default_management_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for management fees |
 | `default_letting_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for letting/reletting fees |
 
-<!-- ### Bank Accounts
+### Bank Accounts
 
-Endpoints:
+Endpoints (prefixed with `/api/v1/app/{company}/property-management/settings`):
 
 - `GET /finance/banks/accounts`
 - `POST /finance/banks/accounts`
@@ -296,7 +296,7 @@ Endpoints:
 List query support:
 
 - Filters:
-  - `filter[type]`, `filter[account_name]`, `filter[account_number]`, `filter[status]`
+  - `filter[search]`, `filter[type]`, `filter[account_name]`, `filter[account_number]`, `filter[status]`
   - `filter[user_group_id]`, `filter[user_id]`, `filter[bank_branch_id]`
 - Sort:
   - `sort=id,account_name,status`
@@ -310,11 +310,19 @@ Create/Update payload (`BankAccountData`):
 | `bank_branch_id` | Yes | integer | Must exist in `bank_branches.id` |
 | `account_name` | Yes | string | - |
 | `account_number` | Yes | string | - |
-| `type` | No | string | `system`, `user` (defaults to `user`) |
-| `status` | No | string | `active`, `inactive` (defaults to `active`) |
-| `user_group_id` | No | integer | Must exist in `user_groups.id` |
-| `user_id` | No | integer | Must exist in `users.id`; defaults to current user for `type=user` |
-| `alias` | No | string | Optional | -->
+| `account_number_confirmation` | Yes | string | - |
+| `type` | No | string | `system`, `user` (defaults to `system`) |
+| `user_group_id` | If `type` is 'user' | integer | Must exist in `user_groups.id` |
+| `user_id` | If `type` is 'user' | integer | Must exist in `users.id` |
+| `alias` | No | string | Optional |
+| `payment_methods` | No | array | Allowed payment methods for this account. Omit to leave existing links untouched on update; send `[]` to clear them. |
+| `payment_methods[].payment_method_id` | Yes (per item) | integer | Must exist in `payment_methods.id` |
+| `payment_methods[].cancellation_fee` | No | decimal | Required if selected payment method `has_cancellation_fee` is true |
+| `payment_methods[].notes` | No | string | Nullable |
+
+Immutable on update — for `PUT/PATCH`, `account_number`, `type`, `user_group_id`, and `user_id`
+
+The response embeds the linked methods under `payment_methods` (each with `id`, `name`, `code`, `cancellation_fee`, `notes`).
 
 ### Expense Categories
 

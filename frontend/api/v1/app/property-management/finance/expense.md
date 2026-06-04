@@ -24,7 +24,7 @@ Supported query params:
 
 - Filters:
   - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers)
-  - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_type_id]`, `filter[status]`
+  - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[status]`
   - `filter[created_at]`, `filter[transaction_at]`
 - Sort:
   - `sort=id,invoice_number,amount,tax,total,paid,balance,transaction_at,created_at,updated_at`
@@ -83,6 +83,7 @@ Sample list response (`FacilityExpenseResource`):
 | `facility_id` | Yes | integer | Must exist in `facilities.id` |
 | `transaction_at` | Yes | date | - |
 | `expense_type_id` | Yes | integer | Must exist in `expense_types.id` |
+| `expense_category_id` | No | integer | Must exist in `expense_categories.id`; when omitted, backend derives from `expense_type_id` |
 | `invoice_number` | Yes | string | - |
 | `amount` | Yes | number | - |
 | `status` | No | string | `pending`, `unpaid`, `partially-paid`, `paid`, `cancelled` |

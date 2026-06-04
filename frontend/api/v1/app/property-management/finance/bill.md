@@ -25,7 +25,7 @@ Supported query params:
 
 - Filters:
   - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers)
-  - `filter[facility_id]`, `filter[vendor_id]`, `filter[created_at]`, `filter[type]`, `filter[status]`
+  - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[created_at]`, `filter[type]`, `filter[status]`
 - Sort:
   - `sort=id,invoice_number,tax_invoice_number,amount,tax,total,paid,balance,invoice_date,invoice_uploaded_at,expense_posted_at,created_at,updated_at`
 - Include:
@@ -85,6 +85,7 @@ Sample list response (`FacilityBillResource`):
 | `vendor_id` | Yes | integer | Must exist in `users.id` |
 | `facility_id` | Yes | integer | Must exist in `facilities.id` |
 | `expense_type_id` | Yes | integer | Must exist in `expense_types.id` |
+| `expense_category_id` | No | integer | Must exist in `expense_categories.id`; when omitted, backend derives from `expense_type_id` |
 | `type` | No | string | `lpo`, `contract`, `liability`, `other` |
 | `items` | No | array | Bill item objects |
 | `currency_id` | No | integer | Must exist in `currencies.id` |
@@ -116,4 +117,5 @@ Used by `post-bill`, `reject-invoice`, and some updates.
 | `invoice_date` | Yes | date |
 | `tax_invoice_number` | Yes | string |
 | `invoice_upload_id` | No | integer (`uploads.id`) |
+| `expense_category_id` | No | integer (`expense_categories.id`) |
 | `notes` | No | string |

@@ -69,7 +69,7 @@ Request fields:
 | `has_vat`                | No          | boolean        | Optional                                              |
 | `tax_pin`                | Conditional | string         | Required if `has_vat=true`; unique in `users.tax_pin` |
 | `withholds`              | No          | array          | Optional - Get from list of withholding taxes                                              |
-| `contracts`              | No          | array          | Optional - Add management contracts as shown in the payload below - Will automatically create properties in there.                                             |
+| `contracts`              | No          | array          | Optional - Add facilities and management contracts. Each item supports `property` and `contract`.                                             |
 | `accounts`              | No          | array          | Optional - Add bank accounts as shown in the payload below.                                             |
 
 
@@ -141,6 +141,17 @@ Example request:
   ]
 }
 ```
+
+Contract rate mapping:
+
+- `contracts[*].contract.letting_fee.rate`
+  - `half_month_rent` => `0.5`
+  - `one_month_rent` => `1`
+  - `two_month_rent` => `2`
+- `contracts[*].contract.re_letting_fee.rate`
+  - `half_month_rent` => `0.5`
+  - `one_month_rent` => `1`
+  - `two_month_rent` => `2`
 
 Example response:
 
@@ -279,6 +290,35 @@ Example response:
   ]
 }
 ```
+
+## Landlord Management Contracts
+
+Base:
+
+`/api/v1/app/{company}/users/landlords/{landlord}/management-contracts`
+
+Endpoints:
+
+- `GET /management-contracts`
+- `POST /management-contracts`
+- `GET /management-contracts/{managementContract}`
+- `PUT/PATCH /management-contracts/{managementContract}`
+- `DELETE /management-contracts/{managementContract}`
+
+Request payload fields:
+
+| Field                   | Required | Type           | Notes |
+| ----------------------- | -------- | -------------- | ----- |
+| `facility_id`           | Yes      | integer        | Must belong to the selected landlord |
+| `management_fee_type`   | Yes      | enum           | `none`, `percentage`, `fixed` |
+| `management_fee_rate`   | Yes      | number         | Numeric. `none` stores as `0` |
+| `letting_fee_type`      | Yes      | enum           | `none`, `percentage`, `fixed` |
+| `letting_fee_rate`      | No       | number/string  | Number or: `half_month_rent`, `one_month_rent`, `two_month_rent` |
+| `re_letting_fee_type`   | Yes      | enum           | `none`, `percentage`, `fixed` |
+| `re_letting_fee_rate`   | No       | number/string  | Number or: `half_month_rent`, `one_month_rent`, `two_month_rent` |
+| `wages`                 | No       | object         | Any wage structure object |
+| `contract_upload_id`    | No       | integer        | Upload reference |
+
 
 ## Delete Landlord
 

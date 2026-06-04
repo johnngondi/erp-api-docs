@@ -39,7 +39,6 @@ Validation error shape:
 }
 ```
 
-Availability failures (over-allocation) are returned as `422` with field-specific keys (for example `leasable_space`, `two_bedroom_units`, `open_parkings`).
 
 ## 2. Data Model and Hierarchy
 
@@ -89,9 +88,9 @@ These rules are now enforced during creation:
 
 Capacity is maintained at each structure level (facility, block, wing, floor):
 - space buckets: `leasable_space`, `common_space`, `landlord_space`
-- unit buckets: `studio_units`, `one_bedroom_units`, `two_bedroom_units`, `three_bedroom_units`, `four_plus_bedroom_units`, `mansions`
 - parking buckets: `open_parkings`, `closed_parkings`
 - allocated mirrors: `allocated_*`
+- residential allocations: `residential_units[*].quantity` vs `residential_units[*].allocated`
 
 ## 3. Division Rules (Critical for frontend)
 
@@ -102,8 +101,8 @@ Rule summary:
 | Scenario | What is enforced |
 |---|---|
 | `division_type = size` | Space size buckets (`*_space`) + parking |
-| `division_type = unit` | Unit buckets (`*_units`, `mansions`) + parking |
-| `division_type = both` | Space and unit + parking |
+| `division_type = unit` | Unit allocation by residential unit id + parking |
+| `division_type = both` | Space + parking (unit id not required) |
 
 Special space rules:
 - `is_signage = true`
@@ -112,17 +111,15 @@ Special space rules:
 - `is_parking = true`
   - always enforced against parking capacity (open or closed), regardless of division type
   - consumes exactly 1 parking slot
-- `is_mansion = true`
-  - mansion mapping takes precedence over `rooms`
-- room mapping for non-parking/non-signage spaces:
-  - `rooms <= 0` => `studio`
-  - `rooms = 1` => `one_bedroom`
-  - `rooms = 2` => `two_bedroom`
-  - `rooms = 3` => `three_bedroom`
-  - `rooms >= 4` => `four_plus_bedroom`
+Unit allocation rule:
+- when effective division type is `unit`, space creation must reference `facility_residential_unit_id`
+- backend validates that the selected unit belongs to one of the current floor ancestors (`floor`, `wing`, `block`, or root `facility`)
 
-Important legacy compatibility rule:
-- when effective division type is `unit`, do not rely on `*_space` to enforce availability for unit spaces. Unit consumption is 1 per space item (size is still sent but not capacity-driving for unit enforcement).
+Residential unit hierarchy rule:
+- for block/wing/floor residential unit rows, `parent_facility_residential_unit_id` is required
+- parent must belong to the immediate parent structure level
+- child `quantity` cannot exceed parent remaining balance after sibling child allocations
+- child `title` and `bedrooms` are derived from the parent row
 
 ### 3.1 `type_id` rule for spaces when parent is `both`
 
@@ -154,6 +151,28 @@ Reason:
 - `GET /facilities/{facility}/spaces`
 - `GET /facilities/{facility}/roles`
 - `PUT /facilities/{facility}/roles/{role}`
+
+## 4.3 Facility Utilities
+
+- `GET /facilities/{facility}/utilities`
+- `POST /facilities/{facility}/utilities`
+- `GET /facilities/{facility}/utilities/{utility}`
+- `PUT /facilities/{facility}/utilities/{utility}`
+- `PATCH /facilities/{facility}/utilities/{utility}`
+- `DELETE /facilities/{facility}/utilities/{utility}`
+
+Create/update payload:
+
+```json
+{
+  "utility_id": 6,
+  "utility_bill_distribution_method": "utility provider rate",
+  "vendor_id": 1
+}
+```
+
+Note:
+- `utility_id` maps to `lease_components.id`.
 
 
 ## 4.5 Blocks
@@ -300,29 +319,100 @@ Create/update payload example:
 
 ```json
 {
-  "facility_type_id": 3,
+  "facility_type_id": 1,
   "space_unit_id": 1,
-  "name": "Parkview Mixed Use",
-  "description": "Mixed commercial and residential complex",
-  "construction_date": "2024-01-15",
+  "landlord_id": 10,
+  "reporting_currency_id": 1,
+  "name": "Kahiu House",
+  "description": null,
+  "construction_date": null,
   "utility_bill_distribution_method": "utility provider rate",
-  "has_blocks": true,
+  "lease_component_allocation_priority_method": "proportional",
+  "has_blocks": false,
   "has_wings": false,
-  "leasable_space": 18000,
-  "common_space": 4200,
-  "landlord_space": 1200,
-  "studio_units": 30,
-  "one_bedroom_units": 45,
-  "two_bedroom_units": 32,
-  "three_bedroom_units": 12,
-  "four_plus_bedroom_units": 6,
-  "mansions": 2,
-  "open_parkings": 60,
-  "closed_parkings": 40,
-  "country_id": 110,
-  "city_id": 901,
-  "physical_address": "Westlands, Nairobi",
-  "coordinates": "-1.2641,36.8106"
+  "leasable_space": 500,
+  "common_space": 0,
+  "landlord_space": 0,
+  "residential_units": [
+    {
+      "title": "Studio",
+      "bedrooms": 0,
+      "quantity": 5,
+      "indicative_rent_per_unit": 5000,
+      "indicative_service_charge_per_unit": 2000
+    }
+  ],
+  "open_parkings": 0,
+  "closed_parkings": 0,
+  "indicative_rent_rate_per_space_unit": 120,
+  "indicative_service_charge_rate_per_space_unit": 25,
+  "indicative_open_parking_fee_per_lot": 3000,
+  "indicative_closed_parking_fee_per_lot": null,
+  "deposit_months": 3,
+  "bill_legal_fees": false,
+  "legal_fee_type": "per space unit",
+  "indicative_legal_rate": null,
+  "country_id": 1,
+  "city_id": 74,
+  "physical_address": "Kilimani",
+  "coordinates": null,
+  "auto_generate_utility_meters": true,
+  "utilities": [
+    {
+      "utility_id": 6,
+      "utility_bill_distribution_method": "utility provider rate",
+      "vendor_id": 1
+    },
+    {
+      "utility_id": 7,
+      "utility_bill_distribution_method": "defined",
+      "vendor_id": 1
+    }
+  ],
+  "contract": {
+    "management_fee": {
+      "enabled": true,
+      "type": "percentage",
+      "rate": 5
+    },
+    "letting_fee": {
+      "enabled": true,
+      "type": "fixed",
+      "rate": "one_month_rent"
+    },
+    "re_letting_fee": {
+      "enabled": true,
+      "type": "fixed",
+      "rate": "one_month_rent"
+    },
+    "wages": {
+      "has_wages": true,
+      "items": [
+        {
+          "role": "Caretaker",
+          "wages": 50000
+        },
+        {
+          "role": "Property Manager",
+          "wages": 100000
+        }
+      ]
+    }
+  },
+  "roles": [
+    {
+      "role_id": 6,
+      "user_id": 1
+    },
+    {
+      "role_id": 7,
+      "user_id": 1
+    },
+    {
+      "role_id": 11,
+      "user_id": 2
+    }
+  ]
 }
 ```
 
@@ -330,6 +420,10 @@ Allowed values for `utility_bill_distribution_method`:
 - `utility provider rate`
 - `distribute to tenants`
 - `defined`
+
+Notes:
+- `utilities[*].utility_id` maps to `lease_components.id` (not `utilities.id`).
+- `legal_fee_type` allowed values are `per space unit` and `fixed`.
 
 Backend-required baseline fields in DTO:
 - `facility_type_id`
@@ -356,22 +450,24 @@ Facility response example:
   "allocated_leasable_space": 3000,
   "allocated_common_space": 500,
   "allocated_landlord_space": 200,
-  "studio_units": 30,
-  "one_bedroom_units": 45,
-  "two_bedroom_units": 32,
-  "three_bedroom_units": 12,
-  "four_plus_bedroom_units": 6,
-  "mansions": 2,
-  "allocated_studio_units": 4,
-  "allocated_one_bedroom_units": 7,
-  "allocated_two_bedroom_units": 3,
-  "allocated_three_bedroom_units": 1,
-  "allocated_four_plus_bedroom_units": 0,
-  "allocated_mansions": 0,
   "open_parkings": 60,
   "closed_parkings": 40,
   "allocated_open_parkings": 8,
   "allocated_closed_parkings": 3,
+  "indicative_open_parking_fee_per_lot": 3000,
+  "indicative_closed_parking_fee_per_lot": null,
+  "residential_units": [
+    {
+      "id": 12,
+      "title": "Studio",
+      "bedrooms": 0,
+      "quantity": 50,
+      "allocated": 18,
+      "available": 32,
+      "indicative_rent_per_unit": 5000,
+      "indicative_service_charge_per_unit": 2000
+    }
+  ],
   "physical_address": "Westlands, Nairobi",
   "coordinates": "-1.2641,36.8106",
   "space_unit": "SqFt",
@@ -402,12 +498,14 @@ Create/update payload:
   "leasable_space": 6000,
   "common_space": 1200,
   "landlord_space": 300,
-  "studio_units": 10,
-  "one_bedroom_units": 20,
-  "two_bedroom_units": 18,
-  "three_bedroom_units": 8,
-  "four_plus_bedroom_units": 3,
-  "mansions": 1,
+  "residential_units": [
+    {
+      "parent_facility_residential_unit_id": 12,
+      "quantity": 10,
+      "indicative_rent_per_unit": 5000,
+      "indicative_service_charge_per_unit": 2000
+    }
+  ],
   "open_parkings": 20,
   "closed_parkings": 12
 }
@@ -426,18 +524,7 @@ Response item example:
   "allocated_leasable_space": 800,
   "allocated_common_space": 150,
   "allocated_landlord_space": 50,
-  "studio_units": 10,
-  "one_bedroom_units": 20,
-  "two_bedroom_units": 18,
-  "three_bedroom_units": 8,
-  "four_plus_bedroom_units": 3,
-  "mansions": 1,
-  "allocated_studio_units": 2,
-  "allocated_one_bedroom_units": 4,
-  "allocated_two_bedroom_units": 1,
-  "allocated_three_bedroom_units": 0,
-  "allocated_four_plus_bedroom_units": 0,
-  "allocated_mansions": 0,
+  "residential_units": [],
   "open_parkings": 20,
   "closed_parkings": 12,
   "allocated_open_parkings": 3,
@@ -455,12 +542,14 @@ Create/update payload (same shape for wings under facility or under block):
   "leasable_space": 3000,
   "common_space": 700,
   "landlord_space": 150,
-  "studio_units": 6,
-  "one_bedroom_units": 14,
-  "two_bedroom_units": 10,
-  "three_bedroom_units": 4,
-  "four_plus_bedroom_units": 2,
-  "mansions": 0,
+  "residential_units": [
+    {
+      "parent_facility_residential_unit_id": 21,
+      "quantity": 6,
+      "indicative_rent_per_unit": 5500,
+      "indicative_service_charge_per_unit": 2200
+    }
+  ],
   "open_parkings": 8,
   "closed_parkings": 6
 }
@@ -478,18 +567,7 @@ Response item example:
   "allocated_leasable_space": 500,
   "allocated_common_space": 90,
   "allocated_landlord_space": 40,
-  "studio_units": 6,
-  "one_bedroom_units": 14,
-  "two_bedroom_units": 10,
-  "three_bedroom_units": 4,
-  "four_plus_bedroom_units": 2,
-  "mansions": 0,
-  "allocated_studio_units": 1,
-  "allocated_one_bedroom_units": 2,
-  "allocated_two_bedroom_units": 0,
-  "allocated_three_bedroom_units": 0,
-  "allocated_four_plus_bedroom_units": 0,
-  "allocated_mansions": 0,
+  "residential_units": [],
   "open_parkings": 8,
   "closed_parkings": 6,
   "allocated_open_parkings": 1,
@@ -509,12 +587,14 @@ Create/update payload (facility/block/wing floor creation all use same structure
   "leasable_space": 1400,
   "common_space": 260,
   "landlord_space": 80,
-  "studio_units": 4,
-  "one_bedroom_units": 7,
-  "two_bedroom_units": 5,
-  "three_bedroom_units": 2,
-  "four_plus_bedroom_units": 1,
-  "mansions": 0,
+  "residential_units": [
+    {
+      "parent_facility_residential_unit_id": 33,
+      "quantity": 4,
+      "indicative_rent_per_unit": 6000,
+      "indicative_service_charge_per_unit": 2500
+    }
+  ],
   "open_parkings": 4,
   "closed_parkings": 3
 }
@@ -534,18 +614,7 @@ Response item example:
   "allocated_leasable_space": 300,
   "allocated_common_space": 40,
   "allocated_landlord_space": 10,
-  "studio_units": 4,
-  "one_bedroom_units": 7,
-  "two_bedroom_units": 5,
-  "three_bedroom_units": 2,
-  "four_plus_bedroom_units": 1,
-  "mansions": 0,
-  "allocated_studio_units": 1,
-  "allocated_one_bedroom_units": 1,
-  "allocated_two_bedroom_units": 0,
-  "allocated_three_bedroom_units": 0,
-  "allocated_four_plus_bedroom_units": 0,
-  "allocated_mansions": 0,
+  "residential_units": [],
   "open_parkings": 4,
   "closed_parkings": 3,
   "allocated_open_parkings": 1,
@@ -582,8 +651,7 @@ Create payload:
   "facility_floor_id": 78,
   "space_type": "leasable",
   "size": 1,
-  "rooms": 2,
-  "is_mansion": false,
+  "facility_residential_unit_id": 31,
   "is_parking": false,
   "is_signage": false,
   "type_id": 2
@@ -617,22 +685,6 @@ Signage payload:
   "size": 1,
   "is_parking": false,
   "is_signage": true
-}
-```
-
-Mansion payload:
-
-```json
-{
-  "name": "Mansion-01",
-  "facility_floor_id": 78,
-  "space_type": "leasable",
-  "size": 1,
-  "rooms": 10,
-  "is_mansion": true,
-  "is_parking": false,
-  "is_signage": false,
-  "type_id": 2
 }
 ```
 
@@ -731,10 +783,10 @@ For space create/update:
 - if `is_parking = true`, require `parking_type` (`open` or `closed`)
 - if `is_signage = true`, do not block on capacity UI (backend treats signage as unlimited)
 - if root facility division is `both` and space is not parking/signage, require `type_id`
-- if `is_mansion = true`, rooms input can exist but mansion logic is used
+- if effective division resolves to `unit`, send `facility_residential_unit_id`
 
 For structures (facility/block/wing/floor):
-- do not send negative values for space/unit/parking buckets
+- do not send negative values for space/parking/residential-unit quantities
 - when API returns `422` over-allocation, display backend field errors directly near matching inputs
 
 For parking spaces:
@@ -755,3 +807,244 @@ Most mutating endpoints return:
 ```
 
 Collection endpoints return paginated resources under `data` and include pagination `links` and `meta`.
+
+## 9. Postman Quick Payloads
+
+These are copy-paste payloads for the new residential units design.
+
+### 9.1 Block
+
+Create block route:
+`POST /api/v1/app/{company}/property-management/facilities/{facility}/blocks`
+
+```json
+{
+  "name": "Block A",
+  "has_wings": true,
+  "leasable_space": 12000,
+  "common_space": 2400,
+  "landlord_space": 500,
+  "residential_units": [
+    {
+      "parent_facility_residential_unit_id": 1,
+      "quantity": 30,
+      "indicative_rent_per_unit": 18000,
+      "indicative_service_charge_per_unit": 2500
+    },
+    {
+      "parent_facility_residential_unit_id": 2,
+      "quantity": 24,
+      "indicative_rent_per_unit": 26000,
+      "indicative_service_charge_per_unit": 3000
+    }
+  ],
+  "open_parkings": 30,
+  "closed_parkings": 12
+}
+```
+
+Update block route:
+`PUT /api/v1/app/{company}/property-management/facilities/blocks/{block}`
+
+```json
+{
+  "name": "Block A - Rev 2",
+  "has_wings": true,
+  "leasable_space": 12500,
+  "common_space": 2500,
+  "landlord_space": 600,
+  "residential_units": [
+    {
+      "id": 401,
+      "parent_facility_residential_unit_id": 1,
+      "quantity": 32,
+      "indicative_rent_per_unit": 18500,
+      "indicative_service_charge_per_unit": 2600
+    },
+    {
+      "parent_facility_residential_unit_id": 5,
+      "quantity": 12,
+      "indicative_rent_per_unit": 42000,
+      "indicative_service_charge_per_unit": 4000
+    }
+  ],
+  "open_parkings": 32,
+  "closed_parkings": 14
+}
+```
+
+### 9.2 Wing
+
+Create wing route:
+- under facility: `POST /api/v1/app/{company}/property-management/facilities/{facility}/wings`
+- under block: `POST /api/v1/app/{company}/property-management/facilities/blocks/{block}/wings`
+
+```json
+{
+  "name": "North Wing",
+  "leasable_space": 5000,
+  "common_space": 800,
+  "landlord_space": 200,
+  "residential_units": [
+    {
+      "parent_facility_residential_unit_id": 21,
+      "quantity": 18,
+      "indicative_rent_per_unit": 28000,
+      "indicative_service_charge_per_unit": 3200
+    },
+    {
+      "parent_facility_residential_unit_id": 23,
+      "quantity": 8,
+      "indicative_rent_per_unit": 65000,
+      "indicative_service_charge_per_unit": 6000
+    }
+  ],
+  "open_parkings": 10,
+  "closed_parkings": 8
+}
+```
+
+Update wing route:
+`PUT /api/v1/app/{company}/property-management/facilities/wings/{wing}`
+
+```json
+{
+  "name": "North Wing - Rev 1",
+  "leasable_space": 5200,
+  "common_space": 900,
+  "landlord_space": 220,
+  "residential_units": [
+    {
+      "id": 510,
+      "parent_facility_residential_unit_id": 21,
+      "quantity": 20,
+      "indicative_rent_per_unit": 28500,
+      "indicative_service_charge_per_unit": 3300
+    }
+  ],
+  "open_parkings": 11,
+  "closed_parkings": 8
+}
+```
+
+### 9.3 Floor
+
+Create floor route:
+- under facility: `POST /api/v1/app/{company}/property-management/facilities/{facility}/floors`
+- under block: `POST /api/v1/app/{company}/property-management/facilities/blocks/{block}/floors`
+- under wing: `POST /api/v1/app/{company}/property-management/facilities/wings/{wing}/floors`
+
+```json
+{
+  "name": "Floor 1",
+  "is_parking": false,
+  "is_divisible": true,
+  "leasable_space": 2000,
+  "common_space": 300,
+  "landlord_space": 100,
+  "residential_units": [
+    {
+      "parent_facility_residential_unit_id": 33,
+      "quantity": 10,
+      "indicative_rent_per_unit": 17000,
+      "indicative_service_charge_per_unit": 2200
+    }
+  ],
+  "open_parkings": 6,
+  "closed_parkings": 4
+}
+```
+
+Update floor route:
+`PUT /api/v1/app/{company}/property-management/facilities/floors/{floor}`
+
+```json
+{
+  "name": "Floor 1 - Rev 1",
+  "is_parking": false,
+  "is_divisible": true,
+  "leasable_space": 2100,
+  "common_space": 320,
+  "landlord_space": 100,
+  "residential_units": [
+    {
+      "id": 680,
+      "parent_facility_residential_unit_id": 33,
+      "quantity": 11,
+      "indicative_rent_per_unit": 17250,
+      "indicative_service_charge_per_unit": 2300
+    }
+  ],
+  "open_parkings": 6,
+  "closed_parkings": 5
+}
+```
+
+### 9.4 Space
+
+Create space route:
+`POST /api/v1/app/{company}/property-management/facility-spaces/spaces`
+
+Leasable space (unit-based facility or unit-based type resolution):
+
+```json
+{
+  "name": "A-101",
+  "facility_floor_id": 78,
+  "space_type": "leasable",
+  "size": 1,
+  "facility_residential_unit_id": 680,
+  "is_parking": false,
+  "is_signage": false,
+  "type_id": 2
+}
+```
+
+Parking space:
+
+```json
+{
+  "name": "P-017",
+  "facility_floor_id": 78,
+  "space_type": "common",
+  "size": 1,
+  "is_parking": true,
+  "parking_type": "closed",
+  "is_signage": false
+}
+```
+
+Signage space:
+
+```json
+{
+  "name": "Signage-East-1",
+  "facility_floor_id": 78,
+  "space_type": "common",
+  "size": 1,
+  "is_parking": false,
+  "is_signage": true
+}
+```
+
+Update space route:
+`PUT /api/v1/app/{company}/property-management/facility-spaces/spaces/{space}`
+
+```json
+{
+  "name": "A-101A",
+  "space_type": "leasable",
+  "size": 1,
+  "facility_residential_unit_id": 680,
+  "is_parking": false,
+  "is_signage": false,
+  "type_id": 2
+}
+```
+
+### 9.5 Residential units sync behavior on update
+
+- If `residential_units` is omitted from update payload, existing residential unit types are kept unchanged.
+- If `residential_units` is sent as `[]`, backend attempts to remove all unit types; any type with `allocated > 0` is blocked.
+- If `residential_units` is sent with rows containing `id`, those rows are updated in place.
+- Rows without `id` are created as new unit types.

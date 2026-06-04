@@ -29,7 +29,7 @@ Endpoints:
 
 - Filters:
   - `filter[id]`, `filter[title]`, `filter[ticket_id]`, `filter[facility_id]`, `filter[asset_id]`
-  - `filter[expense_type_id]`, `filter[expense_sub_type_id]`, `filter[created_at]`, `filter[priority]`, `filter[type]`
+  - `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[expense_sub_type_id]`, `filter[created_at]`, `filter[priority]`, `filter[type]`
 - Sort:
   - `sort=id,title,type,created_at,priority`
 - Include: not supported
@@ -48,6 +48,7 @@ Example:
 | `description` | Yes | string | - |
 | `type` | Yes | string | `purchase`, `work` |
 | `expense_type_id` | Yes | integer | Must exist in `expense_types.id` |
+| `expense_category_id` | No | integer | Must exist in `expense_categories.id`; when omitted, backend derives from `expense_type_id` |
 | `expense_sub_type_id` | Yes | integer | Must belong to selected expense type |
 | `facility_id` | Yes | integer | Must exist in `facilities.id` |
 | `ticket_id` | No | integer | Must exist in `tickets.id` |
@@ -72,6 +73,7 @@ Example:
 | `comment` | Conditional | string | Required in many non-approve flows |
 | `preferred_vendor_id` | Conditional | integer | Required if `has_preferred_vendor=true` |
 | `selected_option` | Conditional | integer | Required for specific quote-step states |
+| `expense_category_id` | Conditional | integer | Required if current step has `select_expense_category=true` and `status=approved` |
 | `vendors` | Conditional | array | Required if `override=true` |
 | `deadline` | No | string/date | Optional |
 | `has_preferred_vendor` | No | boolean | Default `false` |
@@ -93,7 +95,7 @@ List query support:
 
 - Filters:
   - `filter[id]`, `filter[procurement_request_id]`, `filter[assigned_technician_id]`
-  - `filter[created_at]`, `filter[delivery_at]`, `filter[delivered_at]`, `filter[rating]`
+  - `filter[expense_category_id]`, `filter[created_at]`, `filter[delivery_at]`, `filter[delivered_at]`, `filter[rating]`
 - Sort:
   - `sort=id,created_at,amount,delivery_at`
 - Include:
@@ -144,7 +146,7 @@ List query support:
 
 - Filters:
   - `filter[id]`, `filter[title]`, `filter[status]`, `filter[start_at]`, `filter[end_at]`, `filter[created_at]`
-  - `filter[facility_id]`, `filter[expense_type_id]`, `filter[expense_sub_type_id]`, `filter[asset_id]`
+  - `filter[facility_id]`, `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[expense_sub_type_id]`, `filter[asset_id]`
 - Sort:
   - `sort=id,title,status,start_at,end_at,created_at`
 - Include:
@@ -164,6 +166,7 @@ Create/Update payload:
 | `notes` | No | string | Optional |
 | `currency_id` | No | integer | Must exist in `currencies.id` |
 | `expense_type_id` | No | integer | Must exist in `expense_types.id` |
+| `expense_category_id` | No | integer | Must exist in `expense_categories.id`; when omitted, backend derives from `expense_type_id` |
 | `expense_sub_type_id` | No | integer | Must exist in `expense_sub_types.id` |
 | `asset_id` | No | integer | Must exist in `assets.id` |
 | `agreement_upload_id` | No | integer | Must exist in `uploads.id` |
