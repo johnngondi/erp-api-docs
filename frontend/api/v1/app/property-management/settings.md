@@ -302,12 +302,14 @@ List query support:
   - `sort=id,account_name,status`
 - Include:
   - `include=userGroup,user,bankBranch`
+  - `bankBranch` (with `bank`), `currency`, and `payment_methods` are eager-loaded on the index response by default
 
 Create/Update payload (`BankAccountData`):
 
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
 | `bank_branch_id` | Yes | integer | Must exist in `bank_branches.id` |
+| `currency_id` | No | integer | Nullable; must exist in `currencies.id` |
 | `account_name` | Yes | string | - |
 | `account_number` | Yes | string | - |
 | `account_number_confirmation` | Yes | string | - |
@@ -322,7 +324,15 @@ Create/Update payload (`BankAccountData`):
 
 Immutable on update — for `PUT/PATCH`, `account_number`, `type`, `user_group_id`, and `user_id`
 
-The response embeds the linked methods under `payment_methods` (each with `id`, `name`, `code`, `cancellation_fee`, `notes`).
+The response embeds the selected `currency` (`id`, `name`, `code`) and the linked methods under `payment_methods`. Each `payment_methods` item has:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | The link (pivot) row id in `bank_account_payment_methods` |
+| `payment_method_id` | integer | The payment method id |
+| `payment_method` | object | `{ id, name, code, has_cancellation_fee }` |
+| `cancellation_fee` | decimal\|null | Per-account cancellation fee for this method |
+| `notes` | string\|null | Per-account notes for this method |
 
 ### Expense Categories
 
