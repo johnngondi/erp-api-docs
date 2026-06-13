@@ -29,7 +29,8 @@ Supported query params:
 - Sort:
   - `sort=id,invoice_number,tax_invoice_number,amount,tax,total,paid,balance,invoice_date,invoice_uploaded_at,expense_posted_at,created_at,updated_at`
 - Include:
-  - `include=items`
+  - `include=items`, `include=withholdings`, `include=withholdings.withholdingTax`
+  - `include=creditNotes` — embeds the credit notes raised against each bill
 - Pagination:
   - `per_page`, `page`
 
@@ -60,6 +61,10 @@ Sample list response (`FacilityBillResource`):
       "total": "1160.00",
       "paid": "0.00",
       "balance": "1160.00",
+      "credit_notes_count": 1,
+      "has_credit_notes": true,
+      "credited_amount": 232,
+      "creditable_amount": 928,
       "vendor": { "id": 7, "name": "Acme Vendor" },
       "facility": { "id": 22, "name": "Riverside Plaza" },
       "status": { "value": "pending", "color": "warning" },
@@ -77,6 +82,22 @@ Sample list response (`FacilityBillResource`):
   ]
 }
 ```
+
+### Credit-note indicator fields
+
+Every bill in the list/detail response carries a summary of the **active** (non-cancelled) credit
+notes raised against it (see [Bill Credit Notes](./bill-credit-note.md)):
+
+| Field | Type | Notes |
+|---|---|---|
+| `credit_notes_count` | integer | Number of active credit notes against this bill. |
+| `has_credit_notes` | boolean | `true` when `credit_notes_count > 0`. Use this for a list badge/indicator. |
+| `credited_amount` | number | Total value credited so far (absolute, positive). |
+| `creditable_amount` | number | Value still creditable (`total − credited_amount`, floored at 0). Use as the credit note form's max. |
+
+To also pull the credit notes themselves into the row, add `?include=creditNotes`. The bill **show**
+endpoint always embeds them under `credit_notes` (each is a standard `FacilityBillResource` with
+negative figures).
 
 ## Create payload (`BillData`)
 

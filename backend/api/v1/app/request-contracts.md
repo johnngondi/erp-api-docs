@@ -99,7 +99,7 @@ Class: `App\Data\ContractData`
 | `facility_id` | Yes | `int` | - | `Exists` |
 | `start_at` | Yes | `string` | - | `Date` |
 | `period_in_days` | Yes | `int` | - | - |
-| `type` | Yes | `string` | `fixed`, `on-demand` | `In` |
+| `type` | Yes | `string` | `fixed`, `variable` | `In` |
 | `amount` | Yes | `int` | - | - |
 | `end_at` | No | `?string` | - | `Computed` |
 | `currency_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |

@@ -65,8 +65,8 @@ Response shape (`VendorUserResource`):
 Behavior:
 
 - Finds user by `email`.
-- If user exists, user is elevated to vendor group (existing `is_prequalified_vendor=true` is preserved).
-- If user does not exist, backend creates a new user and sets `is_prequalified_vendor=false`.
+- If user exists, user is elevated to vendor group (existing `is_statutory_vendor=true` is preserved).
+- If user does not exist, backend creates a new user and sets `is_statutory_vendor=false`.
 - Creates `vendor_users` record under currently authenticated vendor.
 
 Request body:

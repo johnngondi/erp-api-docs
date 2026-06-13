@@ -9,6 +9,8 @@ Base prefix:
 ## Resources
 
 - [Bills](./finance/bill.md)
+- [Liability Bills](./finance/liability-bill.md)
+- [Bill Credit Notes](./finance/bill-credit-note.md)
 - [Expenses](./finance/expense.md)
 - [Payment Vouchers](./finance/payment-voucher.md)
 - [Remittances](./finance/remittance.md)

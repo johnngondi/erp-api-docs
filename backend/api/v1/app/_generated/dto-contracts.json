@@ -534,7 +534,7 @@
                 "required": true,
                 "enum": [
                     "fixed",
-                    "on-demand"
+                    "variable"
                 ],
                 "rules": [
                     "In"

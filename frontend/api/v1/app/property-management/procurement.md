@@ -160,7 +160,7 @@ Create/Update payload:
 | `facility_id` | Yes | integer | Must exist in `facilities.id` |
 | `start_at` | Yes | date (`YYYY-MM-DD`) | - |
 | `period_in_days` | Yes | integer | Used to compute `end_at` |
-| `type` | Yes | string | `fixed`, `on-demand` |
+| `type` | Yes | string | `fixed`, `variable` |
 | `amount` | Yes | integer | - |
 | `title` | No | string | Optional |
 | `notes` | No | string | Optional |

@@ -61,7 +61,8 @@ Request fields:
 | `policy` | Conditional | boolean/accepted | Required for brand-new user |
 | `has_vat` | No | boolean | - |
 | `tax_pin` | Conditional | string | Required if `has_vat=true`; unique |
-| `is_prequalified_vendor` | No | boolean | Optional |
+| `is_statutory_vendor` | No | boolean | Optional |
+| `is_withholding_exempt` | No | boolean | Optional; when `true`, no withholding is applied to the vendor's bills even if withholding ids are supplied |
 | `withholds` | No | array | Optional |
 
 Example request:
@@ -74,7 +75,7 @@ Example request:
   "portal": 4,
   "terms": true,
   "policy": true,
-  "is_prequalified_vendor": true
+  "is_statutory_vendor": true
 }
 ```
 
