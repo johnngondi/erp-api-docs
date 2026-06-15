@@ -427,7 +427,7 @@ Response envelope for create/update/delete:
 
 UI placement:
 
-- `SettingsPage > Group Tab (Budget) > General Tab`
+- `SettingsPage > Finance > Budget Tab`
 
 These are standard PM general settings (group `budget`). They share the same controller, routes and `SettingResource` as every other general setting — there is no dedicated budget settings endpoint. Read and persist them exactly like the Finance/Procurement general settings above.
 
