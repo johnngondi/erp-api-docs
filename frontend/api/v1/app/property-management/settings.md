@@ -423,6 +423,58 @@ Response envelope for create/update/delete:
 - Expense type key: `type`
 - Expense sub-type key: `sub_type`
 
+## Budget Settings
+
+UI placement:
+
+- `SettingsPage > Group Tab (Budget) > General Tab`
+
+These are standard PM general settings (group `budget`). They share the same controller, routes and `SettingResource` as every other general setting — there is no dedicated budget settings endpoint. Read and persist them exactly like the Finance/Procurement general settings above.
+
+Endpoints (shared):
+
+- `GET /general`
+- `PATCH /general/{setting}`
+
+How to fetch budget settings:
+
+- Use `filter[group]=budget`
+- Example: `GET /general?filter[group]=budget`
+
+Saving:
+
+- One `PATCH /general/{setting}` per changed setting, body `{ "value": <scalar|null> }`.
+- The "Save" button on the sketch should issue a PATCH for each field the user changed (there is no bulk-save endpoint).
+- `value` is always stored/returned as a string (e.g. `"annually"`, `"90"`, `"10"`).
+
+Seeded Budget settings:
+
+| Key | Default | Type | Options | Dependency | Description |
+|---|---|---|---|---|---|
+| `facility_budget_cycle` | `annually` | `select` | static: `monthly`, `quarterly`, `semi_annually`, `annually` | none | How often a budget is prepared and the period each budget covers. |
+| `residential_units_income_estimate` | `90` | `number` | `null` | none | Assumed % occupancy for residential units; multiplied by indicative rents to project budgeted income. |
+| `commercial_units_income_estimate` | `85` | `number` | `null` | none | Assumed % occupancy for commercial units; multiplied by indicative rents to project budgeted income. |
+| `expenditure_budget_derivative` | `same_as_last_cycle` | `select` | static: `same_as_last_cycle`, `add_or_less`, `average` | none | How budgeted expenditure is derived from historical spend. |
+| `expenditure_budget_derivative_operation` | `add` | `select` | static: `add`, `less` | `expenditure_budget_derivative=add_or_less` | Whether the adjustment % is added to or subtracted from the last cycle. |
+| `expenditure_budget_derivative_operation_amount` | `10` | `number` | `null` | `expenditure_budget_derivative=add_or_less` | The adjustment percentage applied to the last cycle's expenditure. |
+| `expenditure_budget_derivative_average_periods` | `5` | `number` | `null` | `expenditure_budget_derivative=average` | Number of previous cycles to average when deriving the budget. |
+
+UI mapping (matches the layout sketch):
+
+- **Budgeting Cycle** → `facility_budget_cycle` (dropdown).
+- **Income Budget Estimate at** (two `% occupancy` inputs):
+  - Commercial Units → `commercial_units_income_estimate`
+  - Residential Units → `residential_units_income_estimate`
+- **Expenditure Budget** (single-choice radio group bound to `expenditure_budget_derivative`):
+  - `same_as_last_cycle` — "Same as last period". No extra inputs.
+  - `add_or_less` — "Add / less X% from last period". Reveals the operation dropdown (`expenditure_budget_derivative_operation`) and the percentage input (`expenditure_budget_derivative_operation_amount`).
+  - `average` — "Average last periods". Reveals the periods input (`expenditure_budget_derivative_average_periods`), labelled in years/cycles.
+
+Dependency behavior (same rule as all general settings):
+
+- Only show/enable a dependent field when its `dependency_key` setting currently equals its `dependency_value`. The three `expenditure_budget_derivative_*` fields are mutually exclusive in this way, driven by the radio selection.
+- When the user switches the radio choice, hide the now-irrelevant dependent inputs. Persist them only when their controlling option is selected.
+
 ## Errors
 
 Use shared behavior in `docs/frontend/app/README.md`:

@@ -159,14 +159,14 @@ Create/Update payload:
 | `vendor_id` | Yes | integer | Must exist in `users.id` |
 | `facility_id` | Yes | integer | Must exist in `facilities.id` |
 | `start_at` | Yes | date (`YYYY-MM-DD`) | - |
-| `period_in_days` | Yes | integer | Used to compute `end_at` |
+| `end_at` | Yes | date (`YYYY-MM-DD`) | Inclusive last day of the contract. `period_in_days` is derived from `start_at`/`end_at` by the backend and stored automatically |
 | `type` | Yes | string | `fixed`, `variable` |
 | `amount` | Yes | integer | - |
+| `expense_type_id` | Yes | integer | Must exist in `facility_expense_types.id` |
+| `expense_category_id` | Yes | integer | Must exist in `expense_categories.id` |
 | `title` | No | string | Optional |
 | `notes` | No | string | Optional |
 | `currency_id` | No | integer | Must exist in `currencies.id` |
-| `expense_type_id` | No | integer | Must exist in `expense_types.id` |
-| `expense_category_id` | No | integer | Must exist in `expense_categories.id`; when omitted, backend derives from `expense_type_id` |
 | `expense_sub_type_id` | No | integer | Must exist in `expense_sub_types.id` |
 | `asset_id` | No | integer | Must exist in `assets.id` |
 | `agreement_upload_id` | No | integer | Must exist in `uploads.id` |

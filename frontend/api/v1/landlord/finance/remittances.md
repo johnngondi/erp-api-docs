@@ -29,7 +29,7 @@ Base route:
 
 ## Includes
 
-- `include=collections`
+- `include=receipts`
 - `include=expenses`
 
 ## Scope
@@ -41,5 +41,5 @@ Base route:
 - `show` loads:
 - Facility summary (`facility`)
 - Currency summary (`currency`)
-- Collections (via landlord `LeaseCollectionResource`)
+- Receipts (via `FacilityReceiptResource`; only confirmed receipts are linked to a remittance)
 - Expenses (via landlord `FacilityExpenseResource`)

@@ -20,7 +20,9 @@ Supported query params:
 
 - Filters:
   - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers)
-  - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_category_id]`, `filter[created_at]`, `filter[type]`, `filter[status]`
+  - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_category_id]`, `filter[type]`, `filter[status]`
+  - `filter[contract_id]` — bills raised against a given contract (`facility_contracts.id`)
+  - Date-range filters: `filter[invoice_date]`, `filter[created_at]`, `filter[invoice_uploaded_at]`, `filter[expense_posted_at]` — see [Date-range filtering](#date-range-filtering)
 - Sort:
   - `sort=id,invoice_number,tax_invoice_number,amount,tax,total,paid,balance,invoice_date,invoice_uploaded_at,expense_posted_at,created_at,updated_at`
 - Include:
@@ -32,6 +34,15 @@ Enum filter options:
 
 - `filter[type]`: `lpo`, `contract`, `liability`, `other` (from `FacilityBillData`)
 - `filter[status]`: `pending`, `unpaid`, `partially-paid`, `paid`, `cancelled` (from `BillStatus` enum)
+
+### Date-range filtering
+
+`invoice_date`, `created_at`, `invoice_uploaded_at`, and `expense_posted_at` are range filters.
+Each accepts an inclusive `from`/`to` pair (dates, `Y-m-d`); either bound may be omitted for an
+open-ended range. Both shapes are supported:
+
+- Bracket form: `filter[created_at][from]=2026-05-01&filter[created_at][to]=2026-05-31`
+- CSV form: `filter[created_at]=2026-05-01,2026-05-31`
 
 Sample list response (`Vendor\\FacilityBillResource`):
 

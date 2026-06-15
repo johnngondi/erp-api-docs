@@ -213,7 +213,7 @@
         "File":  "app\\Http\\Controllers\\Api\\V1\\App\\PropertyManagement\\Finance\\Remittances\\RemittanceController.php",
         "Filters":  "[\u0027id\u0027, \u0027status\u0027, \u0027facility_id\u0027, \u0027landlord_id\u0027, \u0027period_from\u0027, \u0027period_to\u0027]",
         "Sorts":  "[\u0027id\u0027, \u0027period_from\u0027, \u0027period_to\u0027]",
-        "Includes":  "[\u0027collections\u0027, \u0027expenses\u0027]",
+        "Includes":  "[\u0027receipts\u0027, \u0027expenses\u0027]",
         "Fields":  ""
     },
     {

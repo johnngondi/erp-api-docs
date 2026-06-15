@@ -35,7 +35,7 @@ Supported query params:
 - Sort:
   - `sort=id,period_from,period_to,total_income,total_expenses,remittable_amount,created_at,updated_at`
 - Include:
-  - `include=collections,expenses`
+  - `include=receipts,expenses`
 - Pagination:
   - `per_page`, `page`
 

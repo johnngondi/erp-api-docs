@@ -98,13 +98,12 @@ Class: `App\Data\ContractData`
 | `vendor_id` | Yes | `int` | - | `Exists` |
 | `facility_id` | Yes | `int` | - | `Exists` |
 | `start_at` | Yes | `string` | - | `Date` |
-| `period_in_days` | Yes | `int` | - | - |
+| `end_at` | Yes | `string` | - | `Required`, `Date` |
 | `type` | Yes | `string` | `fixed`, `variable` | `In` |
-| `amount` | Yes | `int` | - | - |
-| `end_at` | No | `?string` | - | `Computed` |
+| `amount` | Yes | `float` | - | - |
+| `expense_type_id` | Yes | `int` | - | `Required`, `Exists` |
+| `expense_category_id` | Yes | `int` | - | `Required`, `Exists` |
 | `currency_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
-| `expense_type_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
-| `expense_category_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `expense_sub_type_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `asset_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `agreement_upload_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
