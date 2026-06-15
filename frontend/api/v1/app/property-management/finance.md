@@ -15,6 +15,7 @@ Base prefix:
 - [Payment Vouchers](./finance/payment-voucher.md)
 - [Remittances](./finance/remittance.md)
 - [Settlements](./finance/settlement.md)
+- [Facility Budgets](./finance/budget.md)
 
 ## Notes
 
