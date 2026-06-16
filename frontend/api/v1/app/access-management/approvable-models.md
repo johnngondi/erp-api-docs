@@ -17,7 +17,8 @@ Implemented:
 Use this response to populate:
 
 - model dropdown in template form
-- status dropdowns (`initial_status`, `final_status`)
+
+`statuses` is informational only (e.g. for display). Templates no longer accept `initial_status`/`final_status`; the workflow statuses are fixed per model via the `INITIAL_STATUS_ON_CREATE`, `FINAL_STATUS_ON_APPROVAL`, and `FINAL_STATUS_ON_REJECTION` constants.
 
 ## Response Shape
 

@@ -41,10 +41,7 @@ Create payload table:
 
 | Field | Type | Required | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `name` | string | Yes | - | Template display name |
 | `model_type` | string | Yes | - | Must be one of `/approvable-models` classes |
-| `initial_status` | string | Yes | - | Must be one of selected model statuses |
-| `final_status` | string | Yes | - | Must be one of selected model statuses |
 | `steps` | array[object] | Yes | - | Ordered approval steps |
 | `steps[].step_order` | int | Yes | - | Must be sequential starting at `1` |
 | `steps[].role_id` | int | Yes | - | Company app-role ID to act at this step |
@@ -53,16 +50,18 @@ Create payload table:
 | `post_approval_event` | string \| null | No | `null` | FQCN event class; must exist |
 | `is_active` | boolean | No | `true` | Only one template per model/company |
 
+Notes:
+
+- `name` is **not** accepted in the request. It is derived from `model_type` and stored as `"<Model Label> Approval Template"` (e.g. `"Facility Invoice Approval Template"`). It is still returned in responses.
+- The resource statuses are **not** configured on the template. Each approvable model declares them as constants (`INITIAL_STATUS_ON_CREATE`, `FINAL_STATUS_ON_APPROVAL`, `FINAL_STATUS_ON_REJECTION`) and the system applies them automatically as the resource is created, approved, or rejected.
+
 Example request:
 
 ```json
 {
-  "name": "Tenant Invoice Approval",
   "model_type": "App\\Models\\FacilityInvoice",
   "always_requires_approval": false,
   "bypass_role_ids": [11],
-  "initial_status": "pending",
-  "final_status": "unpaid",
   "steps": [
     { "step_order": 1, "role_id": 21 },
     { "step_order": 2, "role_id": 22 }
@@ -74,11 +73,11 @@ Example request:
 
 `PUT/PATCH /api/v1/app/{company}/access-management/approval-templates/{approvalTemplate}`
 
-Update payload accepts any create fields except `model_type` (partial update supported).
+Update payload accepts the create fields except `model_type` (partial update supported). `name` is derived and cannot be set; resource statuses live on the model, not the template.
 
 Important:
 
-- `model_type` is immutable after template creation.
+- `model_type` is immutable after template creation, so the derived `name` never changes.
 - If `steps` are updated, only future approvals use the new template steps.
 - Existing `approval_steps` already created for in-flight approvables remain unchanged.
 

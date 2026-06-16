@@ -53,9 +53,11 @@ Create payload table:
 
 Behavior by `status`:
 
-- `approve`: marks current step as approved and moves to next pending step; on last step, marks approvable as template `final_status`.
+- `approve`: marks current step as approved and moves to next pending step; on the last step, marks the approvable with the model's `FINAL_STATUS_ON_APPROVAL` and fires the template's post-approval event.
 - `review`: marks current step as review, sends flow back to previous step, and resets previous step to pending.
-- `reject`: marks current step as rejected and ends the approval flow without moving approvable to final status.
+- `reject`: marks the current step as rejected and **terminates the entire workflow** — every remaining pending step for the approvable is also marked rejected (so no later step can be actioned), and the approvable is marked with the model's `FINAL_STATUS_ON_REJECTION`.
+
+The applied statuses come from constants declared on each approvable model (`INITIAL_STATUS_ON_CREATE`, `FINAL_STATUS_ON_APPROVAL`, `FINAL_STATUS_ON_REJECTION`), not from the approval template.
 
 Authorization:
 

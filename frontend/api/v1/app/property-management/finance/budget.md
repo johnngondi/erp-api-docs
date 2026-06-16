@@ -129,40 +129,10 @@ Returns the header plus grouped items.
         "budget_status": { "value": "ok", "color": "success" },
         "expense_type": { "id": 3, "name": "Repairs and Maintenance" }
       }
-    ],
-    "monthly_performance": {
-      "income": [
-        {
-          "month": "Jan",
-          "budgeted_amount": "4259835.62",
-          "actual_amount": "4800000.00",
-          "status": { "value": "ok", "color": "success" }
-        }
-      ],
-      "expenses": [
-        {
-          "month": "Jan",
-          "budgeted_amount": "25000.00",
-          "actual_amount": "92000.00",
-          "status": { "value": "over", "color": "danger" }
-        }
-      ]
-    }
+    ]
   }
 }
 ```
-
-### Monthly performance (`show` only)
-
-`monthly_performance` is included on `GET /finance/budgets/{budget}` (not on the
-list endpoint). It breaks the budget down by calendar month across the period:
-
-- `budgeted_amount` — the period budget split evenly across the months in the
-  period (period budget ÷ months in period).
-- `actual_amount` — collections (income) / expenses booked in that month.
-- `status` — `BudgetItemStatus` (`ok`/`over`/`under`) derived from
-  `budget_at_risk_threshold_percent`, comparing the month's actual against the
-  elapsed share of that month's budget. Future months read `ok` with `0` actuals.
 
 ## Generate a Budget
 
@@ -220,23 +190,6 @@ A budget is flagged `at-risk` by the `budgets:monitor` job when actual
 expenditure exceeds, or actual income falls below, the period-prorated budget by
 more than `budget_at_risk_threshold_percent` (default `10`). Actuals are sourced
 from lease collections (income) and facility expenses (expense).
-
-### At-Risk Threshold setting
-
-`budget_at_risk_threshold_percent` is a company-level budget setting (group
-`budget`, `type` `number`). It is read and updated through the shared general
-settings endpoints — not through this budget API.
-
-| Key | Default | Type | Options | Dependency | Description |
-|---|---|---|---|---|---|
-| `budget_at_risk_threshold_percent` | `10` | `number` | `null` | none | Tolerance band (%) before a budget is flagged "at risk"; applies to both over-spend on expenses and under-collection on income, measured against the period-prorated budget. |
-
-- Fetch with `GET /general?filter[group]=budget`.
-- Save with `PATCH /general/{setting}`, body `{ "value": "10" }` (stored/returned
-  as a string).
-
-See [Budget Settings](../settings.md#budget-settings) for the full catalog and
-UI mapping.
 
 ## Errors
 
