@@ -458,6 +458,7 @@ Seeded Budget settings:
 | `expenditure_budget_derivative_operation` | `add` | `select` | static: `add`, `less` | `expenditure_budget_derivative=add_or_less` | Whether the adjustment % is added to or subtracted from the last cycle. |
 | `expenditure_budget_derivative_operation_amount` | `10` | `number` | `null` | `expenditure_budget_derivative=add_or_less` | The adjustment percentage applied to the last cycle's expenditure. |
 | `expenditure_budget_derivative_average_periods` | `5` | `number` | `null` | `expenditure_budget_derivative=average` | Number of previous cycles to average when deriving the budget. |
+| `budget_at_risk_threshold_percent` | `10` | `number` | `null` | none | Tolerance band (%) before a budget is flagged "at risk"; applies to both over-spend on expenses and under-collection on income, measured against the period-prorated budget. |
 
 UI mapping (matches the layout sketch):
 
@@ -469,6 +470,7 @@ UI mapping (matches the layout sketch):
   - `same_as_last_cycle` — "Same as last period". No extra inputs.
   - `add_or_less` — "Add / less X% from last period". Reveals the operation dropdown (`expenditure_budget_derivative_operation`) and the percentage input (`expenditure_budget_derivative_operation_amount`).
   - `average` — "Average last periods". Reveals the periods input (`expenditure_budget_derivative_average_periods`), labelled in years/cycles.
+- **At-Risk Threshold (%)** → `budget_at_risk_threshold_percent` (number). The allowed variance before the `budgets:monitor` job flags a budget as at-risk.
 
 Dependency behavior (same rule as all general settings):
 
