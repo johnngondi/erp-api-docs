@@ -11,6 +11,7 @@ Base prefix:
 - Facilities
   - `docs/frontend/app/property-management/facilities/facilities.md`
   - `docs/frontend/app/property-management/facilities/floor_generation.md`
+  - `docs/frontend/app/property-management/facilities/utility-meters.md`
 - Tickets
   - `docs/frontend/app/property-management/tickets.md`
 - Procurement
@@ -22,6 +23,7 @@ Base prefix:
   - `docs/frontend/app/property-management/finance/payment-voucher.md`
   - `docs/frontend/app/property-management/finance/remittance.md`
   - `docs/frontend/app/property-management/finance/settlement.md`
+  - `docs/frontend/app/property-management/finance/vendor-statement.md`
 - Settings
   - `docs/frontend/app/property-management/settings.md`
 - Lease Management

@@ -15,6 +15,8 @@ Base prefix:
 - [Payment Vouchers](./finance/payment-voucher.md)
 - [Remittances](./finance/remittance.md)
 - [Settlements](./finance/settlement.md)
+- [Vendor Statements](./finance/vendor-statement.md)
+- [Bank Account Statements (Cashbook)](./finance/bank-account-statement.md)
 - [Facility Budgets](./finance/budget.md)
 
 ## Notes

@@ -8,3 +8,4 @@ Base prefix:
 
 - [Bills](./finance/bill.md)
 - [Payment Vouchers](./finance/payment-voucher.md)
+- [Vendor Statement](./finance/vendor-statement.md)
