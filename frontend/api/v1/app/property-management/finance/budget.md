@@ -50,6 +50,7 @@ Estimation and lifecycle are documented in
 Supported query params:
 
 - Filters:
+  - `filter[search]` (Scout-backed search across the related facility name, currency code, period dates and statuses; supports CSV IDs)
   - `filter[facility_id]`
   - `filter[status]` — `ok`, `at-risk` (from `BudgetStatus`)
   - `filter[period]=YYYY-MM-DD` — budgets whose period contains the given date

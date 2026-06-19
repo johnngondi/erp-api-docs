@@ -937,6 +937,175 @@ GET /procurement/lpos?filter[search]=1,2,3&sort=-id&per_page=50
 GET /procurement/lpos?filter[search]=Acme&filter[vendor_id]=12&sort=-created_at
 ```
 
+## Utility Meter (`/facilities/utility-meters`)
+
+### Supported filters
+
+- `filter[search]` - string
+- `filter[meter_number]` - string
+- `filter[meter_serial_number]` - string
+- `filter[name]` - string
+- `filter[utility_id]` - integer (lease component ID)
+- `filter[facility_id]` - integer (facility ID)
+- `filter[reading_unit_id]` - integer (SKU ID)
+- `filter[status]` - string enum (see allowed values below)
+- `filter[created_at]` - date or datetime string (`YYYY-MM-DD` or ISO datetime)
+
+### `filter[status]` available options
+
+- `active`
+- `inactive`
+
+Examples:
+
+```http
+GET /facilities/utility-meters?filter[status]=active
+GET /facilities/utility-meters?filter[status]=inactive
+```
+
+### `filter[search]` behavior
+
+`search` has special behavior:
+
+1. Comma-separated numeric list (no spaces required): exact match by utility meter IDs.
+Input format: `number,number,number`
+
+Example:
+
+```http
+GET /facilities/utility-meters?filter[search]=1,2,3
+```
+
+2. Any other single value (text/number/phrase) uses normal text search.
+Input format: any string
+
+Search covers:
+- meter ID
+- meter number
+- meter serial number
+- name
+- status
+- facility name
+- utility (lease component) name
+
+Examples:
+
+```http
+GET /facilities/utility-meters?filter[search]=SN-987654322
+GET /facilities/utility-meters?filter[search]=Electricity
+```
+
+### Supported sorts
+
+- `sort=meter_number`
+- `sort=meter_serial_number`
+- `sort=name`
+- `sort=utility_id`
+- `sort=facility_id`
+- `sort=reading_unit_id`
+- `sort=status`
+- `sort=created_at`
+
+Sort format:
+
+- Ascending: `sort=<field>`
+- Descending: `sort=-<field>`
+
+Examples:
+
+```http
+GET /facilities/utility-meters?sort=name
+GET /facilities/utility-meters?sort=-created_at
+```
+
+### Combined examples
+
+```http
+GET /facilities/utility-meters?filter[facility_id]=2&filter[status]=active&sort=name&per_page=25
+GET /facilities/utility-meters?filter[search]=1,2,3&sort=-created_at&per_page=50
+GET /facilities/utility-meters?filter[search]=Electricity&filter[utility_id]=6&sort=name
+```
+
+## Facility Budget (`/finance/budgets`)
+
+### Supported filters
+
+- `filter[search]` - string
+- `filter[facility_id]` - integer (facility ID)
+- `filter[status]` - string enum (see allowed values below)
+- `filter[period]` - date string (`YYYY-MM-DD`); matches budgets whose period contains the date
+
+### `filter[status]` available options
+
+- `ok`
+- `at-risk`
+
+Examples:
+
+```http
+GET /finance/budgets?filter[status]=ok
+GET /finance/budgets?filter[status]=at-risk
+```
+
+### `filter[search]` behavior
+
+`search` has special behavior:
+
+1. Comma-separated numeric list (no spaces required): exact match by budget IDs.
+Input format: `number,number,number`
+
+Example:
+
+```http
+GET /finance/budgets?filter[search]=1,2,3
+```
+
+2. Any other single value (text/number/phrase) uses normal text search.
+Input format: any string
+
+Search covers:
+- budget ID
+- facility name
+- currency code
+- status
+- period start / period end dates
+
+Examples:
+
+```http
+GET /finance/budgets?filter[search]=Riverside
+GET /finance/budgets?filter[search]=KES
+```
+
+### Supported sorts
+
+- `sort=id`
+- `sort=period_start`
+- `sort=period_end`
+- `sort=income_budget`
+- `sort=expense_budget`
+- `sort=created_at`
+
+Sort format:
+
+- Ascending: `sort=<field>`
+- Descending: `sort=-<field>`
+
+Examples:
+
+```http
+GET /finance/budgets?sort=period_start
+GET /finance/budgets?sort=-created_at
+```
+
+### Combined examples
+
+```http
+GET /finance/budgets?filter[facility_id]=2&filter[status]=at-risk&sort=-period_start&per_page=25
+GET /finance/budgets?filter[search]=1,2,3&sort=-period_start&per_page=50
+GET /finance/budgets?filter[search]=Riverside&filter[status]=ok&sort=-created_at
+```
+
 ## Add New Models To This Doc
 
 When adding search/sort support for another model, append a new section using this template:

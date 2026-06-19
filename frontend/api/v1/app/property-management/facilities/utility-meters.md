@@ -24,6 +24,7 @@ Endpoints:
 List query support:
 
 - Filters:
+  - `filter[search]` (Scout-backed search across meter number, serial number, name, and the related facility/utility names; supports CSV IDs)
   - `filter[meter_number]`, `filter[meter_serial_number]`, `filter[name]`
   - `filter[utility_id]`, `filter[facility_id]`, `filter[reading_unit_id]`, `filter[status]`, `filter[created_at]`
 - Sort:
