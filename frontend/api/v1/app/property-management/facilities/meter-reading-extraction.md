@@ -69,38 +69,19 @@ Verification (`verification`):
 }
 ```
 
-## Temporary test endpoint (no auth)
-
-> **For development/testing only — will be removed before release.**
-
-`POST /api/v1/settings/file-management/uploads/test-read-meter`
-
-Unauthenticated and not bound to a meter — just send an upload and get the
-reading back (no `verification` block). Use it to smoke-test the vision
-pipeline without going through auth/tenancy.
-
-Request body:
-- `upload_id` (integer, required)
-
-Response:
-```json
-{
-  "data": {
-    "message": "Meter read successfully",
-    "result": {
-      "current_reading": "012345",
-      "meter_number": "MTR-99",
-      "is_legible": true,
-      "feedback": null
-    }
-  }
-}
-```
-
 ## Notes
 - Extraction is synchronous and may take several seconds.
 - Always check `is_legible` before using `result`, and `verification.matches_meter`
   before saving the reading against the meter.
+- Extraction only reads the image — it never saves a reading. Persist the result via
+  `POST /facilities/utility-meters/{meter}/readings` (see the Utility Meters API docs).
+- When the meter is faulty or unreadable (e.g. `is_legible: false`, a damaged display,
+  or `feedback` indicating a problem) and the user cannot capture a reliable value,
+  save the reading with `is_faulty: true` and a `fault_reason` (required when faulty —
+  the `feedback` text is a good default). This flags the parent meter as faulty so the
+  billing run estimates its consumption instead of using the recorded reading. Both the
+  flag and reason are kept on the reading for history, and are cleared automatically by
+  the next clean (non-faulty) reading.
 
 ## Errors
 - `422 Unprocessable Entity` — `upload_id` missing or not an existing upload.

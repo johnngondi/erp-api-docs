@@ -20,6 +20,7 @@ Endpoints:
 - `DELETE /facilities/utility-meters/{meter}`
 - `PATCH /facilities/utility-meters/{meter}/activate`
 - `PATCH /facilities/utility-meters/{meter}/deactivate`
+- `POST /facilities/utility-meters/submit-readings`
 
 List query support:
 
@@ -64,12 +65,67 @@ Example create payload:
 Response (`data`):
 
 - `message`
-- `utility_meter` — includes `utility` (lease component), `facility`, `reading_unit` (SKU), `spaces`, `last_reading`, `last_reading_at`, and `permissions`.
+- `utility_meter` — includes `utility` (lease component), `facility`, `reading_unit` (SKU), `spaces`, `last_reading`, `last_reading_at`, `last_reading_image`, `reading_status`, `submitted_at`, `is_faulty`, `fault_reason`, and `permissions`.
 
 `last_reading` tracks the latest recorded reading. It is set to `initial_reading`
 when the meter is created (with `last_reading_at` null, since no reading exists yet)
 and is bumped automatically each time a reading is added. `last_reading_at` records
 the timestamp of that most recent reading.
+
+`last_reading_image` is the `Upload` attached to the most recent reading (same
+shape as other upload fields; `null` when the latest reading had no image). It is
+kept in sync with `last_reading`/`last_reading_at` whenever a reading is recorded,
+so list and detail views can show the photo without loading the readings.
+
+`reading_status` is derived from `last_reading_at` against the current month and is
+intended to drive a status badge:
+
+| Condition | `value` | `label` | `color` |
+|---|---|---|---|
+| `last_reading_at` is within the current month | `read` | `Read` | `success` |
+| `last_reading_at` is in a prior month or null | `not read` | `Not Read` | `danger` |
+
+```json
+"reading_status": {
+    "value": "read",
+    "color": "success",
+    "label": "Read"
+}
+```
+
+`submitted_at` is the timestamp at which the meter's readings were submitted for the
+current period's billing (see below); `null` means the meter is still open for the
+month. It is returned as a date block (`raw`, `formatted`, `diff`).
+
+### Submitting readings for billing
+
+`POST /facilities/utility-meters/submit-readings`
+
+Marks the supplied meters as submitted (`submitted_at = now()`) so their current
+readings can be used to generate the period's bills. Sending a meter that is already
+submitted simply refreshes its `submitted_at` timestamp.
+
+Payload (`SubmitUtilityMeterReadingsData`):
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `meter_ids` | Yes | integer[] | At least one. Each must exist in `utility_meters.id`. The request fails (422) if any id cannot be found within the company. |
+
+```json
+{
+    "meter_ids": [1, 2, 3]
+}
+```
+
+Response (`data`):
+
+- `message`
+- `utility_meters` — the submitted meters as a `UtilityMeterResource` collection (now carrying a populated `submitted_at`).
+
+Authorized by `update-utility-meter`. Every meter's `submitted_at` is cleared back to
+`null` automatically on the first day of each month by the
+`utility-meters:reset-submissions` scheduled command, reopening meters for the new
+billing period.
 
 ## Utility Meter Readings
 
@@ -87,6 +143,7 @@ List query support:
 
 - Filters:
   - `filter[current_reading]`, `filter[utility_meter_id]`, `filter[created_at]`
+  - `filter[is_faulty]` (e.g. `filter[is_faulty]=1` to list only faulty readings)
 - Sort:
   - `sort=current_reading,utility_meter_id,created_at`
 
@@ -96,15 +153,24 @@ Create/Update payload (`UtilityMeterReadingData`):
 |---|---|---|---|
 | `current_reading` | Yes | number | Decimal, stored with 5 dp. Must be **≥ the meter's `last_reading`** (a meter cannot read backwards). |
 | `reading_image_id` | No | integer | Nullable. Must exist in `uploads.id` when provided. |
+| `is_faulty` | No | boolean | Defaults to `false`. Set `true` when the meter is faulty/unreadable. The value is mirrored onto the parent meter's `is_faulty`, so a faulty reading flags the meter and a later clean reading clears it. |
+| `fault_reason` | No* | string | Max 500 chars. **Required when `is_faulty` is `true`.** Stored on the reading (fault history) and mirrored onto the meter's `fault_reason` while it stays faulty; cleared to `null` by the next clean reading. |
 
 Example reading payload:
 
 ```json
 {
     "current_reading": 123.67890,
-    "reading_image_id": null
+    "reading_image_id": null,
+    "is_faulty": true,
+    "fault_reason": "Display cracked and unreadable"
 }
 ```
+
+Each reading exposes `is_faulty` and `fault_reason` in its resource (so faults have a
+history). The parent meter resource exposes `is_faulty` and `fault_reason` too
+(reflecting the latest reading); while `is_faulty` is `true`, billing should estimate
+the meter's consumption rather than trust the recorded reading.
 
 ## Permissions
 
@@ -115,6 +181,7 @@ Example reading payload:
 | Update meter | `update-utility-meter` (or meter creator) |
 | Delete meter | `delete-utility-meter` (or meter creator) |
 | Activate / deactivate | `activate-utility-meter` / `deactivate-utility-meter` |
+| Submit readings for billing | `update-utility-meter` |
 | View reading | `view-utility-meter-reading` |
 | Create / update reading | `update-utility-meter-reading` (or reading creator) |
 | Delete reading | `delete-utility-meter-reading` (or reading creator) |

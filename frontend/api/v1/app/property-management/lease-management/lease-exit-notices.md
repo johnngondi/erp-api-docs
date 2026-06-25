@@ -57,10 +57,28 @@ Request body:
 | `exit_date` | Yes | date string | Format: `YYYY-MM-DD` |
 | `reason_for_exit` | Yes | string | Exit reason |
 | `supporting_upload_id` | No | integer | Must exist in `uploads.id` |
+| `auto_credit_arrears` | No | boolean | Defaults to `false`. See "Auto-credit arrears" below |
 
 Notes:
 
 - `deposit_held` and `arrears` are computed automatically.
+
+### Auto-credit arrears
+
+When `auto_credit_arrears` is `true`, processing the exit notice settles the
+tenant's outstanding arrears out of the deposit held before refunding it:
+
+1. The amount credited is `min(total outstanding invoice balances, deposit held)`
+   — the deposit funds the credit, so it can never credit more than is held.
+2. Credit notes are raised against the tenant's unpaid / partially paid invoices
+   (oldest first), each capped at the invoice balance, until the deposit-funded
+   budget is used up or the invoices run out.
+3. The deposit refund bill/expense is then posted for the **remaining** deposit
+   (deposit held minus the amount credited). When the arrears consume the whole
+   deposit, no refund is posted.
+
+When `false` (the default), behaviour is unchanged: the full deposit is refunded
+and arrears are handled separately.
 
 ## Update Exit Notice
 
@@ -73,6 +91,7 @@ Request body may include:
 - `supporting_upload_id`
 - `repair_damages_cost`
 - `repairs_cost_quote_upload_id`
+- `auto_credit_arrears`
 
 `repair_damages_cost` and `repairs_cost_quote_upload_id` are intended for staff-side evaluation updates.
 
