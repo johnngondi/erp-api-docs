@@ -1,0 +1,208 @@
+{
+  "info": {
+    "name": "PropertyX — Document Templates",
+    "description": "Sample requests for the document-template designer backend.\n\nSet the collection variables first:\n- `baseUrl`  e.g. http://propertyx.test\n- `company`  the company id in the URL\n- `token`    a Sanctum bearer token\n- `templateId`, `modelId` as you go.\n\nAll requests send `Accept: application/json` and Bearer auth.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://propertyx.test" },
+    { "key": "company", "value": "1" },
+    { "key": "token", "value": "" },
+    { "key": "templateId", "value": "" },
+    { "key": "modelId", "value": "" },
+    { "key": "pm", "value": "{{baseUrl}}/api/v1/app/{{company}}/property-management" }
+  ],
+  "item": [
+    {
+      "name": "Registry (palette + config schemas)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{pm}}/settings/documents/templates/registry?document_type=facility_invoice",
+          "host": ["{{pm}}"],
+          "path": ["settings", "documents", "templates", "registry"],
+          "query": [{ "key": "document_type", "value": "facility_invoice" }]
+        }
+      }
+    },
+    {
+      "name": "Payload schema + sample",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{pm}}/settings/documents/templates/facility_invoice/payload-schema",
+          "host": ["{{pm}}"],
+          "path": ["settings", "documents", "templates", "facility_invoice", "payload-schema"]
+        }
+      }
+    },
+    {
+      "name": "List templates (filter by type + facility)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{pm}}/settings/documents/templates?filter[document_type]=facility_invoice&filter[facility_id]=10&per_page=15",
+          "host": ["{{pm}}"],
+          "path": ["settings", "documents", "templates"],
+          "query": [
+            { "key": "filter[document_type]", "value": "facility_invoice" },
+            { "key": "filter[facility_id]", "value": "10" },
+            { "key": "per_page", "value": "15" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create template",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const t = pm.response.json().data?.document_template;",
+              "if (t?.id) pm.collectionVariables.set('templateId', t.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{pm}}/settings/documents/templates",
+          "host": ["{{pm}}"],
+          "path": ["settings", "documents", "templates"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Standard Invoice — A4\",\n  \"document_type\": \"facility_invoice\",\n  \"facility_ids\": null,\n  \"is_default\": false,\n  \"is_active\": true,\n  \"page_setup\": {\n    \"paper\": \"A4\",\n    \"orientation\": \"portrait\",\n    \"margins\": { \"top\": 15, \"right\": 18, \"bottom\": 15, \"left\": 18 },\n    \"repeat_header\": true\n  },\n  \"layout\": {\n    \"type\": \"section\",\n    \"rows\": 4,\n    \"cols\": 1,\n    \"flow\": false,\n    \"cells\": [\n      {\n        \"row\": 1, \"col\": 1, \"row_span\": 1, \"col_span\": 1, \"valign\": \"top\",\n        \"child\": {\n          \"type\": \"section\", \"rows\": 1, \"cols\": 2, \"flow\": false,\n          \"cells\": [\n            { \"row\": 1, \"col\": 1, \"child\": { \"type\": \"block\", \"block\": \"company_header\", \"config\": { \"show_logo\": true, \"fields\": [\"company.name\", \"company.tax_pin\", \"company.address\", \"company.phone\", \"company.email\"] } } },\n            { \"row\": 1, \"col\": 2, \"child\": { \"type\": \"block\", \"block\": \"document_details\", \"config\": { \"heading_text\": \"Invoice\", \"fields\": [\"document.number\", \"document.issued_at\", \"document.due_at\", \"document.status\"] } } }\n          ]\n        }\n      },\n      {\n        \"row\": 2, \"col\": 1, \"valign\": \"top\",\n        \"child\": {\n          \"type\": \"section\", \"rows\": 1, \"cols\": 2, \"flow\": false,\n          \"cells\": [\n            { \"row\": 1, \"col\": 1, \"child\": { \"type\": \"block\", \"block\": \"customer_details\", \"config\": { \"heading_text\": \"Billed to\", \"show_labels\": true, \"label_position\": \"left\", \"fields\": [\"customer.name\", \"customer.phone\", \"customer.tax_pin\"], \"field_labels\": { \"customer.tax_pin\": \"PIN Number\" } } } },\n            { \"row\": 1, \"col\": 2, \"child\": { \"type\": \"block\", \"block\": \"qr_code\", \"config\": { \"source\": \"field\", \"field\": \"document.verify_url\", \"size_mm\": 28, \"caption\": \"Scan to verify\", \"align\": \"center\" } } }\n          ]\n        }\n      },\n      {\n        \"row\": 3, \"col\": 1, \"valign\": \"top\",\n        \"child\": {\n          \"type\": \"section\", \"rows\": 1, \"cols\": 1, \"flow\": true,\n          \"cells\": [\n            { \"row\": 1, \"col\": 1, \"child\": { \"type\": \"block\", \"block\": \"line_items\", \"config\": { \"show_row_numbers\": true, \"zebra\": false, \"fields\": [\"items.description\", \"items.quantity\", \"items.unit_price\", \"items.total\"] } } }\n          ]\n        }\n      },\n      {\n        \"row\": 4, \"col\": 1, \"valign\": \"top\",\n        \"child\": {\n          \"type\": \"section\", \"rows\": 1, \"cols\": 2, \"flow\": false,\n          \"cells\": [\n            { \"row\": 1, \"col\": 1, \"child\": { \"type\": \"block\", \"block\": \"signature\", \"config\": { \"label\": \"Authorised signature\", \"show_line\": true } } },\n            { \"row\": 1, \"col\": 2, \"child\": { \"type\": \"block\", \"block\": \"totals\", \"config\": { \"fields\": [\"totals.subtotal\", \"totals.tax\", \"totals.total\", \"totals.balance\"] } } }\n          ]\n        }\n      }\n    ]\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Show template",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{pm}}/settings/documents/templates/{{templateId}}",
+          "host": ["{{pm}}"],
+          "path": ["settings", "documents", "templates", "{{templateId}}"]
+        }
+      }
+    },
+    {
+      "name": "Update template (rename + scope to facilities)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{pm}}/settings/documents/templates/{{templateId}}",
+          "host": ["{{pm}}"],
+          "path": ["settings", "documents", "templates", "{{templateId}}"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Standard Invoice — A4 (Westlands)\",\n  \"facility_ids\": [10, 20],\n  \"is_active\": true\n}"
+        }
+      }
+    },
+    {
+      "name": "Set as default",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{pm}}/settings/documents/templates/{{templateId}}/set-default",
+          "host": ["{{pm}}"],
+          "path": ["settings", "documents", "templates", "{{templateId}}", "set-default"]
+        }
+      }
+    },
+    {
+      "name": "Duplicate template",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{pm}}/settings/documents/templates/{{templateId}}/duplicate",
+          "host": ["{{pm}}"],
+          "path": ["settings", "documents", "templates", "{{templateId}}", "duplicate"]
+        }
+      }
+    },
+    {
+      "name": "Delete template (soft)",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{pm}}/settings/documents/templates/{{templateId}}",
+          "host": ["{{pm}}"],
+          "path": ["settings", "documents", "templates", "{{templateId}}"]
+        }
+      }
+    },
+    {
+      "name": "Render — preview as HTML (sample data)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Accept", "value": "text/html" }],
+        "url": {
+          "raw": "{{pm}}/document-templates/{{templateId}}/render?preview=1&format=html",
+          "host": ["{{pm}}"],
+          "path": ["document-templates", "{{templateId}}", "render"],
+          "query": [
+            { "key": "preview", "value": "1" },
+            { "key": "format", "value": "html" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Render — preview as PDF (sample data)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Accept", "value": "application/pdf" }],
+        "url": {
+          "raw": "{{pm}}/document-templates/{{templateId}}/render?preview=1",
+          "host": ["{{pm}}"],
+          "path": ["document-templates", "{{templateId}}", "render"],
+          "query": [{ "key": "preview", "value": "1" }]
+        }
+      }
+    },
+    {
+      "name": "Render — real document to PDF",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/pdf" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{pm}}/document-templates/{{templateId}}/render",
+          "host": ["{{pm}}"],
+          "path": ["document-templates", "{{templateId}}", "render"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model_id\": {{modelId}}\n}"
+        }
+      }
+    }
+  ]
+}
