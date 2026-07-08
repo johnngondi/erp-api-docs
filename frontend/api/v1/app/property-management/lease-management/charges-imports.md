@@ -1,5 +1,8 @@
 # Lease Charges Imports API
 
+> **New meter-reading-based utility billing** (in transition, coexists with the
+> spreadsheet import below): see [utility-billing.md](./utility-billing.md).
+
 Domain: `Property Management > Lease Management`
 
 Base route:
