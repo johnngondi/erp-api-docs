@@ -129,14 +129,19 @@ Each block declares:
 | `company_header` | all | logo + name/PIN/address fields |
 | `logo` | all | image block from `company.logo_url` |
 | `customer_details` | invoice, receipt, credit note | the "Billed to" party |
+| `tenant_details` | invoice, receipt, credit note | tenant name/contacts + `tenant.unit` |
 | `vendor_details` | lpo | the counterparty for LPOs |
 | `document_details` | all | number, date, served-by, status, notes |
+| `receipt_details` | receipt | receipt no./date/method (binds existing `document.*`/`payment.*` paths) |
 | `line_items` | all | **flow** section — paginates across pages |
 | `totals` | all | subtotal/discount/VAT/total/paid/balance |
+| `summary_totals` | all | same `totals.*` fields, boxed summary presentation |
 | `payment_details` | receipt | method, reference, account |
 | `qr_code` | all | generated server-side (see §6) |
+| `barcode` | all | Code 128 SVG generated server-side (see §6) |
 | `free_text` | all | notes/terms/footer |
 | `signature` | all | name + signature line |
+| `divider_line` | all | horizontal/vertical rule |
 
 ### Serialized form (`BlockRegistry::toArray($documentType)`)
 
@@ -154,6 +159,7 @@ not raw resource keys:
 ```
 company:  { name, tax_pin, address, phone, email, logo_url }
 customer: { name, email, phone, address, tax_pin }     # invoice/receipt/credit note
+tenant:   { name, phone, email, unit }                 # invoice/receipt/credit note
 vendor:   { name, email, phone, address, tax_pin }     # lpo
 document: { number, reference, issued_at, due_at, served_by, status, notes, verify_url }
 items:    [ { description, quantity, unit_price, tax, total } ]
@@ -191,7 +197,7 @@ Blocks also honour `show_labels`, `label_position` (`left`/`top`), `heading_text
 
 ---
 
-## 6. QR generation
+## 6. QR & barcode generation
 
 `qr_code` config:
 
@@ -204,6 +210,16 @@ Blocks also honour `show_labels`, `label_position` (`left`/`top`), `heading_text
 `QrCodeGenerator::render($value, $px)` produces an **inline SVG** via
 `bacon/bacon-qr-code` (offline, embeds in the PDF). If the library is missing it
 falls back to a network QR `<img>` (prefer the library for offline PDFs).
+
+`barcode` config (`source` is `field|value`):
+
+```jsonc
+{ "source": "field", "field": "document.number", "size_mm": 60, "height_mm": 15, "caption": "Scan at till", "align": "center" }
+```
+
+`BarcodeGenerator::render($value, $widthPx, $heightPx)` encodes **Code 128
+(subset B)** into an inline SVG of bars — fully self-contained (no package),
+printable ASCII only (other characters are stripped).
 
 ---
 
@@ -223,7 +239,18 @@ persistence), matching the project's `ApprovalTemplate` pattern.
     overlap);
   - each block exists in the registry **and is allowed for the document type**;
   - every field key in a block's config exists in `availableFields()`;
-  - config conforms to `configSchema` (no unknown keys, typed values).
+  - config conforms to `configSchema` **plus** the shared presentational keys
+    (colors, `text_spacing`, `label_width_balance`, `*_align`), each typed; any
+    other key is rejected;
+  - section `style` (`spacing`, `background_color`, `vertical_dividers[]`,
+    `horizontal_dividers[]`), block `style` (`border_*`), and a cell's
+    `manual_page_break_before` are validated strictly (unknown keys / bad hex
+    colors / out-of-grid divider positions are rejected).
+
+Presentational rendering: a block-box wrapper in `DocumentRenderer` applies border
+/ background / text color / line-height / alignment (radius + padding when a border
+or background is set); `line_items` and `summary_totals` paint their own surface,
+so the wrapper skips their background. Colors accept `#rgb`/`#rrggbb` or `""`.
 
 Errors are field-pathed, e.g.
 `layout.cells[0].child.config.fields[0]: unknown field "customer.foo" for block "customer_details"`.
@@ -267,6 +294,14 @@ Errors are field-pathed, e.g.
 `html()` and `pdf()` share one code path, so **preview and PDF cannot drift** —
 `?preview=1` renders sample data through the same renderer.
 
+A real render is driven by `{ resource_id }` (the id of the underlying
+invoice/receipt/lpo/credit note; the legacy `model_id` key is still accepted as
+a fallback). `DocumentTemplateRenderController::resolveModel()` loads it via the
+type's `model` + `with` config, and enforces that the template's company and
+facility apply. A foreign/missing id returns `422` keyed on `resource_id` with a
+type-specific message from the type's `label` (e.g. `Receipt not found for this
+company.`).
+
 > **Infra:** Browsershot needs Node + Puppeteer/Chrome on the host. Configure via
 > `DOCUMENT_TEMPLATES_NODE_BINARY`, `DOCUMENT_TEMPLATES_NPM_BINARY`,
 > `DOCUMENT_TEMPLATES_CHROME_PATH`, `DOCUMENT_TEMPLATES_PDF_TIMEOUT`.
@@ -289,7 +324,7 @@ and authorized by `DocumentTemplatePolicy` (`*-document-template` permissions).
 | `POST settings/documents/templates/{documentTemplate}/duplicate` | clone |
 | `GET  settings/documents/templates/registry?document_type=…` | palette + config schemas + default page setup |
 | `GET  settings/documents/templates/{type}/payload-schema` | canonical schema + sample |
-| `POST document-templates/{documentTemplate}/render` | render PDF (`{ model_id }`), `?preview=1`, `?format=html` |
+| `POST document-templates/{documentTemplate}/render` | render PDF (`{ resource_id }`, or legacy `model_id`), `?preview=1`, `?format=html` |
 
 Single-item responses use the `DataResource` envelope (`{ message?, document_template }`);
 lists are paginated (`data`/`links`/`meta`).

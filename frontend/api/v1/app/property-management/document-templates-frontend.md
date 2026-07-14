@@ -205,6 +205,17 @@ This is what you POST/PATCH as `layout`. The root node is a **section**.
   "rows": 1, // integer ≥ 1
   "cols": 2, // integer ≥ 1
   "flow": false, // true only for the line-items flow section
+  "style": {
+    // all optional — see §4.2
+    "spacing": 8, // number; grid gap AND section padding, in px
+    "background_color": "#e7f3f3", // "#rrggbb" or "" (transparent); adds 6px radius
+    "vertical_dividers": [
+      { "after_col": 1, "line_color": "#ced5de", "line_width": 1 }
+    ],
+    "horizontal_dividers": [
+      { "after_row": 1, "line_color": "#ced5de", "line_width": 1 }
+    ],
+  },
   "cells": [
     {
       "row": 1,
@@ -212,6 +223,7 @@ This is what you POST/PATCH as `layout`. The root node is a **section**.
       "row_span": 1,
       "col_span": 1,
       "valign": "top", // top | middle | bottom
+      "manual_page_break_before": false, // force a page break before this cell
       "child": {
         /* block or nested section, or null for an empty cell */
       },
@@ -231,6 +243,16 @@ This is what you POST/PATCH as `layout`. The root node is a **section**.
     "show_labels": true,
     "fields": ["customer.name", "customer.tax_pin"],
     "field_labels": { "customer.tax_pin": "PIN Number" },
+    // presentational extras (see §4.2) may be added to any block's config
+    "text_spacing": 6,
+    "background_color": "#ffffff",
+  },
+  "style": {
+    // optional box border — see §4.2
+    "border_enabled": true,
+    "border_color": "#cbd5e1", // "#rrggbb"
+    "border_width": 1, // px
+    "border_sides": ["bottom"], // subset of top|right|bottom|left; empty/absent = all four
   },
 }
 ```
@@ -242,11 +264,18 @@ Rules the server enforces (so enforce them in the editor too):
 - `block` must exist in the registry **and be allowed for the document type**.
 - Every key in `config.fields` (and every key of `config.field_labels`) must be
   one of that block's `available_fields[].key`.
-- `config` may only contain keys present in the block's `config_schema`, with the
-  right value type.
+- `config` may contain the keys in the block's `config_schema` **plus** the shared
+  presentational keys (§4.2), each with the right value type. Any other key is a
+  `422`.
+- `style` (on a section or a block) and `manual_page_break_before` (on a cell) are
+  validated strictly — unknown keys / bad colors are rejected. Colors are
+  `#rgb`/`#rrggbb` (or `""` for "none"); divider `after_col`/`after_row` must be
+  inside the grid.
 
 Only the **`line_items`** block (the one with `is_flow: true`) paginates; put it
-in a section you mark `"flow": true`. Other blocks stay on their page.
+in a section you mark `"flow": true`. Other blocks stay on their page. Use a cell's
+`manual_page_break_before: true` to force a hard page break before a root-level
+section.
 
 ---
 
@@ -263,6 +292,7 @@ Map each `config_schema` entry to a control by its `type`:
 | `enum`       | select / segmented              | choices in `options`                                                       |
 | `field_list` | checkbox list                   | `options` = selectable field keys; value is the **ordered** subset to show |
 | `label_map`  | per-field label override inputs | object `{ fieldKey: "Custom label" }`                                      |
+| `color`      | color picker                    | value is `#rgb`/`#rrggbb`, or `""` for none                                |
 
 The special keys you'll touch most:
 
@@ -276,13 +306,53 @@ Block-specific extras you'll see in `config_schema`:
 
 - `company_header`: `show_logo`
 - `logo`: `align`, `max_height_mm`
-- `line_items`: `show_row_numbers`, `zebra`
+- `line_items`: `show_row_numbers`, `zebra`, `background_color` (header fill),
+  `label_color` (header text), `label_width_balance`
 - `qr_code`: `source` (`field|static`), `field` (payload dot-path), `value`
   (static text/link), `size_mm`, `caption`, `align`
+- `barcode`: `source` (`field|value`), `field` (payload dot-path), `value`
+  (static text), `size_mm` (width), `height_mm`, `caption`, `align` — encodes
+  **Code 128** server-side into an inline SVG
+- `divider_line`: `orientation` (`horizontal|vertical`), `line_color`, `line_width`
+- `summary_totals`: same fields as `totals`, rendered as a boxed summary
 - `free_text`: `content`
 - `signature`: `label`, `show_line`, `name`
 
 Always read `default` from the schema to initialize a freshly-dropped block.
+
+### 4.2 Shared presentational keys & styling
+
+Beyond each block's own `config_schema`, the server accepts a **global set of
+presentational keys** on any block's `config`, plus `style` objects on sections
+and blocks. Don't hardcode these against a block — they're accepted everywhere and
+rendered where they make sense.
+
+**Presentational `config` keys (any block):**
+
+| Key                   | Type     | Effect                                                            |
+| --------------------- | -------- | ---------------------------------------------------------------- |
+| `text_color`          | color    | Value text color                                                 |
+| `label_color`         | color    | Label text color                                                 |
+| `background_color`    | color    | Block background fill (`""` = transparent)                       |
+| `text_spacing`        | number   | 0–16 → line-height `1.2 + clamp(x,0,16)/20`                       |
+| `label_width_balance` | number   | −4…4, shifts the label/value column split (0 = balanced)         |
+| `label_align`         | enum     | `left\|center\|right` — label alignment                          |
+| `value_align` / `text_align` | enum | value alignment                                              |
+
+Legacy aliases still accepted: `label_size_balance` (→ `label_width_balance`),
+`field_label_overrides` (→ `field_labels`).
+
+When a block sets a `background_color` or a border (below), the renderer adds a
+`6px` radius + `6px` padding to the block box automatically.
+
+**Section `style`** (see §3): `spacing` (gap **and** padding), `background_color`,
+`vertical_dividers[]` (`after_col`, `line_color`, `line_width`),
+`horizontal_dividers[]` (`after_row`, `line_color`, `line_width`).
+
+**Block `style`** (see §3): `border_enabled`, `border_color`, `border_width`,
+`border_sides[]` (subset of `top|right|bottom|left`; empty/absent = all four).
+
+**Cell `manual_page_break_before`**: `true` forces a page break before the cell.
 
 ---
 
@@ -396,16 +466,19 @@ they can't drift.
 POST …/document-templates/{id}/render
 ```
 
-| Want                                          | Query / body                                          |
-| --------------------------------------------- | ----------------------------------------------------- |
-| **PDF of a real document**                    | body `{ "model_id": 481 }` → `application/pdf` stream |
-| **Preview with sample data**                  | `?preview=1` (no `model_id` needed) → PDF             |
-| **Preview as HTML** (for an in-canvas iframe) | `?preview=1&format=html` → `text/html`                |
-| **Real document as HTML**                     | `?format=html` + `{ "model_id": 481 }`                |
+| Want                                          | Query / body                                             |
+| --------------------------------------------- | ------------------------------------------------------- |
+| **PDF of a real document**                    | body `{ "resource_id": 481 }` → `application/pdf` stream |
+| **Preview with sample data**                  | `?preview=1` (no `resource_id` needed) → PDF            |
+| **Preview as HTML** (for an in-canvas iframe) | `?preview=1&format=html` → `text/html`                  |
+| **Real document as HTML**                     | `?format=html` + `{ "resource_id": 481 }`               |
 
-- `model_id` is the id of the underlying document (invoice/receipt/lpo/credit
+- `resource_id` is the id of the underlying document (invoice/receipt/lpo/credit
   note). The server authorizes that the template's company matches and that it's
-  usable by the document's facility; a foreign/invalid id returns `422`.
+  usable by the document's facility; a foreign/invalid id returns `422` with the
+  error keyed on `resource_id` and a type-specific message (e.g. `Receipt not
+  found for this company.`). The legacy `model_id` key is still accepted as a
+  fallback.
 - For a live designer preview, save (or use a transient render of) the current
   layout, then hit `?preview=1&format=html` and drop the HTML into an iframe.
 
@@ -422,7 +495,7 @@ POST …/document-templates/{id}/render
    `config.field_labels` (§5).
 6. Save via POST/PATCH; on `422`, map error keys back onto nodes (§6).
 7. Preview with `POST render?preview=1&format=html`; print with
-   `POST render` + `{ model_id }`.
+   `POST render` + `{ resource_id }`.
 
 ```
 

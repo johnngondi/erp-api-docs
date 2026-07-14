@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "PropertyX — Document Templates",
-    "description": "Sample requests for the document-template designer backend.\n\nSet the collection variables first:\n- `baseUrl`  e.g. http://propertyx.test\n- `company`  the company id in the URL\n- `token`    a Sanctum bearer token\n- `templateId`, `modelId` as you go.\n\nAll requests send `Accept: application/json` and Bearer auth.",
+    "description": "Sample requests for the document-template designer backend.\n\nSet the collection variables first:\n- `baseUrl`  e.g. http://propertyx.test\n- `company`  the company id in the URL\n- `token`    a Sanctum bearer token\n- `templateId`, `resourceId` as you go.\n\nAll requests send `Accept: application/json` and Bearer auth.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -13,7 +13,7 @@
     { "key": "company", "value": "1" },
     { "key": "token", "value": "" },
     { "key": "templateId", "value": "" },
-    { "key": "modelId", "value": "" },
+    { "key": "resourceId", "value": "" },
     { "key": "pm", "value": "{{baseUrl}}/api/v1/app/{{company}}/property-management" }
   ],
   "item": [
@@ -200,7 +200,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"model_id\": {{modelId}}\n}"
+          "raw": "{\n  \"resource_id\": {{resourceId}}\n}"
         }
       }
     }
