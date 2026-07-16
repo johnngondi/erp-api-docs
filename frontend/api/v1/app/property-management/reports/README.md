@@ -10,7 +10,8 @@ Base route:
 of global filters, and one presentation vocabulary (formats, colors, weights, background tints). A
 single generic table renderer — the reusable **report template** — can display this report and every
 future one without hardcoding columns or colours. Each per-report page (e.g.
-[billings-and-collections.md](./billings-and-collections.md)) then only documents what is specific to
+[billings-and-collections.md](./billings-and-collections.md),
+[income-and-expenditure.md](./income-and-expenditure.md)) then only documents what is specific to
 that report: its extra filters, its buckets, and its numbers.
 
 ## What a report is
@@ -29,7 +30,8 @@ that report: its extra filters, its buckets, and its numbers.
 
 Every report supports these six filters (defined on the shared `App\Data\Reports\ReportFilterData`).
 Individual reports may add their own on top (e.g. Billings & Collections adds `leases_status`,
-`expense_category_id`, `lease_component_id`).
+`expense_category_id`, `lease_component_id`; Income & Expenditure adds `report_type` for period
+grouping, `account_id`, and a `currency_id` required for multi-property roll-ups).
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
@@ -77,10 +79,13 @@ GET …/reports/tenants/billings-and-collections?facility_id=1&period_from=2026-
 
 - `property` — `{ id, name, currency: { code, name } }`, or `null` when no single property is
   selected. **Currency lives on the property** (its reporting currency). When `property` is `null`,
-  a top-level `header.currency` fallback (the company default currency) is included instead.
+  a top-level `header.currency` fallback (the company default currency, or a report-selected currency)
+  is included instead.
 - `period` — `{ from, to }` (the resolved period, after defaults).
 - `filters` — every filter echoed back (nulls included) so the UI can show the active scope.
 - `generated_at` — ISO-8601 timestamp.
+- A report **may add** header fields — e.g. Income & Expenditure adds `landlord` (`{ id, name }` when a
+  `landlord_id` filter is applied, else `null`). Per-report pages document any such additions.
 
 ### `report.<bucket>.fields` — column definitions
 
@@ -105,22 +110,35 @@ so you can group or deep-link without parsing the key. **Treat `fields` as the s
 
 ### `report.<bucket>.items` — rows
 
-Each row is a flat object keyed by the field `key`s, **plus two row-level metadata keys**:
+Each row is keyed by the field `key`s, **plus row-level metadata**:
 
 - `type` — `normal` | `subtotal` | `grosstotal` (see below). Data rows are `normal`; the totals row
-  is `subtotal` (or `grosstotal` where a report has a distinct grand total).
+  is `subtotal` (or `grosstotal` where a report has a distinct grand total). Always present.
 - `background_color` — color enum tinting the **whole row** (e.g. `secondary` on the totals row).
+  **Optional — omitted when `none`.** A missing key means no row tint.
 
-Every **cell** (each field-keyed value) is an object:
+A row **need not contain every field key.** A key may be omitted because a preceding cell spans it
+(`col_span`, below) or because the row simply doesn't populate it — render such columns empty.
+
+Every **cell** (each field-keyed value) is an object. Only `value` is guaranteed:
 
 ```jsonc
-{ "value": 4800, "color": "danger" }
+{ "value": 4800, "color": "danger" }   // fully specified
+{ "value": 4800 }                      // no special colour, single column
+{ "value": "Income Received", "col_span": 5 }  // spans 5 columns
 ```
 
 - `value` — the raw value; format it by the field's `format`. A `money` value may be a number or a
   decimal string — coerce to number before formatting.
 - `color` — a color enum applied to that individual cell (e.g. an overdue balance in `danger`).
-  Default `none`.
+  **Optional — omitted when `none`.** A missing key means no cell colour.
+- `col_span` — a positive integer > 1; the cell occupies that many columns and the row **omits** the
+  next `col_span − 1` field keys. **Optional — omitted when `1`** (the default). Used for full-width
+  banner rows (e.g. a section header spanning the whole table).
+
+> **Payload convention:** absent `color` / `background_color` ⇒ `none`; absent `col_span` ⇒ `1`. The
+> backend drops these keys when they hold their default to keep the response small — never assume a
+> key is present, and never treat its absence as anything but the default.
 
 ### `summary`
 
@@ -192,11 +210,17 @@ The generic algorithm the reusable frontend template implements, for any report:
 2. For each bucket you display, build columns from `fields` **in order**; skip `visible: false`
    columns by default and expose `togglable: true` columns in a column picker.
 3. For each row in `items`:
-   - apply the row's `background_color` (whole-row tint);
-   - for each cell, apply (in order) the column's `background_color`, then the cell's `color`, then
-     the field's `weight` and `alignment`; format `value` by the field's `format`.
+   - apply the row's `background_color` if present (whole-row tint); absent ⇒ no tint.
+   - walk the `fields` in order keeping a **skip counter**. For each field:
+     - if the skip counter is positive, decrement it and render nothing (a previous cell spans here);
+     - else read the row's cell for that field `key`. If the key is **absent**, render an empty cell.
+       Otherwise apply (in order) the column's `background_color`, then the cell's `color` if present,
+       then the field's `weight` and `alignment`; format `value` by the field's `format`. If the cell
+       has `col_span: N`, render it across N columns and set the skip counter to `N − 1`.
    - render `type: "subtotal"` / `type: "grosstotal"` rows as footer / emphasised rows.
 4. Use `summary` for headline KPI tiles.
+
+Remember: a missing `color` / `background_color` means `none`, and a missing `col_span` means `1`.
 
 **Never hardcode columns or a fixed palette — `fields` and the payload are the source of truth.**
 

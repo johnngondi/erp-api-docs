@@ -135,22 +135,21 @@ Trimmed to the `header`, one full bucket, and the `summary`. The other buckets f
         ],
         "items": [
           {
-            "lease_id": { "value": 1, "color": "none" },
-            "name": { "value": "Super Admin", "color": "none" },
-            "balance_bf": { "value": 0, "color": "none" },
-            "total_billings": { "value": 34800, "color": "none" },
-            "total_collections": { "value": 30000, "color": "none" },
-            "balance_cf": { "value": 4800, "color": "none" },
-            "type": "normal",
-            "background_color": "none"
+            "lease_id": { "value": 1 },
+            "name": { "value": "Super Admin" },
+            "balance_bf": { "value": 0 },
+            "total_billings": { "value": 34800 },
+            "total_collections": { "value": 30000 },
+            "balance_cf": { "value": 4800 },
+            "type": "normal"
           },
           {
-            "lease_id": { "value": null, "color": "none" },
-            "name": { "value": "Total", "color": "none" },
-            "balance_bf": { "value": 0, "color": "none" },
-            "total_billings": { "value": 34800, "color": "none" },
-            "total_collections": { "value": 30000, "color": "none" },
-            "balance_cf": { "value": 4800, "color": "none" },
+            "lease_id": { "value": null },
+            "name": { "value": "Total" },
+            "balance_bf": { "value": 0 },
+            "total_billings": { "value": 34800 },
+            "total_collections": { "value": 30000 },
+            "balance_cf": { "value": 4800 },
             "type": "subtotal",
             "background_color": "secondary"
           }
