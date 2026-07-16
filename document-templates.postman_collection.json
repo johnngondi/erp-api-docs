@@ -14,7 +14,9 @@
     { "key": "token", "value": "" },
     { "key": "templateId", "value": "" },
     { "key": "resourceId", "value": "" },
-    { "key": "pm", "value": "{{baseUrl}}/api/v1/app/{{company}}/property-management" }
+    { "key": "pm", "value": "{{baseUrl}}/api/v1/app/{{company}}/property-management" },
+    { "key": "tenantApi", "value": "{{baseUrl}}/api/v1/tenant" },
+    { "key": "vendorApi", "value": "{{baseUrl}}/api/v1/vendor" }
   ],
   "item": [
     {
@@ -196,6 +198,61 @@
         "url": {
           "raw": "{{pm}}/document-templates/{{templateId}}/render",
           "host": ["{{pm}}"],
+          "path": ["document-templates", "{{templateId}}", "render"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"resource_id\": {{resourceId}}\n}"
+        }
+      }
+    },
+    {
+      "name": "Portal (tenant) — list templates for an owned invoice",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{tenantApi}}/document-templates?document_type=facility_invoice&resource_id={{resourceId}}",
+          "host": ["{{tenantApi}}"],
+          "path": ["document-templates"],
+          "query": [
+            { "key": "document_type", "value": "facility_invoice" },
+            { "key": "resource_id", "value": "{{resourceId}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Portal (tenant) — render an owned invoice (HTML)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "text/html" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{tenantApi}}/document-templates/{{templateId}}/render?format=html",
+          "host": ["{{tenantApi}}"],
+          "path": ["document-templates", "{{templateId}}", "render"],
+          "query": [{ "key": "format", "value": "html" }]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"resource_id\": {{resourceId}}\n}"
+        }
+      }
+    },
+    {
+      "name": "Portal (vendor) — render an owned LPO to PDF",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/pdf" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{vendorApi}}/document-templates/{{templateId}}/render",
+          "host": ["{{vendorApi}}"],
           "path": ["document-templates", "{{templateId}}", "render"]
         },
         "body": {

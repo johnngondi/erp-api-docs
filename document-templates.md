@@ -329,6 +329,34 @@ and authorized by `DocumentTemplatePolicy` (`*-document-template` permissions).
 Single-item responses use the `DataResource` envelope (`{ message?, document_template }`);
 lists are paginated (`data`/`links`/`meta`).
 
+### Portal printing (tenant & vendor)
+
+Tenant and vendor portal users can list + print the documents they own. These
+routes have **no `{company}` segment**, so the `CompanyScoped` global scope adds
+no filter — the company + facility are derived from the *source document* instead,
+and access is enforced by each portal's ownership query (**not** the permission-only
+`view` policy, which is only a coarse gate).
+
+| Method & path | Action |
+| --- | --- |
+| `GET  api/v1/tenant/document-templates?document_type=&resource_id=` | list templates usable for a tenant-owned invoice/receipt/credit-note |
+| `POST api/v1/tenant/document-templates/{documentTemplate}/render` | render `{ resource_id }` (or legacy `model_id`), `?format=html` |
+| `GET  api/v1/vendor/document-templates?document_type=&resource_id=` | list templates usable for a vendor-owned LPO |
+| `POST api/v1/vendor/document-templates/{documentTemplate}/render` | render `{ resource_id }`, `?format=html` |
+
+- **Per-portal type allow-list** — tenant: `facility_invoice`, `facility_receipt`,
+  `facility_credit_note`; vendor: `facility_lpo`. Rendering a template of any other
+  type returns `403`.
+- **Ownership** — the `resource_id` is resolved through the portal's ownership
+  scope (tenant: `lease.user_id`; receipts also via `paying_user_id`; vendor:
+  `vendor_id`). A foreign/unknown id returns `404`. The template must also belong to
+  the document's company and apply to its facility, else `403`.
+- No `?preview=1` here — portals always render a real, owned document. Shared logic
+  lives in `App\Http\Controllers\Api\V1\Concerns\PortalDocumentController`; each
+  portal subclass only supplies its `scopes()` map.
+- **Landlord** is not yet supported — its documents (remittances, payment-vouchers,
+  collections, expenses) have no `document_templates.types` entry.
+
 ---
 
 ## 10. Seeding

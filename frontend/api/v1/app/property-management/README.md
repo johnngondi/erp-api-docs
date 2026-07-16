@@ -26,6 +26,9 @@ Base prefix:
   - `docs/frontend/app/property-management/finance/settlement.md`
   - `docs/frontend/app/property-management/finance/vendor-statement.md`
   - `docs/frontend/app/property-management/finance/bank-statement-reconciliation.md`
+- Reports
+  - `docs/frontend/app/property-management/reports/README.md`
+  - `docs/frontend/app/property-management/reports/billings-and-collections.md`
 - Settings
   - `docs/frontend/app/property-management/settings.md`
 - Lease Management
