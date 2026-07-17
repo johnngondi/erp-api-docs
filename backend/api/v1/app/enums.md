@@ -301,10 +301,16 @@ Class: `App\Enums\SettlementStatus`
 
 Class: `App\Enums\SpaceStatus`
 
-| Value | Color |
-|---|---|
-| `available` | `success` |
-| `occupied` | `secondary` |
+Serialized as `{ value, label, color }`. The status, together with `rent_occupied_by_lease_id` and `service_charge_occupied_by_lease_id`, is derived from the underlying leases and is never set directly — see [space occupancy](../../../frontend/api/v1/app/property-management/facilities/space-occupancy.md).
+
+| Value | Color | Meaning | Visible when applying |
+|---|---|---|---|
+| `available` | `success` | No lease holds either the rent or the service charge. | Yes |
+| `only rent available` | `info` | A lease holds the service charge; the rent is free. | Yes |
+| `only service charge available` | `secondary` | A lease holds the rent; the service charge is free. | No |
+| `under consideration` | `secondary` | An open lease application targets this (otherwise free) space. | No |
+| `on notice` | `warning` | The lease holding the rent has a pending exit notice. | Yes |
+| `unavailable` | `danger` | Separate (or the same) leases hold both the rent and the service charge. | No |
 
 ## Status
 

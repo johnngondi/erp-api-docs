@@ -13,6 +13,7 @@ Base prefix:
   - `docs/frontend/app/property-management/facilities/floor_generation.md`
   - `docs/frontend/app/property-management/facilities/utility-meters.md`
   - `docs/frontend/app/property-management/facilities/meter-reading-extraction.md`
+  - `docs/frontend/app/property-management/facilities/space-occupancy.md`
 - Tickets
   - `docs/frontend/app/property-management/tickets.md`
 - Procurement
@@ -32,6 +33,7 @@ Base prefix:
 - Settings
   - `docs/frontend/app/property-management/settings.md`
 - Lease Management
+  - `docs/frontend/app/property-management/lease-management/lease-applications.md`
   - `docs/frontend/app/property-management/lease-management/leases.md`
   - `docs/frontend/app/property-management/lease-management/invoices.md`
   - `docs/frontend/app/property-management/lease-management/credit-notes.md`
