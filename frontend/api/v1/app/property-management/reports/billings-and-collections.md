@@ -12,10 +12,10 @@ everything they **paid** for a period, with the opening (brought-forward) and cl
 
 > **Read [the shared reports contract](./README.md) first.** This page only documents what is
 > specific to this report — its extra filters, its four buckets, and its balance conventions. The
-> response envelope (`header` + `report.<bucket>` of `fields`/`items` + `summary`), the field keys
-> (`format`, `type`, `weight`, `background_color`, …), the per-cell `{ value, color }` shape, the
-> row `type` values, and the colour/format vocabulary all live in the README and apply here
-> unchanged.
+> response envelope (`header` + a `report` array of buckets + `summary`), the bucket keys
+> (`bucket`/`header`/`fields`/`items`/`summary`), the field keys (`format`, `type`, `weight`,
+> `background_color`, …), the per-cell `{ value, color }` shape, the row `type` values, and the
+> colour/format vocabulary all live in the README and apply here unchanged.
 
 ## Endpoints
 
@@ -25,7 +25,7 @@ everything they **paid** for a period, with the opening (brought-forward) and cl
 
 `GET /api/v1/app/{company}/property-management/reports/tenants/billings-and-collections`
 
-Returns a `header`, a `report` object holding four buckets, and a report-level `summary`.
+Returns a `header`, a `report` array of four buckets, and a report-level `summary`.
 
 ### Filters (query params)
 
@@ -60,17 +60,24 @@ There is no pagination, sort, or include — a report is returned whole for the 
 
 ## The four buckets
 
-| Bucket | One row per… | Columns |
-|---|---|---|
-| `summary` | lease | `lease_id`, `name`, `balance_bf`, `total_billings`, `total_collections`, `balance_cf` |
-| `summary_by_account` | lease | summary columns **plus** per-account `account_{id}_billings` (before `total_billings`) and `account_{id}_collections` (before `total_collections`) |
-| `billings` | lease | `lease_id`, `name`, `balance_bf`, per-component `component_{id}` (before `total_amount`), `total_amount`, `total_tax`, `gross_total`, `balance_cf` |
-| `collections` | lease | same shape as `billings`, for money received |
+They always come back in this order, and this report's buckets are fixed — they don't vary with the
+filters.
+
+| `bucket` | `header.label` | One row per… | Columns |
+|---|---|---|---|
+| `overview` | Summary | lease | `lease_id`, `name`, `balance_bf`, `total_billings`, `total_collections`, `balance_cf` |
+| `summary_by_account` | Summary by Account | lease | overview columns **plus** per-account `account_{id}_billings` (before `total_billings`) and `account_{id}_collections` (before `total_collections`) |
+| `billings` | Billings | lease | `lease_id`, `name`, `balance_bf`, per-component `component_{id}` (before `total_amount`), `total_amount`, `total_tax`, `gross_total`, `balance_cf` |
+| `collections` | Collections | lease | same shape as `billings`, for money received |
+
+Each bucket's `header` carries only the standard `label` — this report's buckets are sections of one
+scope, not separate entities. Each bucket's `summary` holds that bucket's column totals (the same
+numbers as its Total row).
 
 **Accounts vs components:** an *account* is an expense category; a *component* is a lease component
 (each component belongs to one account). `summary_by_account` rolls up to accounts; `billings` /
 `collections` break down to individual components. The per-account and per-component columns are the
-[dynamic columns](./README.md#reportbucketfields--column-definitions) described in the contract —
+[dynamic columns](./README.md#fields--column-definitions) described in the contract —
 `togglable: true`, each carrying its `account_id` / `component_id`.
 
 ### Balance convention
@@ -100,7 +107,7 @@ Following the shared vocabulary, this report sets:
 ## Sample response
 
 Trimmed to the `header`, one full bucket, and the `summary`. The other buckets follow the same
-`{ fields, items }` shape (see the bucket table above for their columns) and the same cell shape.
+five-key shape (see the bucket table above for their columns) and the same cell shape.
 
 ```json
 {
@@ -123,8 +130,10 @@ Trimmed to the `header`, one full bucket, and the `summary`. The other buckets f
       },
       "generated_at": "2026-07-15T14:52:57+03:00"
     },
-    "report": {
-      "summary": {
+    "report": [
+      {
+        "bucket": "overview",
+        "header": { "label": "Summary" },
         "fields": [
           { "label": "Lease", "key": "lease_id", "format": "integer", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
           { "label": "Tenant", "key": "name", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
@@ -153,12 +162,18 @@ Trimmed to the `header`, one full bucket, and the `summary`. The other buckets f
             "type": "subtotal",
             "background_color": "secondary"
           }
-        ]
+        ],
+        "summary": {
+          "balance_bf": 0,
+          "total_billings": 34800,
+          "total_collections": 30000,
+          "balance_cf": 4800
+        }
       },
-      "summary_by_account": { "fields": [ "…" ], "items": [ "…" ] },
-      "billings":           { "fields": [ "…" ], "items": [ "…" ] },
-      "collections":        { "fields": [ "…" ], "items": [ "…" ] }
-    },
+      { "bucket": "summary_by_account", "header": { "label": "Summary by Account" }, "fields": [ "…" ], "items": [ "…" ], "summary": { "…": "…" } },
+      { "bucket": "billings",           "header": { "label": "Billings" },           "fields": [ "…" ], "items": [ "…" ], "summary": { "…": "…" } },
+      { "bucket": "collections",        "header": { "label": "Collections" },        "fields": [ "…" ], "items": [ "…" ], "summary": { "…": "…" } }
+    ],
     "summary": {
       "lease_count": 1,
       "total_balance_bf": 0,
@@ -174,12 +189,12 @@ Example of the dynamic-column buckets (from the same call) — note the injected
 `component_2` columns come back `togglable: true` and carry their entity ref:
 
 ```jsonc
-// A per-account column in report.summary_by_account.fields — carries account_id
+// A per-account column in the `summary_by_account` bucket's fields — carries account_id
 { "label": "Rent Billings", "key": "account_1_billings", "format": "money", "type": "normal",
   "weight": "font-normal", "background_color": "none", "alignment": "right", "togglable": true,
   "visible": true, "account_id": 1 }
 
-// A per-component column in report.billings.fields — carries component_id
+// A per-component column in the `billings` bucket's fields — carries component_id
 { "label": "Rent", "key": "component_1", "format": "money", "type": "normal",
   "weight": "font-normal", "background_color": "none", "alignment": "right", "togglable": true,
   "visible": true, "component_id": 1 }
@@ -188,14 +203,14 @@ Example of the dynamic-column buckets (from the same call) — note the injected
 Column order (keys) for the dynamic buckets, for reference:
 
 ```jsonc
-// report.summary_by_account.fields
+// the `summary_by_account` bucket's fields
 [ "lease_id", "name", "balance_bf",
   "account_{id}_billings",   // ← per-account, injected before total_billings
   "total_billings",
   "account_{id}_collections",// ← per-account, injected before total_collections
   "total_collections", "balance_cf" ]
 
-// report.billings.fields / report.collections.fields
+// the `billings` / `collections` buckets' fields
 [ "lease_id", "name", "balance_bf",
   "component_{id}",          // ← per-component, injected before total_amount
   "total_amount", "total_tax", "gross_total", "balance_cf" ]

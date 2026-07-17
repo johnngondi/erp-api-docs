@@ -12,9 +12,10 @@ computed on the fly.
 
 > **Read [the shared reports contract](./README.md) first.** This page only documents what is specific
 > to this report — its extra filters, its matrix layout, its property-scoped buckets, and its
-> reconciliation. The response envelope (`header` + `report.<bucket>` of `fields`/`items` + `summary`),
-> the field keys, the per-cell `{ value, color }` shape, and the colour/format vocabulary all live in
-> the README and apply here unchanged.
+> reconciliation. The response envelope (`header` + a `report` array of buckets + `summary`), the
+> bucket keys (`bucket`/`header`/`fields`/`items`/`summary`), the field keys, the per-cell
+> `{ value, color }` shape, and the colour/format vocabulary all live in the README and apply here
+> unchanged.
 
 ## Endpoints
 
@@ -28,7 +29,7 @@ Unlike a per-lease report, this one is a **matrix**:
   component), **Expenses** (one row per expense type), and **Summary** (the reconciliation). Each
   section ends in a `Sub Total`.
 - **Columns** are **time periods** (`report_type`) plus a `Total`. The period columns are
-  [dynamic columns](./README.md#reportbucketfields--column-definitions): keys `period_0`, `period_1`,
+  [dynamic columns](./README.md#fields--column-definitions): keys `period_0`, `period_1`,
   … each carrying `period_from` / `period_to`.
 - **Buckets are property-scoped.** With a `facility_id` you get one `property_{id}` bucket; without
   one you get an `overall` roll-up **plus** a `property_{id}` bucket per property in scope.
@@ -84,16 +85,31 @@ Beyond the shared header fields, this report adds:
 
 ## Buckets
 
-| Bucket | When present | One row per… | Columns |
-|---|---|---|---|
-| `property_{id}` | always (one per property in scope) | category line / summary line | `label`, one `period_{i}` per period, `total` |
-| `overall` | only when `facility_id` is omitted | same, summed across properties | same |
+**This report's buckets are data-driven** — how many you get, and their ids, depend on the properties
+in scope. Read them from the `report` array; never assume a fixed set.
+
+| `bucket` | When present | `header.label` | One row per… | Columns |
+|---|---|---|---|---|
+| `overall` | only when `facility_id` is omitted | `Overall` | category line / summary line, summed across properties | `label`, one `period_{i}` per period, `total` |
+| `property_{id}` | always (one per property in scope) | the property's name | category line / summary line | same |
+
+Order: `overall` first when present, then one bucket per property **sorted by property name**.
+
+Bucket `header` additions beyond the standard `label`:
+
+- `property` — `{ id, name }` on each `property_{id}` bucket. **Absent on `overall`** (a roll-up has
+  no single property). This is how you identify which property a bucket is for — don't parse the
+  `bucket` id.
+
+Each bucket's `summary` holds that bucket's own KPI scalars (same keys as the report-level `summary`
+below). For a single-property report they match `data.summary`; for a roll-up, `data.summary` mirrors
+the `overall` bucket.
 
 Every bucket shares the same column set. Each row carries the standard row metadata (`type`, and
 `background_color` when not `none`) **plus a report-specific `section` key** (`income` | `expenses` |
 `summary`) so a renderer can group the three sections. Section banner rows (`Income Received`,
 `Expenses`, `Summary`) are a single `label` cell with `col_span` covering every column — the data
-cells are omitted (see the [shared contract](./README.md#reportbucketitems--rows) for `col_span`).
+cells are omitted (see the [shared contract](./README.md#items--rows) for `col_span`).
 
 ### Reconciliation (the Summary section)
 
@@ -152,8 +168,13 @@ Trimmed to the `header`, one property bucket (monthly, two months), and the `sum
       },
       "generated_at": "2026-07-16T14:52:57+03:00"
     },
-    "report": {
-      "property_1": {
+    "report": [
+      {
+        "bucket": "property_1",
+        "header": {
+          "label": "ACK Gardens",
+          "property": { "id": 1, "name": "ACK Gardens" }
+        },
         "fields": [
           { "label": "", "key": "label", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
           { "label": "Jan 2026", "key": "period_0", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": false, "period_from": "2026-01-01", "period_to": "2026-01-31" },
@@ -177,9 +198,16 @@ Trimmed to the `header`, one property bucket (monthly, two months), and the `sum
           { "label": { "value": "Remittable Amount" }, "period_0": { "value": 8499928.55 }, "period_1": { "value": 4650192.19 }, "total": { "value": 13150120.74 }, "section": "summary", "type": "subtotal", "background_color": "secondary" },
           { "label": { "value": "Less Advance Remittance" }, "period_0": { "value": 0 }, "period_1": { "value": 0 }, "total": { "value": 0 }, "section": "summary", "type": "normal" },
           { "label": { "value": "Nett Remittance" }, "period_0": { "value": 8499928.55 }, "period_1": { "value": 4650192.19 }, "total": { "value": 13150120.74 }, "section": "summary", "type": "grosstotal", "background_color": "secondary" }
-        ]
+        ],
+        "summary": {
+          "total_income": 21127892.26,
+          "total_expenses": 7011857.88,
+          "total_surplus": 14116034.38,
+          "total_remittable": 13150120.74,
+          "nett_remittance": 13150120.74
+        }
       }
-    },
+    ],
     "summary": {
       "total_income": 21127892.26,
       "total_expenses": 7011857.88,

@@ -64,16 +64,24 @@ GET …/reports/tenants/billings-and-collections?facility_id=1&period_from=2026-
 {
   "data": {
     "header":  { /* who/what/when the report is for */ },
-    "report":  {
-      "<bucket>": {
-        "fields": [ /* column definitions, in display order */ ],
-        "items":  [ /* rows; keys match each field's `key` */ ]
+    "report":  [ /* buckets, in display order */
+      {
+        "bucket":  "property_1",  /* stable machine id, unique within the report */
+        "header":  { "label": "ACK Gardens" },  /* + any report-specific bucket info */
+        "fields":  [ /* column definitions, in display order */ ],
+        "items":   [ /* rows; keys match each field's `key` */ ],
+        "summary": { /* bucket-level totals for headline KPI tiles; may be {} */ }
       }
-    },
+    ],
     "summary": { /* report-level totals for headline KPI tiles */ }
   }
 }
 ```
+
+`report` is an **array**, never an object keyed by bucket id. Buckets vary per report and some are
+data-driven (Income & Expenditure emits one per property in scope), so a bucket carries its own
+identity and label rather than the renderer deriving them from a key. **Array order is display
+order.** A report with no buckets returns `[]`.
 
 ### `header`
 
@@ -87,7 +95,32 @@ GET …/reports/tenants/billings-and-collections?facility_id=1&period_from=2026-
 - A report **may add** header fields — e.g. Income & Expenditure adds `landlord` (`{ id, name }` when a
   `landlord_id` filter is applied, else `null`). Per-report pages document any such additions.
 
-### `report.<bucket>.fields` — column definitions
+> Not to be confused with a **bucket's** `header` (below), which describes one bucket. This one
+> describes the whole report.
+
+### A bucket
+
+Every bucket carries these five keys, and **all five are always present** — buckets are exempt from
+the lean-payload convention that governs cells and rows (below). There are only a handful of buckets
+per report, so predictability beats leanness here.
+
+| Key | Type | Notes |
+|---|---|---|
+| `bucket` | string | Stable machine id, unique within the report (e.g. `overview`, `property_1`, `overall`). Use it as a React key / deep-link target — **don't parse it for meaning**. |
+| `header` | object | Info about this bucket. Always carries `label` (see below); a report may add more. |
+| `fields` | array | This bucket's column definitions, in display order. |
+| `items` | array | This bucket's rows. |
+| `summary` | object | Bucket-level KPI scalars. May be `{}` — never `[]`. |
+
+`header.label` is the **only guaranteed key** and is always a non-empty human-readable string — a
+generic renderer can title a tab or section from it without knowing the report. Everything else in
+`header` is report-specific and documented on that report's page (e.g. Income & Expenditure adds
+`property` on its per-property buckets).
+
+Different buckets in one report **may have different columns** — always read each bucket's own
+`fields`.
+
+### `fields` — column definitions
 
 Render your table columns from this array, **in order**. Each field:
 
@@ -108,7 +141,7 @@ like `account_2_billings`, `component_2`. These always come back `togglable: tru
 explicit entity ref (`account_id` = `expense_categories.id`, `component_id` = `lease_components.id`)
 so you can group or deep-link without parsing the key. **Treat `fields` as the source of truth.**
 
-### `report.<bucket>.items` — rows
+### `items` — rows
 
 Each row is keyed by the field `key`s, **plus row-level metadata**:
 
@@ -142,8 +175,12 @@ Every **cell** (each field-keyed value) is an object. Only `value` is guaranteed
 
 ### `summary`
 
-Report-level totals for headline tiles (plain scalars, not cells) — e.g. `lease_count`,
-`total_billings`, `total_collections`.
+Totals for headline tiles (plain scalars, **not** cells) — e.g. `lease_count`, `total_billings`,
+`total_collections`. It appears in two places, with the same shape:
+
+- **`data.summary`** — report-level, across everything in scope.
+- **`report[i].summary`** — that bucket's own totals. Always present; may be `{}` when the bucket has
+  no meaningful headline number.
 
 ---
 
@@ -207,8 +244,10 @@ The generic algorithm the reusable frontend template implements, for any report:
 
 1. Read `header.property.currency` (or top-level `header.currency` fallback) for money formatting;
    show `header.period` and active `header.filters` as the report scope.
-2. For each bucket you display, build columns from `fields` **in order**; skip `visible: false`
-   columns by default and expose `togglable: true` columns in a column picker.
+2. Iterate `report` **in array order** — that is the display order. Title each bucket from its
+   `header.label`; key it by `bucket`. Then build that bucket's columns from its own `fields`
+   **in order**; skip `visible: false` columns by default and expose `togglable: true` columns in a
+   column picker.
 3. For each row in `items`:
    - apply the row's `background_color` if present (whole-row tint); absent ⇒ no tint.
    - walk the `fields` in order keeping a **skip counter**. For each field:
@@ -218,7 +257,7 @@ The generic algorithm the reusable frontend template implements, for any report:
        then the field's `weight` and `alignment`; format `value` by the field's `format`. If the cell
        has `col_span: N`, render it across N columns and set the skip counter to `N − 1`.
    - render `type: "subtotal"` / `type: "grosstotal"` rows as footer / emphasised rows.
-4. Use `summary` for headline KPI tiles.
+4. Use `data.summary` for the report's headline KPI tiles, and each bucket's `summary` for its own.
 
 Remember: a missing `color` / `background_color` means `none`, and a missing `col_span` means `1`.
 
