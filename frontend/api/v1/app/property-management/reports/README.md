@@ -11,7 +11,8 @@ of global filters, and one presentation vocabulary (formats, colors, weights, ba
 single generic table renderer — the reusable **report template** — can display this report and every
 future one without hardcoding columns or colours. Each per-report page (e.g.
 [billings-and-collections.md](./billings-and-collections.md),
-[income-and-expenditure.md](./income-and-expenditure.md)) then only documents what is specific to
+[income-and-expenditure.md](./income-and-expenditure.md),
+[facility-budget.md](./facility-budget.md)) then only documents what is specific to
 that report: its extra filters, its buckets, and its numbers.
 
 ## What a report is
