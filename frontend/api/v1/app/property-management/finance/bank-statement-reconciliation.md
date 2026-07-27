@@ -16,13 +16,19 @@ Reconciling a bank statement is a four-step flow:
      unrecorded line, typically a bank-side entry with nothing behind it (bank
      charge, deposit interest) but also a genuine receipt/payment captured only at
      the bank; or
-   - classify it as an `external_transaction` — available for any line, **including
-     bank charges** — which excludes it from the report's Bank Charges total and
-     surfaces it on its own External line (handy for charges that belong to an
-     external transaction).
+   - **classify** it into the reconciliation taxonomy (statement classes C1–C10 /
+     D1–D14). Each item already carries a **`default_classification`** the server
+     inferred; the UI pre-selects it and lets the reconciler change it. The class's
+     *resolution type* (timing / omission / error / bank issue / suspense) decides
+     where it lands in the report.
 4. **Report** — once the matches are worked through, generate the bank
-   reconciliation statement: cashbook balances → known adjustments → balance per
-   the bank → variance.
+   reconciliation statement. `full_account` proves the **adjusted cashbook balance**
+   two ways — from our books (± omissions & errors) and from the bank (± timing,
+   bank issues, suspense) — and they must agree.
+
+The classification vocabulary is fetched once from the
+[classifications endpoint](#classification-taxonomy) so the classify pickers stay
+in sync with the engine and show each class's description.
 
 All endpoints are under:
 `/api/v1/app/{company}/property-management/settings/finance/banks/accounts/{account}`
@@ -231,14 +237,18 @@ AI suggestions are **not** auto-recorded — they need user action.
             ],
             "add_to_cashbook": true,
             "is_bank_side": false,
-            "can_classify": true
+            "can_classify": true,
+            "default_classification": "unrecognised_credit",
+            "default_classification_info": { "value": "unrecognised_credit", "code": "C10", "label": "Unrecognised Credits on Bank Statement", "description": "Default holding class: a credit appears on the statement, is absent from the cashbook, and has not yet been investigated.", "side": "credit", "resolution_type": "suspense", "landing_place": "suspense_queue" }
           },
           {
             "statement": { "transaction_reference": null, "value_date": "2025-05-31", "payment_date": "2025-05-31", "description": "Interest credited", "money_in": 120.5, "money_out": null, "is_transaction_fee": false, "is_interest_earning": true },
             "candidates": [],
             "add_to_cashbook": true,
             "is_bank_side": true,
-            "can_classify": true
+            "can_classify": true,
+            "default_classification": "interest_received",
+            "default_classification_info": { "value": "interest_received", "code": "C2", "label": "Interest Received", "description": "Credit interest earned on the account balance.", "side": "credit", "resolution_type": "omission", "landing_place": "adjusted_cashbook" }
           }
         ],
         "money_outs": [
@@ -247,13 +257,15 @@ AI suggestions are **not** auto-recorded — they need user action.
             "candidates": [],
             "add_to_cashbook": true,
             "is_bank_side": true,
-            "can_classify": true
+            "can_classify": true,
+            "default_classification": "bank_charge",
+            "default_classification_info": { "value": "bank_charge", "code": "D1", "label": "Bank Charges & Ledger Fees", "description": "Account maintenance, transaction, RTGS, cheque book and service fees levied directly by the bank.", "side": "debit", "resolution_type": "omission", "landing_place": "adjusted_cashbook" }
           }
         ]
       },
       "outstanding": {
         "money_ins": [
-          { "id": 77, "refference_number": "DEP100", "transaction_at": "2025-05-02", "debit": "8000.00000", "credit": "0.00000", "notes": "Receipt#9 - …", "payment_method": "Cash", "transaction": { "type": "FacilityReceipt", "id": 9 } }
+          { "id": 77, "refference_number": "DEP100", "transaction_at": "2025-05-02", "debit": "8000.00000", "credit": "0.00000", "notes": "Receipt#9 - …", "payment_method": "Cash", "transaction": { "type": "FacilityReceipt", "id": 9 }, "default_classification": "uncredited_receipts", "default_classification_info": { "value": "uncredited_receipts", "code": "R1", "label": "Uncredited Receipts (Deposits in Transit)", "description": "Cash, cheques or transfers banked at or near period end that the bank had not credited by the statement date. Fully valid - just late.", "side": "receipt", "resolution_type": "timing", "landing_place": "reconciliation_statement" } }
         ],
         "money_outs": []
       },
@@ -280,20 +292,29 @@ AI suggestions are **not** auto-recorded — they need user action.
     - `is_bank_side` — `true` for charges / interest (`is_transaction_fee` or
       `is_interest_earning`); a UI hint that booking to the cashbook is the *typical*
       resolution for this line.
-    - `can_classify` — always `true`: any line, **including bank charges**, may be
-      classified as an `external_transaction` to pull it out of the report's Bank
-      Charges total and onto its own External line (see
-      [Classify an unrecorded statement line](#52-classify-an-unrecorded-statement-line)).
+    - `can_classify` — always `true`: any line may be classified into the statement
+      taxonomy (C1–C10 / D1–D14).
+    - `default_classification` — the statement class the server inferred for this
+      line (e.g. a fee → `bank_charge`, interest → `interest_received`, otherwise
+      `unrecognised_credit` / `unrecognised_debit`). **Pre-select it** in the
+      classify picker; the reconciler can change it.
+    - `default_classification_info` — the full class payload for that default
+      (`value`, `code`, `label`, `description`, `side`, `resolution_type`,
+      `landing_place`) so the picker can render it without a separate lookup.
 - **`outstanding`** — cashbook rows with no statement counterpart (in our books,
-  not yet on the statement); no children.
+  not yet on the statement); no children. Each also carries `default_classification`
+  + `default_classification_info` (a receipt banked before the period start defaults
+  to `receipts_from_prior_periods` (R11), otherwise `uncredited_receipts` (R1); a
+  payment defaults to `unpresented_payments` (P1)).
 - **`classified`** — lines the reconciler resolved during the workings by
   classification (see [Classify lines](#5-classify-lines-during-the-workings)),
   grouped `cashbook` / `statement` (**not** by side). Classified items are dropped
-  from `outstanding` / `unrecorded`. Shape:
+  from `outstanding` / `unrecorded`. `classification` is the class **value**;
+  `classification_info` is the full class payload. Shape:
   ```json
   "classified": {
-    "cashbook":  [ { "cashbook": { "id": 77, "debit": "8000.00000", "credit": "0.00000", "notes": "Receipt#9 …" }, "classification": "erroneous_receipt", "notes": "Double receipted" } ],
-    "statement": [ { "statement": { "value_date": "2025-05-15", "description": "Rent - Westlands Plaza", "money_in": 60000.0, "money_out": null }, "classification": "external_transaction" } ]
+    "cashbook":  [ { "cashbook": { "id": 77, "debit": "8000.00000", "credit": "0.00000", "notes": "Receipt#9 …" }, "classification": "erroneous_receipt", "classification_info": { "value": "erroneous_receipt", "code": "R4", "label": "Erroneous Receipts", "description": "A receipt posted that never happened at all - keyed in error, wrong customer, or against the wrong instrument.", "side": "receipt", "resolution_type": "error", "landing_place": "adjusted_cashbook" }, "notes": "Double receipted" } ],
+    "statement": [ { "statement": { "value_date": "2025-05-15", "description": "Rent - Westlands Plaza", "money_in": 60000.0, "money_out": null }, "classification": "external_transaction", "classification_info": { "value": "external_transaction", "code": "C8", "label": "External Transactions - Credits", "description": "Third-party funds landing in the account with no relationship to our operations (wrong beneficiary, misdirected transfer).", "side": "credit", "resolution_type": "bank_issue", "landing_place": "reconciliation_statement" }, "notes": null } ]
   }
   ```
 
@@ -402,11 +423,15 @@ emitted as a flat, ordered `rows[]` envelope that drives the frontend table and
 the Excel/PDF export row-for-row.
 
 **Two report types** (select via `report_type`):
-- `full_account` (default) — accounts where receipts **and** payments happen; rolls
-  the cashbook to an adjusted carried-forward balance and reconciles it to the
-  bank statement closing balance, incl. bank/bounced charges.
+- `full_account` (default) — accounts where receipts **and** payments happen. Proves
+  the **adjusted cashbook balance** two ways and shows they agree: *from our books*
+  (opening + receipts − payments ± omissions & errors) and *from the bank* (closing
+  balance + uncredited receipts − unpresented payments ± bank issues / suspense).
 - `credits_only` — collections accounts (receipting only); proves cashbook
   collections equal bank statement collections after timing/error adjustments.
+
+Each unmatched item is first resolved to a [class](#classification-taxonomy); the
+class's resolution type decides which proof it lands in and its sign.
 
 **Period basis:** the reconciling period comes from the statement's
 `statement_period`, applied to the cashbook row **`created_at`** (the date a row
@@ -427,10 +452,11 @@ One object. `rows` is the flat, ordered list; each row is
 `OPENING | ADD | LESS | SUBTOTAL | COMPARISON | RESULT`. Computing the report is a
 single pass applying `op_sign * amount` (op_sign `+1` for ADD, `-1` for LESS):
 
-- `OPENING` resets the running total to `amount`; `ADD`/`LESS` adjust it;
-  `SUBTOTAL` snapshots it; `COMPARISON` holds an external figure (the bank
-  balance) and does not change the running total; `RESULT` = a subtotal minus the
-  comparison/other subtotal.
+- `OPENING` resets the running total to `amount` (each proof starts with one);
+  `ADD`/`LESS` adjust it; `SUBTOTAL` snapshots it; `RESULT` = the difference between
+  the **last two subtotals** (the two adjusted-cashbook balances that must agree).
+  `COMPARISON` is legacy (external figure that does not change the running total)
+  and is no longer emitted by either layout.
 - Signs are **literal** — a negative `amount` on a `LESS` row adds back. Never
   auto-correct signs.
 - `SUBTOTAL`/`RESULT` `amount`s are recomputed server-side, not trusted from input.
@@ -438,19 +464,17 @@ single pass applying `op_sign * amount` (op_sign `+1` for ADD, `-1` for LESS):
 
 `reconciling_difference.status` is `balanced` (0.00), `variance` (a genuine
 unresolved figure — surface it), or `incomplete` (the statement closing balance
-was unreadable). `detail_schedule` (full_account, plus classification-backed
-credits_only groups) itemises each reconciling category; each group's `subtotal`
-ties back to its matching summary row.
+was unreadable, so the bank-side proof `OPENING` is `0`). `detail_schedule`
+itemises each reconciling category; each group's `subtotal` ties back to its
+matching summary row.
 
 ### Full response — `full_account`
-Every spec row is present, including the zero / manual lines (nothing is omitted),
-so the table can be rendered directly from `rows` in order. This sample is the
-NW Realite Ltd, 1–9 July 2026 example (fully **balanced** — `0.00`). Note how the
-two possible-match items (a 375,000 receipt and a 750,000 payment that are on the
-statement but not yet matched) appear on **both** the cashbook side (Unmatched
-Credits on Cashbook / Payments not released) and the statement side (Unknown
-Credits / Unknown Debits), and net to zero — so the report balances even before
-they are resolved.
+Two blocks, each starting with an `OPENING` and closing with a `SUBTOTAL` — the two
+**adjusted cashbook balances** that must agree; `RESULT` is their difference. Only
+classes that actually occur produce a row (plus the always-present opening / period
+movement / `Receipts from Prior Periods`), and rows are ordered by class code within
+each block. This sample is fully **balanced** (`0.00`): both subtotals are
+`12,184,960.01`.
 
 ```json
 {
@@ -462,60 +486,26 @@ they are resolved.
       "period": { "start": "2026-07-01", "end": "2026-07-09" },
       "title": "BANK RECONCILIATION AS AT 9TH JULY 2026",
       "rows": [
-        { "label": "CashBook Balance b/f as at 01/07/2026", "description": "", "amount": 11427317.51, "op": "OPENING" },
-        { "label": "Receipts For The Month", "description": "", "amount": 2345000.00, "op": "ADD" },
-        { "label": "Payments For The Month", "description": "", "amount": 1585000.00, "op": "LESS" },
-        { "label": "Receipts from prior periods", "description": "Receipted in cashbook now but paid in bank last month", "amount": 0.00, "op": "LESS" },
-        { "label": "Unmatched Credits on Cashbook", "description": "Receipts on cashbook but not in bank statement", "amount": 875000.00, "op": "LESS" },
-        { "label": "Payments not released", "description": "Payouts on cashbook but not in bank", "amount": 1160000.00, "op": "ADD" },
-        { "label": "CashBook Balance c/f as at 09/07/2026", "description": "", "amount": 12472317.51, "op": "SUBTOTAL" },
-        { "label": "Erroneous Receipts", "description": "Double receipting or receipted to wrong person or cancelled and repaid", "amount": 0.00, "op": "LESS" },
-        { "label": "Banked in Other Banks", "description": "In cashbook but not in bank statement", "amount": 0.00, "op": "LESS" },
-        { "label": "Unknown Credits / Unmatched Bankings on Bank Statement", "description": "Credits in bank statement but not in cashbook", "amount": 590000.00, "op": "ADD" },
-        { "label": "Unknown Debits on Bank Statement", "description": "Debits in bank statement but not in cashbook", "amount": 1135000.00, "op": "LESS" },
-        { "label": "External Credits on Bank Statement", "description": "Bank credits classified as external, resolved during the workings", "amount": 0.00, "op": "ADD" },
-        { "label": "External Debits on Bank Statement", "description": "Bank debits classified as external, resolved during the workings", "amount": 0.00, "op": "LESS" },
-        { "label": "Bank Charges", "description": "Normal charges", "amount": 2357.50, "op": "LESS" },
-        { "label": "Bounced Charges", "description": "Bounced charges", "amount": 0.00, "op": "LESS" },
-        { "label": "Bank Reconciliation Balance as at 09/07/2026", "description": "", "amount": 11924960.01, "op": "SUBTOTAL" },
-        { "label": "Bank Balance as Per Statement 09/07/2026", "description": "", "amount": 11924960.01, "op": "COMPARISON" },
-        { "label": "Reconciling Difference", "description": "Variance Reco Vs Bank", "amount": 0.00, "op": "RESULT" }
+        { "label": "Balance per Cashbook b/f as at 01/07/2026", "description": "", "amount": 11427317.51, "op": "OPENING" },
+        { "label": "Receipts for the Month", "description": "", "amount": 2345000.00, "op": "ADD" },
+        { "label": "Payments for the Month", "description": "", "amount": 1585000.00, "op": "LESS" },
+        { "label": "Receipts from Prior Periods", "description": "A receipt recorded in the cashbook this period but banked in a prior period (receipted now, banked prior).", "amount": 0.00, "op": "LESS" },
+        { "label": "Bank Charges & Ledger Fees", "description": "Account maintenance, transaction, RTGS, cheque book and service fees levied directly by the bank.", "amount": 2357.50, "op": "LESS" },
+        { "label": "Adjusted Cashbook Balance", "description": "", "amount": 12184960.01, "op": "SUBTOTAL" },
+        { "label": "Balance per Bank Statement as at 09/07/2026", "description": "", "amount": 11924960.01, "op": "OPENING" },
+        { "label": "Unrecognised Credits on Bank Statement", "description": "Default holding class: a credit appears on the statement, is absent from the cashbook, and has not yet been investigated.", "amount": 590000.00, "op": "LESS" },
+        { "label": "Unrecognised Debits on Bank Statement", "description": "Default holding class: a debit appears on the statement, is absent from the cashbook, and has not yet been investigated.", "amount": 1135000.00, "op": "ADD" },
+        { "label": "Unpresented Payments (Cheques / EFTs Issued)", "description": "Payments correctly written and recorded, but the payee has not yet presented them, or the EFT had not settled by the statement date.", "amount": 1160000.00, "op": "LESS" },
+        { "label": "Uncredited Receipts (Deposits in Transit)", "description": "Cash, cheques or transfers banked at or near period end that the bank had not credited by the statement date. Fully valid - just late.", "amount": 875000.00, "op": "ADD" },
+        { "label": "Adjusted Cashbook Balance (per Bank Statement)", "description": "", "amount": 12184960.01, "op": "SUBTOTAL" },
+        { "label": "Reconciling Difference", "description": "The two adjusted cashbook balances must agree", "amount": 0.00, "op": "RESULT" }
       ],
       "reconciling_difference": { "amount": 0.00, "status": "balanced" },
       "detail_schedule": [
+        { "group": "Receipts from Prior Periods", "op": "LESS", "items": [], "subtotal": 0.00 },
         {
-          "group": "Unmatched Credits on Cashbook",
+          "group": "Unrecognised Credits on Bank Statement",
           "op": "LESS",
-          "items": [
-            { "date": "2026-07-05", "particulars": "Receipt#3 - Peter Otieno", "ref": "248312026070600005", "amount": 375000.00, "remarks": "" },
-            { "date": "2026-07-05", "particulars": "Receipt#4 - Lucy Wairimu", "ref": "RCPT-OUT-001", "amount": 500000.00, "remarks": "" }
-          ],
-          "subtotal": 875000.00
-        },
-        {
-          "group": "Payments not released",
-          "op": "ADD",
-          "items": [
-            { "date": "2026-07-07", "particulars": "PV#3 - landlord - Brian Wathome", "ref": "853207080001000008", "amount": 750000.00, "remarks": "" },
-            { "date": "2026-07-05", "particulars": "PV#4 - vendor - Omar Hassan", "ref": "PV-OUT-001", "amount": 410000.00, "remarks": "" }
-          ],
-          "subtotal": 1160000.00
-        },
-        {
-          "group": "Erroneous Receipts",
-          "op": "LESS",
-          "items": [],
-          "subtotal": 0.00
-        },
-        {
-          "group": "Banked in Other Banks",
-          "op": "LESS",
-          "items": [],
-          "subtotal": 0.00
-        },
-        {
-          "group": "Unknown Credits / Unreceipted Bankings on Bank Statement",
-          "op": "ADD",
           "items": [
             { "date": "2026-07-02", "particulars": "EFT CR SERVICE CHARGE - GRACE WANJIKU", "ref": "248312026070200002", "amount": 120000.00, "remarks": "" },
             { "date": "2026-07-09", "particulars": "EFT CR SERVICE CHARGE - SAMUEL KIPTOO", "ref": "248312026070900009", "amount": 95000.00, "remarks": "" },
@@ -524,8 +514,16 @@ they are resolved.
           "subtotal": 590000.00
         },
         {
-          "group": "Unknown Debits on Bank Statement",
+          "group": "Bank Charges & Ledger Fees",
           "op": "LESS",
+          "items": [
+            { "date": "2026-07-31", "particulars": "Ledger fees", "ref": null, "amount": 2357.50, "remarks": "" }
+          ],
+          "subtotal": 2357.50
+        },
+        {
+          "group": "Unrecognised Debits on Bank Statement",
+          "op": "ADD",
           "items": [
             { "date": "2026-07-06", "particulars": "RTGS OUT; MAINTENANCE WORKS - JANET WAMBUI", "ref": "853207060001000006", "amount": 320000.00, "remarks": "" },
             { "date": "2026-07-09", "particulars": "RTGS OUT; UTILITY PAYMENT - FELISTER KARIUKI", "ref": "853207090001000010", "amount": 65000.00, "remarks": "" },
@@ -534,16 +532,22 @@ they are resolved.
           "subtotal": 1135000.00
         },
         {
-          "group": "External Credits on Bank Statement",
-          "op": "ADD",
-          "items": [],
-          "subtotal": 0.00
+          "group": "Unpresented Payments (Cheques / EFTs Issued)",
+          "op": "LESS",
+          "items": [
+            { "date": "2026-07-07", "particulars": "PV#3 - landlord - Brian Wathome", "ref": "853207080001000008", "amount": 750000.00, "remarks": "" },
+            { "date": "2026-07-05", "particulars": "PV#4 - vendor - Omar Hassan", "ref": "PV-OUT-001", "amount": 410000.00, "remarks": "" }
+          ],
+          "subtotal": 1160000.00
         },
         {
-          "group": "External Debits on Bank Statement",
-          "op": "LESS",
-          "items": [],
-          "subtotal": 0.00
+          "group": "Uncredited Receipts (Deposits in Transit)",
+          "op": "ADD",
+          "items": [
+            { "date": "2026-07-05", "particulars": "Receipt#3 - Peter Otieno", "ref": "248312026070600005", "amount": 375000.00, "remarks": "" },
+            { "date": "2026-07-05", "particulars": "Receipt#4 - Lucy Wairimu", "ref": "RCPT-OUT-001", "amount": 500000.00, "remarks": "" }
+          ],
+          "subtotal": 875000.00
         }
       ]
     }
@@ -552,21 +556,21 @@ they are resolved.
 ```
 
 Notes for this layout:
-- The running total flows through **both** subtotals (one `OPENING`): the c/f
-  subtotal (`12472317.51`) continues into Block B and lands on the reconciliation
-  balance (`11924960.01`); `RESULT` = last `SUBTOTAL` − `COMPARISON`.
-- **Cashbook rows with no statement counterpart** are split by side and signed so
-  they reconcile the book to the bank: receipts booked but not yet on the bank go
-  to **Unmatched Credits on Cashbook** (`LESS` — the book is ahead of the bank),
-  payments booked but not yet on the bank go to **Payments not released** (`ADD` —
-  the book is behind the bank). **Statement lines with no cashbook match** go to
-  **Unknown Credits** (`ADD`) / **Unknown Debits** (`LESS`). An item that is on
-  both sides but simply not matched yet (a possible match) lands in one cashbook
-  row and one statement row with opposite signs, so it nets to zero.
-- `detail_schedule` groups mirror these rows; each group's `subtotal` **equals**
-  its matching summary row (e.g. `Unmatched Credits on Cashbook` group `875000.00`
-  = the `LESS` row). Empty groups are still returned with `items: []` and
-  `subtotal: 0.00`.
+- **Two `OPENING`s, two `SUBTOTAL`s.** Block A is the adjusted cashbook *from our
+  books*: opening b/f + receipts − payments − `Receipts from Prior Periods`, then
+  omission/error adjustments (here, `Bank Charges & Ledger Fees` — bank-recorded,
+  not yet in our books → `LESS`). Block B is the adjusted cashbook *from the bank*:
+  the statement closing balance, then timing (`Uncredited Receipts` `ADD`,
+  `Unpresented Payments` `LESS`), bank-issue and suspense items. `RESULT` is Block A
+  `SUBTOTAL` − Block B `SUBTOTAL`; `0.00` means they agree.
+- **Signs follow the class resolution type**, not a fixed rule: an omission/error
+  adjusts our books (Block A); a timing/bank-issue/suspense item adjusts the bank
+  (Block B). A bank-side inflow (uncredited receipt) `ADD`s to the bank; a bank-side
+  outflow (unpresented payment) `LESS`es. `Unrecognised Credits`/`Debits` are the
+  default holding classes (C10 / D14) for statement lines still under investigation.
+- `detail_schedule` groups mirror the adjustment rows (one per class, ordered by
+  code, with `Receipts from Prior Periods` first); each group's `subtotal`
+  **equals** its matching summary row.
 
 ### Full response — `credits_only`
 Two `OPENING`s (cashbook, then bank); the second resets the running total, and
@@ -655,14 +659,14 @@ one debit line:
   - `description` — explanatory clause (may be `""`).
   - `amount` — 2 dp; **may be negative**. Render `0.00` as `-` if you prefer,
     but it is a real `0` in the maths.
-  - `op` — `OPENING` / `ADD` / `LESS` / `SUBTOTAL` / `COMPARISON` / `RESULT`.
-    Bold `OPENING` / `SUBTOTAL` / `COMPARISON` / `RESULT`; highlight `SUBTOTAL`
-    with a top rule; colour the `RESULT` cell green when `balanced`, red / amber
-    otherwise.
+  - `op` — `OPENING` / `ADD` / `LESS` / `SUBTOTAL` / `RESULT` (`COMPARISON` is
+    legacy and no longer emitted). Bold `OPENING` / `SUBTOTAL` / `RESULT`; highlight
+    `SUBTOTAL` with a top rule; colour the `RESULT` cell green when `balanced`,
+    red / amber otherwise.
 - `reconciling_difference.amount` — the `RESULT` figure (target `0.00`).
 - `reconciling_difference.status` — `balanced` (0.00) / `variance` (non-zero,
-  surface it) / `incomplete` (statement closing balance unreadable; the
-  `COMPARISON` row is `0` and the difference is not meaningful).
+  surface it) / `incomplete` (statement closing balance unreadable; the bank-side
+  `OPENING` is `0` and the difference is not meaningful).
 - `detail_schedule[]` — supporting itemisation; each
   `{ group, op, items[], subtotal }`, `items[]` =
   `{ date, particulars, ref, amount, remarks }`. Each `subtotal` equals its
@@ -671,6 +675,47 @@ one debit line:
 - All amounts 2 dp; no intermediate rounding.
 - The report is deterministic and read-only — regenerate freely after each resolve
   to watch the difference close.
+
+---
+
+## Classification taxonomy
+
+`GET .../{account}/reconciliations/classifications`
+
+Read-only, account-independent. Returns every reconciliation class so the UI can
+build the classify pickers (with descriptions) and resolve an item's
+`default_classification`. Fetch once and cache for the session.
+
+Response:
+```json
+{
+  "data": {
+    "message": "Reconciliation classifications retrieved successfully",
+    "result": {
+      "cashbook": [
+        { "value": "uncredited_receipts", "code": "R1", "label": "Uncredited Receipts (Deposits in Transit)", "description": "Cash, cheques or transfers banked at or near period end that the bank had not credited by the statement date. Fully valid - just late.", "side": "receipt", "resolution_type": "timing", "landing_place": "reconciliation_statement" }
+      ],
+      "statement": [
+        { "value": "bank_charge", "code": "D1", "label": "Bank Charges & Ledger Fees", "description": "Account maintenance, transaction, RTGS, cheque book and service fees levied directly by the bank.", "side": "debit", "resolution_type": "omission", "landing_place": "adjusted_cashbook" }
+      ]
+    }
+  }
+}
+```
+
+- **`cashbook[]`** — 22 classes: receipts **R1–R11**, payments **P1–P11**. Use these
+  to classify an outstanding **cashbook row** (§5.1).
+- **`statement[]`** — 24 classes: credits **C1–C10**, debits **D1–D14**. Use these
+  to classify an unrecorded **statement line** (§5.2).
+- Per class: `value` (the stored/POSTed value), `code` (R1…, C1…), `label`,
+  `description` (render under the label), `side`
+  (`receipt`|`payment`|`credit`|`debit`), `resolution_type`
+  (`timing`|`omission`|`error`|`bank_issue`|`suspense`), and `landing_place`
+  (`adjusted_cashbook`|`reconciliation_statement`|`suspense_queue`).
+
+Grouping the picker by `resolution_type` mirrors how the report treats each class:
+timing & bank-issue items stay on the reconciliation statement; omissions & errors
+are journalised into the adjusted cashbook; suspense items are aged.
 
 ---
 
@@ -690,7 +735,10 @@ row is resolved **without** a statement match (its `reconciliation_status` stays
 `pending`).
 
 Request body (`application/json`):
-- `classification` (present, nullable) — `erroneous_receipt`, `banked_in_other_bank`, or `null` to clear.
+- `classification` (present, nullable) — any **cashbook** class `value` (R1–R11 /
+  P1–P11) from the [classifications endpoint](#classification-taxonomy) — e.g.
+  `erroneous_receipt`, `banked_in_other_bank`, `receipts_from_prior_periods` — or
+  `null` to clear.
 - `notes` (optional) — reconciler note shown in the report detail schedule.
 
 ```json
@@ -701,22 +749,25 @@ Response:
 ```json
 { "data": { "message": "Cashbook entry classified", "result": { "cashbook_id": 77, "classification": "erroneous_receipt" } } }
 ```
-`404` if the entry is not on this account. `null` clears and the row returns to `outstanding`.
+`404` if the entry is not on this account. `null` clears and the row returns to
+`outstanding`. A `422` is returned for a value that is not a cashbook class.
 
 ### 5.2 Classify an unrecorded statement line
 `POST .../{account}/reconciliations/statement-lines/classify`
 
 Unrecorded lines have no cashbook row, so the classification is persisted keyed by
 the statement line's identity (reference + dates + amounts) so it survives
-re-extraction. Any unrecorded line carries `can_classify: true` — **including bank
-charges** (`is_transaction_fee` lines). Classifying a charge as `external_transaction`
-excludes it from the report's `Bank Charges` total and re-surfaces it under the
-`External Debits on Bank Statement` group, so charges belonging to an external
-transaction can be eliminated from the reconciliation.
+re-extraction. Any unrecorded line carries `can_classify: true`. The class you send
+determines how the line is treated in the report via its resolution type — e.g. a
+bank charge (`bank_charge`, D1, omission) is journalised into the adjusted cashbook,
+while an external transaction (`external_transaction`, C8 / `external_transaction_debit`,
+D13, bank issue) stays on the reconciliation statement.
 
 Request body (`application/json`):
 - `statement_token` (required) — token from extract.
-- `classification` (present, nullable) — `external_transaction`, or `null` to clear.
+- `classification` (present, nullable) — any **statement** class `value` (C1–C10 /
+  D1–D14) from the [classifications endpoint](#classification-taxonomy), or `null`
+  to clear.
 - `bank_entry` (required) — the `statement` object from the `unrecorded` bucket (money_in **or** money_out).
 - `notes` (optional).
 
@@ -729,9 +780,9 @@ Response:
 { "data": { "message": "Statement line classified", "result": { "classification": "external_transaction" } } }
 ```
 `422` if the token expired / belongs to another account, or the classification is
-invalid. In the report, a classified statement line nets (`money_in` adds,
-`money_out` subtracts) — credits into the **ADD: External Credits on Bank
-Statement** row and debits into the **LESS: External Debits on Bank Statement** row.
+not a statement class. In the `credits_only` report, external classifications are
+shown gross — credits into the **ADD: External Credits on Bank Statement** row and
+debits into the **LESS: External Debits on Bank Statement** row.
 
 ---
 

@@ -16,6 +16,7 @@ Base route:
 - `PATCH /leases/{lease}/activate`
 - `PATCH /leases/{lease}/suspend`
 - `PATCH /leases/{lease}/terminate`
+- `POST /leases/{lease}/generate-invoice-for-next-period`
 
 ## List Leases
 
@@ -121,6 +122,37 @@ Response shape:
   }
 }
 ```
+
+## Generate Invoice For Next Period
+
+`POST /api/v1/app/{company}/property-management/lease-management/leases/{lease}/generate-invoice-for-next-period`
+
+Purpose:
+
+- Manually generate the upcoming period's invoice for a lease ahead of the scheduled due date
+  (`next_due_at`), when operationally necessary. Runs the same generation as the `invoices:generate`
+  scheduler.
+
+Request body:
+
+- None.
+
+Eligibility (returns `422` validation error otherwise):
+
+- Lease `status` must be `active`.
+- Lease must have a billing schedule (`next_due_at` set).
+- Unlike the scheduler, the "next due" date check is **skipped** — `next_due_at` may be in the future.
+
+Behavior:
+
+- The invoice `notes` describe the billing **period** being generated for (derived from `next_due_at` and
+  the billing cycle), not the date it was generated.
+- `next_due_at` is advanced to the start of the next period when the invoice is created.
+
+Success response:
+
+- `message`: `Invoice for next period generated successfully.`
+- `invoice`: the created `FacilityInvoice`.
 
 ## Lease Items and Components
 

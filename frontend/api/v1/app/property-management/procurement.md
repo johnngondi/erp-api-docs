@@ -141,6 +141,7 @@ Endpoints:
 - `PUT/PATCH /contracts/{contract}`
 - `DELETE /contracts/{contract}`
 - `PATCH /contracts/{contract}/status`
+- `POST /contracts/{contract}/generate-bill-for-next-period`
 
 List query support:
 
@@ -181,6 +182,38 @@ Status update payload:
 | Field | Required | Type | Allowed Values |
 |---|---|---|---|
 | `status` | Yes | string | `pending`, `active`, `suspended`, `expired`, `inactive` |
+
+### Generate bill for next period
+
+`POST /api/v1/app/{company}/property-management/procurement/contracts/{contract}/generate-bill-for-next-period`
+
+Purpose:
+
+- Manually generate the upcoming period's bill for a contract ahead of the scheduled
+  billing date (`next_billing_at`), when operationally necessary. Runs the same generation
+  as the `contracts:generate-bills` scheduler.
+
+Request body:
+
+- None.
+
+Eligibility (returns `422` validation error otherwise):
+
+- Contract `type` must be `fixed` with `amount > 0`.
+- Contract `status` must be `active`.
+- Contract must have a billing schedule (`next_billing_at` set).
+- Unlike the scheduler, the "not yet due" check is **skipped** — `next_billing_at` may be in the future.
+
+Behavior:
+
+- The bill `notes` describe the billing **period** being generated for (derived from `next_billing_at` and
+  the billing cycle), not the date it was generated.
+- `next_billing_at` is advanced by one billing cycle when the bill is created.
+
+Success response:
+
+- `message`: `Bill for next period generated successfully.`
+- `bill`: the created `FacilityBill`.
 
 ## Inventories and Purchase Items
 
