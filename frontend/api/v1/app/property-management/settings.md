@@ -431,6 +431,12 @@ UI placement:
 
 These are standard PM general settings (group `budget`). They share the same controller, routes and `SettingResource` as every other general setting — there is no dedicated budget settings endpoint. Read and persist them exactly like the Finance/Procurement general settings above.
 
+> **These are company-wide defaults.** Each property can override any of these eight
+> keys for itself; a property with no override inherits the value set here. The
+> per-property equivalents live at
+> [Property Budget Settings](facilities/budget-settings.md), and reuse this exact
+> layout, `type`/`options` metadata and dependency rules.
+
 Endpoints (shared):
 
 - `GET /general`
@@ -476,6 +482,14 @@ Dependency behavior (same rule as all general settings):
 
 - Only show/enable a dependent field when its `dependency_key` setting currently equals its `dependency_value`. The three `expenditure_budget_derivative_*` fields are mutually exclusive in this way, driven by the radio selection.
 - When the user switches the radio choice, hide the now-irrelevant dependent inputs. Persist them only when their controlling option is selected.
+
+Per-property overrides:
+
+- The same eight fields can be set on an individual property under
+  `Property > Budget Settings`. See
+  [Property Budget Settings](facilities/budget-settings.md) — it uses a single
+  `PUT` with a partial payload rather than one `PATCH` per field, and each field
+  can be cleared back to the company default by sending `null`.
 
 ## Errors
 

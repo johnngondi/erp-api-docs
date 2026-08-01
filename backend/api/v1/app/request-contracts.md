@@ -560,6 +560,26 @@ Class: `App\Data\ReceiptData`
 | `currency_id` | Yes | `?int` | - | `Exists` |
 | `allocations` | Yes | `array` | - | - |
 
+## ReceiptReallocationData
+
+Class: `App\Data\ReceiptReallocationData`
+
+| Field | Required | Type | Allowed Values (Enum) | Rules |
+|---|---|---|---|---|
+| `allocations` | Yes | `array` | - | `Required` |
+
+Each entry is a `ReceiptReallocationItemData`. The entries must add up to the full receipt
+amount. See `docs/backend/api/v1/app/receipt-reallocation.md`.
+
+## ReceiptReallocationItemData
+
+Class: `App\Data\ReceiptReallocationItemData`
+
+| Field | Required | Type | Allowed Values (Enum) | Rules |
+|---|---|---|---|---|
+| `invoice_id` | Yes | `int` | - | `Required`, `Exists` |
+| `amount` | Yes | `float` | - | `Required` |
+
 ## ReceiptUpdateData
 
 Class: `App\Data\ReceiptUpdateData`

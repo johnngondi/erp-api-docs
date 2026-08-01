@@ -19,7 +19,11 @@ everything they **paid** for a period, with the opening (brought-forward) and cl
 
 ## Endpoints
 
-- `GET /reports/tenants/billings-and-collections`
+- `GET /reports/tenants/billings-and-collections` — requires `view-billings-and-collections-report`
+- `GET /reports/tenants/billings-and-collections/export` — requires
+  `export-billings-and-collections-report`. Takes a required `format` (`excel` | `pdf`) plus the same
+  filters as the report (below). Currently answers `501` — see
+  [the shared contract](./README.md#permissions--export).
 
 ## Get the report
 

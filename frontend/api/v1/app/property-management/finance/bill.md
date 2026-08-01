@@ -17,6 +17,7 @@ Base route:
 - `PUT /bills/{bill}/post-bill`
 - `PUT /bills/{bill}/reject-invoice`
 - `PUT /bills/bulk-post-bill`
+- `POST /bills/merge`
 
 ## List Bills
 
@@ -35,6 +36,7 @@ Supported query params:
 - Include:
   - `include=items`, `include=withholdings`, `include=withholdings.withholdingTax`
   - `include=creditNotes` — embeds the credit notes raised against each bill
+  - `include=mergedChildren` — embeds the bills merged into this one (see [Merge bills](#merge-bills))
 - Pagination:
   - `per_page`, `page`
 
@@ -115,6 +117,15 @@ To also pull the credit notes themselves into the row, add `?include=creditNotes
 endpoint always embeds them under `credit_notes` (each is a standard `FacilityBillResource` with
 negative figures).
 
+### Merge indicator fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `merged_into_bill_id` | integer \| null | Set on a bill that was merged into a super bill. Merged bills are soft deleted, so they do not appear in the list at all — this only surfaces on a restored/`withTrashed` read. |
+| `is_merged` | boolean | `true` when `merged_into_bill_id` is set. |
+| `merged_bills_count` | integer | On a super bill, how many bills were merged into it (only present when the count is loaded). |
+| `merged_bills` | array | The merged bills themselves, when `?include=mergedChildren` is used. |
+
 ## Create payload (`BillData`)
 
 | Field | Required | Type | Allowed Values / Notes |
@@ -190,5 +201,104 @@ Sample response:
   "bills": [
     { "id": 1201, "...": "standard FacilityBillResource" }
   ]
+}
+```
+
+## Merge bills
+
+`POST /api/v1/app/{company}/property-management/finance/bills/merge`
+
+Combines several **pending** bills from the same supplier for the same property into one new bill
+(the "super bill"). Each merged bill becomes a single line item on the super bill — carrying its
+amount, tax and notes — and is then soft deleted, so it disappears from the bill list.
+
+Permission: the same as creating a bill (`create-facility-bill`).
+
+Vendors can merge their own bills too, from
+[`POST /api/v1/vendor/finance/bills/merge`](../../../vendor/finance/bill.md#merge-bills). That route
+applies the same rules but is stricter: it accepts no classification overrides, so the selected bills
+must already share the same `type`, `expense_type_id` and `expense_category_id`.
+
+### Constraints
+
+The whole request is rejected with a `422` (message under `errors.message`) if any of these fail:
+
+- At least **two** distinct bills, all of which must exist.
+- Every bill is `pending`. A bill in any other status cannot be merged.
+- No bill has been invoiced or posted (`invoice_number`, `tax_invoice_number`, `expense_posted_at`
+  must all be empty and no expense may exist).
+- No bill is a `credit-note`, and none has already been merged into another bill.
+- All bills share the same `vendor_id`, `facility_id` and `currency_id`.
+
+### Choosing the effective type / category
+
+`type`, `expense_type_id` and `expense_category_id` may legitimately differ between the selected
+bills. When they do and no override is sent, the request fails with a message naming the field and
+listing the candidate values, e.g.
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "message": ["The selected bills have different expense type values (3, 7). Choose the one that applies to the merged bill."]
+  }
+}
+```
+
+The UI should then prompt the user to pick one and resend with the corresponding field set. An
+override is always honoured, even when the bills agree.
+
+### Payload (`MergeFacilityBillsData`)
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `bill_ids` | Yes | integer[] | At least 2, distinct; each must exist in `facility_bills.id` |
+| `type` | No | string | `lpo`, `contract`, `liability`, `other`. Required only when the selected bills disagree |
+| `expense_type_id` | No | integer | `facility_expense_types.id`. Required only when the selected bills disagree |
+| `expense_category_id` | No | integer | `expense_categories.id`. Derived from the expense type when omitted |
+| `expense_sub_type_id` | No | integer | `facility_expense_sub_types.id` |
+| `notes` | No | string | Overrides the notes the backend composes (see below) |
+
+### What the super bill looks like
+
+- `amount`, `tax`, `total` = the sums of the merged bills; `paid = 0`, `balance = total`,
+  `status = pending`, `tax_type = fixed` (the merged taxes are already resolved amounts).
+- One item per merged bill: `title` from that bill's first item (falling back to `Bill#{id}`),
+  `notes` = the merged bill's notes, `amount`/`tax`/`total` copied across, and `billable` pointing at
+  the merged bill.
+- `notes`: the client's `notes` if supplied; otherwise the shared note when every merged bill has the
+  same one, else `Merged {n} bills: {note}; {note}; …`.
+- `withholding_tax_ids` = the union of the merged bills' withholding taxes, recalculated against the
+  combined totals.
+- No invoice number: the super bill is invoiced and posted to expenses like any other bill.
+
+### Undoing a merge
+
+Cancelling the super bill (`PATCH /bills/{bill}/cancel`) **while it is still pending** restores every
+merged bill exactly as it was — pending, with its own items and withholdings intact — and clears
+their merge markers. Deleting a pending super bill does the same before removing it.
+
+Once the super bill has left `pending` (posted to expenses, partially paid, paid), the merge is
+locked in: cancelling it follows the normal bill-cancellation path (expense cancellation and, where
+applicable, the negative reversal bill) and the merged bills stay deleted.
+
+Sample response:
+
+```json
+{
+  "message": "2 bills merged successfully.",
+  "bill": {
+    "id": 1310,
+    "notes": "Merged 2 bills: Lobby cleaning; Car park cleaning",
+    "amount": "1500.00",
+    "tax": "240.00",
+    "total": "1740.00",
+    "status": { "value": "pending", "color": "warning" },
+    "items": [
+      { "id": 5001, "title": "Lobby cleaning", "notes": "Lobby cleaning", "amount": "1000.00", "tax": "160.00", "total": "1160.00" },
+      { "id": 5002, "title": "Car park cleaning", "notes": "Car park cleaning", "amount": "500.00", "tax": "80.00", "total": "580.00" }
+    ],
+    "...": "standard FacilityBillResource"
+  }
 }
 ```

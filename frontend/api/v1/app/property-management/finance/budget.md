@@ -12,8 +12,8 @@ A facility budget is **system-generated and manually tunable**. It is not freely
 created or deleted through the API — instead it is generated automatically and
 its line amounts are edited in place.
 
-A budget covers a single period (driven by the `facility_budget_cycle` setting)
-and is composed of:
+A budget covers a single period (driven by the `facility_budget_cycle` setting, or
+the property's own `budget_cycle` override) and is composed of:
 
 - **Income items** — split into:
   - **Commercial units** — auto-billed lease components at facility level
@@ -22,10 +22,46 @@ and is composed of:
     type (`facility_residential_unit_id` set).
   - **Utilities** — facility-wide utility components (not tied to a unit),
     seeded at `0`.
-- **Expense items** — one per facility expense type, defaulting to `0`.
+- **Expense items** — one per facility expense type. Each is budgeted at the
+  **greater of** its contracted floor and its derived historical amount (see
+  [How expenses are derived](#how-expenses-are-derived)); an expense type with
+  neither is seeded at `0`.
 
 Estimation and lifecycle are documented in
-[Budget Settings](../settings.md#budget-settings).
+[Budget Settings](../settings.md#budget-settings). Every budget setting can also be
+overridden per property — see
+[Property Budget Settings](../facilities/budget-settings.md).
+
+## How expenses are derived
+
+For each of the facility's expense types the budgeted amount is
+`max(contracted, derived)`:
+
+- **Contracted** — the committed spend from the property's **active, fixed-amount
+  contracts** attributed to that expense type. Each contract's `amount` covers one
+  billing occurrence (`billing_cycle` × `billing_period`), so it is prorated over
+  the portion of the budget period the contract is actually live for, and grossed up
+  by the contract's tax when `has_tax` is set. Variable contracts, non-active
+  contracts, contracts that do not overlap the period, and contracts with no
+  `expense_type_id` contribute nothing.
+- **Derived** — the historical figure produced from the property's previous budgets
+  using the `expenditure_budget_derivative` method (same as last cycle / add-or-less
+  X% / average of last N cycles).
+
+Contracts act as a **floor, not a ceiling**: a facility whose history shows more
+spend on a contracted type than the contract alone commits keeps the larger figure,
+which captures ad-hoc work on top of the contract. This also means a brand-new
+property with signed contracts gets a meaningful expense budget on its very first
+cycle instead of a row of zeros.
+
+Both sides read their settings from the property first and fall back to the company
+setting.
+
+> When a fixed contract is created, changed (amount, billing cycle/period, status,
+> type, dates, expense type or tax) or deleted, the property's **current** budget is
+> re-synced in a queued job: any expense line sitting below the new contracted floor
+> is raised to it. Lines already budgeted higher — from history or a manual edit —
+> are never lowered.
 
 ## Endpoints
 
@@ -226,7 +262,10 @@ from lease collections (income) and facility expenses (expense).
 
 `budget_at_risk_threshold_percent` is a company-level budget setting (group
 `budget`, `type` `number`). It is read and updated through the shared general
-settings endpoints — not through this budget API.
+settings endpoints — not through this budget API. A property may override it for
+itself via [Property Budget Settings](../facilities/budget-settings.md); when it
+does, that value is used for the property's own budgets and for its bucket in the
+Facility Budget report.
 
 | Key | Default | Type | Options | Dependency | Description |
 |---|---|---|---|---|---|

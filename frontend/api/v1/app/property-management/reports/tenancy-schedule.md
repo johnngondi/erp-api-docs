@@ -30,7 +30,10 @@ report template (indent by `depth`); the envelope, bucket keys and cell shape ar
 
 ## Endpoints
 
-- `GET /reports/tenants/tenancy-schedule`
+- `GET /reports/tenants/tenancy-schedule` — requires `view-tenancy-schedule-report`
+- `GET /reports/tenants/tenancy-schedule/export` — requires `export-tenancy-schedule-report`. Takes a
+  required `format` (`excel` | `pdf`) plus the same filters as the report (below). Currently answers
+  `501` — see [the shared contract](./README.md#permissions--export).
 
 ## Filters (query params)
 

@@ -27,6 +27,43 @@ that report: its extra filters, its buckets, and its numbers.
 
 ---
 
+## Permissions & export
+
+Every report has **two** permissions, both named after the report's own slug:
+
+| Permission | Guards |
+|---|---|
+| `view-{report}-report` | `GET {report-url}` — the report itself. Missing ⇒ `403`. |
+| `export-{report}-report` | `GET {report-url}/export` — the export. Missing ⇒ `403`. |
+
+The slugs are `income-and-expenditure`, `property-expenses`, `facility-budget`,
+`billings-and-collections`, `tenancy-schedule` — so e.g. the Tenancy Schedule needs
+`view-tenancy-schedule-report` and `export-tenancy-schedule-report`. Viewing does **not** imply
+exporting: they are granted independently on a role, so the UI should hide the report and the Export
+button separately. Both are listed by
+`GET /api/v1/app/{company}/access-management/permissions` under the `Property Management` tag.
+
+### The export endpoint
+
+Every report has an `…/export` sibling at its own URL:
+
+```
+GET …/reports/landlords/facility-budget/export?format=excel
+GET …/reports/tenants/tenancy-schedule/export?format=pdf&facility_id=1&period_from=2026-07-01
+```
+
+- **It accepts every filter its report accepts** — same flat param names, same defaults, including
+  that report's extra filters. The export is a rendering of the same generated report, so the
+  frontend exports exactly what the user is looking at by **replaying the current query string with
+  `format` appended**.
+- `format` is **required** and must be `excel` or `pdf`. Anything else ⇒ `422` on `format`.
+
+> **Not implemented yet.** The export endpoints currently authorize and validate, then answer
+> `501 Not Implemented` — the file writers are wired in a follow-up. The permission, the URL and the
+> parameter contract above are final, so the frontend can build against them now.
+
+---
+
 ## Global filters
 
 Every report supports these six filters (defined on the shared `App\Data\Reports\ReportFilterData`).

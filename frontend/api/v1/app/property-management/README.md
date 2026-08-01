@@ -14,6 +14,7 @@ Base prefix:
   - `docs/frontend/app/property-management/facilities/utility-meters.md`
   - `docs/frontend/app/property-management/facilities/meter-reading-extraction.md`
   - `docs/frontend/app/property-management/facilities/space-occupancy.md`
+  - `docs/frontend/app/property-management/facilities/budget-settings.md`
 - Tickets
   - `docs/frontend/app/property-management/tickets.md`
 - Procurement

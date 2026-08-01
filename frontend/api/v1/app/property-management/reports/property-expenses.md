@@ -18,7 +18,10 @@ and computed on the fly.
 
 ## Endpoints
 
-- `GET /reports/landlords/property-expenses`
+- `GET /reports/landlords/property-expenses` — requires `view-property-expenses-report`
+- `GET /reports/landlords/property-expenses/export` — requires `export-property-expenses-report`.
+  Takes a required `format` (`excel` | `pdf`) plus the same filters as the report (below). Currently
+  answers `501` — see [the shared contract](./README.md#permissions--export).
 
 ## What makes this report different
 

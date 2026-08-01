@@ -19,7 +19,11 @@ computed on the fly.
 
 ## Endpoints
 
-- `GET /reports/landlords/income-and-expenditure`
+- `GET /reports/landlords/income-and-expenditure` — requires `view-income-and-expenditure-report`
+- `GET /reports/landlords/income-and-expenditure/export` — requires
+  `export-income-and-expenditure-report`. Takes a required `format` (`excel` | `pdf`) plus the same
+  filters as the report (below). Currently answers `501` — see
+  [the shared contract](./README.md#permissions--export).
 
 ## What makes this report different
 

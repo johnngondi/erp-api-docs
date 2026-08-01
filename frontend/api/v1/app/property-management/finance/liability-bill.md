@@ -82,9 +82,10 @@ Sample list response (`LiabilityBillWithholdingResource`):
 
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
-| `vendor_id` | Yes | integer | Must exist in `users.id` |
+| `vendor_id` | Yes | integer | Must exist in `users.id` — the tax merchant/withholding authority the bill is payable to |
 | `facility_id` | Yes | integer | Must exist in `facilities.id` |
 | `withholding_tax_id` | Yes | integer | Must exist in `withholding_taxes.id` |
+| `workings_upload_id` | No | integer | Must exist in `uploads.id`; the supporting "workings" document, stored as the liability bill's invoice (`invoice_upload_id`) |
 | `withholdings` | Yes | array | Non-empty; the withholding rows being paid |
 
 ### Withholding object (`LiabilityBillWithholdingData`)
@@ -103,6 +104,7 @@ Sample request body:
   "vendor_id": 7,
   "facility_id": 22,
   "withholding_tax_id": 3,
+  "workings_upload_id": 991,
   "withholdings": [
     { "id": 5012, "bill_id": 1201, "amount": 160.0, "to_pay": 160.0 },
     { "id": 5013, "bill_id": 1202, "amount": 80.0, "to_pay": 80.0 }
@@ -120,9 +122,23 @@ On create, a single `liability` `FacilityBill` is recorded:
   `FacilityBillWithholding`.
 - Each selected `FacilityBillWithholding` has its `paid`/`balance` advanced by `to_pay` and its
   status set to `paid` (balance cleared) or `partially-paid`.
+- If `workings_upload_id` is supplied it is stored as the bill's invoice (`invoice_upload_id`) and
+  `invoice_uploaded_at` is stamped.
 
-Cancelling the liability bill (via the standard bill cancel endpoint) reverses every settlement:
-the linked withholdings have their `paid`/`balance` unwound and their status re-derived.
+**Vendor statement effects:**
+
+- On create, a single **credit** for the bill total is posted to the tax merchant (the bill's
+  `vendor_id`) — what they are owed for the withholdings being remitted. No debit is posted to the
+  original vendors at this point.
+- When a payment voucher pays this liability bill, the tax merchant is **debited** for the amount
+  paid (netting their statement toward zero), and each original vendor is **debited** their share of
+  the payment, allocated in proportion to their withholding line item's amount. A partial payment
+  posts proportional debits.
+
+Cancelling the liability bill (via the standard bill cancel endpoint) reverses every settlement: the
+linked withholdings have their `paid`/`balance` unwound and their status re-derived, and the tax
+merchant's credit line is removed. Cancelling the payment voucher removes the tax merchant debit and
+the proportional original-vendor withholding debits it produced.
 
 Sample response (`FacilityBillResource`):
 

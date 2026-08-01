@@ -18,7 +18,13 @@ and a **status** flag. It is **read-only** and computed on the fly.
 
 ## Endpoints
 
-- `GET /reports/landlords/facility-budget`
+- `GET /reports/landlords/facility-budget` — requires `view-facility-budget-report`
+- `GET /reports/landlords/facility-budget/export` — requires `export-facility-budget-report`. Takes a
+  required `format` (`excel` | `pdf`) plus the same filters as the report (below). Currently answers
+  `501` — see [the shared contract](./README.md#permissions--export).
+
+> `view-facility-budget-report` is the **report**; the plain `view-facility-budget` permission is the
+> stored budget resource. They are separate.
 
 ## What makes this report different
 

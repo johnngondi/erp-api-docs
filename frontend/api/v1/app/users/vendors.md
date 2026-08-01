@@ -63,7 +63,21 @@ Request fields:
 | `tax_pin` | Conditional | string | Required if `has_vat=true`; unique |
 | `is_statutory_vendor` | No | boolean | Optional |
 | `is_withholding_exempt` | No | boolean | Optional; when `true`, no withholding is applied to the vendor's bills even if withholding ids are supplied |
+| `is_tax_merchant` | No | boolean | Optional; flags the vendor as a tax merchant |
 | `withholds` | No | array | Optional |
+| `bank_account` | No | object | Optional. When present, a bank account is created and owned by the vendor. See the table below. |
+
+`bank_account` object fields (validated against `BankAccountData`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `bank_branch_id` | Yes | integer | Must exist in `bank_branches.id` |
+| `account_name` | Yes | string | Name on the account |
+| `account_number` | Yes | string | Must be unique in `bank_accounts.account_number` |
+| `account_number_confirmation` | Yes | string | Must match `account_number` (`confirmed` rule) |
+
+The backend automatically sets `type = user`, `user_id` (the created vendor) and `user_group_id` (the vendor
+group) — do not send these. If the bank details fail validation, the entire vendor creation is rolled back.
 
 Example request:
 
@@ -75,7 +89,13 @@ Example request:
   "portal": 4,
   "terms": true,
   "policy": true,
-  "is_statutory_vendor": true
+  "is_statutory_vendor": true,
+  "bank_account": {
+    "bank_branch_id": 12,
+    "account_name": "Prime Mechanical Ltd",
+    "account_number": "0123456789",
+    "account_number_confirmation": "0123456789"
+  }
 }
 ```
 

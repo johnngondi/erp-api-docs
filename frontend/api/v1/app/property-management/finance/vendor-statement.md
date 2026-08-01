@@ -140,3 +140,7 @@ carried whenever the originating bill was generated from a fixed contract.
 | Bill — **not** remitted | The bill's lines are deleted. |
 | Credit note | The credit note's line is deleted. |
 | Liability bill | The withholding settlement debit lines it produced are deleted (the settlement is unwound and may be redone). |
+
+Merging bills (see [Bills](./bill.md#merge-bills)) never touches the statement: only pending bills can
+be merged, and a pending bill has not been posted, so it has no statement lines to move or unwind.
+The super bill raises its single credit line when it is posted to expenses, like any other bill.

@@ -111,6 +111,7 @@ Treat `5xx` as backend/system failure:
 - Facilities:
   - `docs/frontend/app/property-management/facilities/facilities.md`
   - `docs/frontend/app/property-management/facilities/floor_generation.md`
+  - `docs/frontend/app/property-management/facilities/budget-settings.md`
 - Tickets:
   - `docs/frontend/app/property-management/tickets.md`
 - Procurement:
