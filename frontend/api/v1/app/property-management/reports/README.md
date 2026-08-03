@@ -15,6 +15,11 @@ future one without hardcoding columns or colours. Each per-report page (e.g.
 [facility-budget.md](./facility-budget.md)) then only documents what is specific to
 that report: its extra filters, its buckets, and its numbers.
 
+> **One exception to "global filters".** [trial-balance.md](./trial-balance.md) is a company-wide
+> accounting snapshot rather than a party report: it takes **none** of the six global filters and has
+> no `period` in its `header` — only `as_at` and `currency_id`. Everything else on this page still
+> applies to it unchanged.
+
 ## What a report is
 
 - **Read-only** and **computed on the fly** — no persistence, no side effects.
@@ -37,7 +42,7 @@ Every report has **two** permissions, both named after the report's own slug:
 | `export-{report}-report` | `GET {report-url}/export` — the export. Missing ⇒ `403`. |
 
 The slugs are `income-and-expenditure`, `property-expenses`, `facility-budget`,
-`billings-and-collections`, `tenancy-schedule` — so e.g. the Tenancy Schedule needs
+`billings-and-collections`, `tenancy-schedule`, `trial-balance` — so e.g. the Tenancy Schedule needs
 `view-tenancy-schedule-report` and `export-tenancy-schedule-report`. Viewing does **not** imply
 exporting: they are granted independently on a role, so the UI should hide the report and the Export
 button separately. Both are listed by

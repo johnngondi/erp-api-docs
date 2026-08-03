@@ -69,6 +69,8 @@ Sample response:
       {
         "id": 9001,
         "transaction": { "type": "FacilityReceipt", "id": 4210 },
+        "facility": { "id": 7, "name": "Riverside Apartments" },
+        "payee": { "id": 512, "name": "Jane Tenant" },
         "refference_number": "RCP-000123",
         "payment_method": { "id": 3, "name": "Bank Transfer" },
         "notes": "Receipt#4210 - 05 Jun, 2026 - Jane Tenant - Riverside Apartments",
@@ -84,6 +86,8 @@ Sample response:
       {
         "id": 9044,
         "transaction": { "type": "FacilityPaymentVoucher", "id": 801 },
+        "facility": { "id": 7, "name": "Riverside Apartments" },
+        "payee": { "id": 88, "name": "Acme Maintenance Ltd" },
         "refference_number": "PV-000801",
         "payment_method": { "id": 3, "name": "Bank Transfer" },
         "notes": "PV#801 - vendor - Acme Maintenance Ltd",
@@ -109,6 +113,8 @@ Field notes (`BankAccountTransactionResource`):
 |---|---|---|
 | `transaction.type` | string\|null | Source model short name: `FacilityReceipt` or `FacilityPaymentVoucher`. |
 | `transaction.id` | integer\|null | Id of that source record. |
+| `facility` | object\|null | `{ id, name }` — the property the line belongs to. Null for bank-side lines and for vouchers spanning more than one property (see below). |
+| `payee` | object\|null | The counterparty: the paying user on a receipt, the payable user on a voucher. Null for bank-side lines. |
 | `refference_number` | string\|null | The source receipt/voucher `transaction_number`. |
 | `payment_method` | object\|null | `{ id, name }` when the source carried a payment method. |
 | `notes` | string | Human-readable line description. |
@@ -122,11 +128,19 @@ Lines are written automatically as part of the receipt/voucher lifecycle — the
 create them directly. Recording is **idempotent**: a receipt or voucher that has already produced a
 line is skipped, so re-processing never double-posts.
 
-| Event | Line | Account | Source (`transaction`) | Notes format |
-|---|---|---|---|---|
-| Receipt processed | debit = receipt amount | the receipt's `receiving_account_id` | the `FacilityReceipt` | `Receipt#{id} - {transaction_date} - {paying user} - {property}` |
-| Payment voucher released | credit = voucher amount | the voucher's `debit_bank_account_id` | the `FacilityPaymentVoucher` | `PV#{id} - {payable_as} - {receiving user}` |
+| Event | Line | Account | Source (`transaction`) | `facility` / `payee` | Notes format |
+|---|---|---|---|---|---|
+| Receipt processed | debit = receipt amount | the receipt's `receiving_account_id` | the `FacilityReceipt` | the receipt's property and paying user | `Receipt#{id} - {transaction_date} - {paying user} - {property}` |
+| Payment voucher released | credit = voucher amount | the voucher's `debit_bank_account_id` | the `FacilityPaymentVoucher` | the voucher's payable user, and the property of the items it settles | `PV#{id} - {payable_as} - {receiving user}` |
 
 `refference_number` carries the source `transaction_number`, and `transaction_at` is set when the
 receipt is processed / the voucher is released (paid). A receipt with no receiving account, or a
 voucher with no debit bank account, produces no line.
+
+A voucher has no property of its own — it is settling items, and both payable types (bills and
+remittances) carry one. The line is attributed to a property only when **every** item on the
+voucher points at that same property; a voucher spread across properties gets `facility: null`.
+
+Lines booked straight to the cashbook from a bank statement (bank charges, interest — see
+[Bank statement reconciliation](bank-statement-reconciliation.md)) have no source document, so
+both `facility` and `payee` are null on them.

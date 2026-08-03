@@ -169,6 +169,11 @@ Treat `5xx` as backend/system failure:
 - Company Users:
   - `docs/frontend/api/v1/app/access-management/company-users.md`
 
+## Alerts Docs
+
+- Alerts (user pop-ups):
+  - `docs/frontend/api/v1/app/alerts.md`
+
 ## Users Docs
 
 - Overview:
