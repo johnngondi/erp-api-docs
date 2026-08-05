@@ -15,6 +15,9 @@ Permission: `reallocate-facility-receipt` (`FacilityReceiptPolicy::reallocate`).
 is also exposed per-record under `permissions.reallocate` on `FacilityReceiptResource`, so
 the UI can hide the action.
 
+Frontend spec (screen, split-button placement, client-side validation):
+`docs/frontend/api/v1/app/property-management/lease-management/receipt-reallocation.md`.
+
 ## GET — allocatable invoices
 
 Returns the receipt, the invoices its money may be spread across, and how it is spread today.

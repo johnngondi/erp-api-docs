@@ -39,6 +39,7 @@ Base prefix:
   - `docs/frontend/app/property-management/lease-management/invoices.md`
   - `docs/frontend/app/property-management/lease-management/credit-notes.md`
   - `docs/frontend/app/property-management/lease-management/receipts.md`
+  - `docs/frontend/app/property-management/lease-management/receipt-reallocation.md`
   - `docs/frontend/app/property-management/lease-management/lease-deposits.md`
   - `docs/frontend/app/property-management/lease-management/lease-escalations.md`
   - `docs/frontend/app/property-management/lease-management/lease-opening-balances.md`

@@ -13,6 +13,8 @@ Base route:
 - `GET /receipts/{receipt}`
 - `PUT/PATCH /receipts/{receipt}`
 - `PATCH /receipts/{receipt}/cancel`
+- `GET /receipts/{receipt}/reallocation`
+- `PUT /receipts/{receipt}/reallocation`
 - `POST /receipts/{receipt}/dispute`
 - `DELETE /receipts/{receipt}/dispute`
 - `DELETE /receipts/{receipt}`
@@ -127,6 +129,17 @@ Possible status values returned by API resource:
 - `pending` (`secondary`)
 - `confirmed` (`success`)
 - `cancelled` (`danger`)
+
+## Reallocate Receipt
+
+Moves a confirmed receipt's money between the tenant's invoices, leaving the receipt and its
+cashbook entry untouched. Two endpoints (`GET` to load the screen, `PUT` to commit), the
+`Reallocate` item in the receipt row/header split button, and the reallocation modal are
+specified in full in:
+
+`docs/frontend/app/property-management/lease-management/receipt-reallocation.md`
+
+Show the action only when `receipt.permissions.reallocate === true`.
 
 ## Delete Receipt
 
