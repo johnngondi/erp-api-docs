@@ -18,6 +18,7 @@ Base route:
 - `PUT /bills/{bill}/reject-invoice`
 - `PUT /bills/bulk-post-bill`
 - `POST /bills/merge`
+- `POST /bills/bulk-settlement` — see [Bulk bills payment](bulk-bills-payment.md)
 
 ## List Bills
 
@@ -30,6 +31,9 @@ Supported query params:
   - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[type]`, `filter[status]`
   - `filter[landlord_id]` — bills whose facility belongs to the given landlord (`users.id`)
   - `filter[contract_id]` — bills raised against a given contract (`facility_contracts.id`)
+  - `filter[payable]` — boolean. When true, returns only bills that can still be paid: status
+    `unpaid` or `partially-paid` **and** a non-zero `payable_amount`. This is what the "Pay Bills"
+    table lists. Off by default, so the unfiltered index is unchanged.
   - Date-range filters: `filter[invoice_date]`, `filter[created_at]`, `filter[invoice_uploaded_at]`, `filter[expense_posted_at]` — see [Date-range filtering](#date-range-filtering)
 - Sort:
   - `sort=id,invoice_number,tax_invoice_number,amount,tax,total,paid,balance,invoice_date,invoice_uploaded_at,expense_posted_at,created_at,updated_at`
@@ -79,6 +83,8 @@ Sample list response (`FacilityBillResource`):
       "total": "1160.00",
       "paid": "0.00",
       "balance": "1160.00",
+      "withheld_amount": 60,
+      "payable_amount": 1100,
       "credit_notes_count": 1,
       "has_credit_notes": true,
       "credited_amount": 232,
@@ -100,6 +106,19 @@ Sample list response (`FacilityBillResource`):
   ]
 }
 ```
+
+### Payable amount fields
+
+The list and show endpoints always eager-load `withholdings`, so every bill carries what is still
+owed to the supplier:
+
+| Field | Type | Notes |
+|---|---|---|
+| `withheld_amount` | number | Tax still withheld on the bill — the sum of withholdings with a positive `balance`. A withholding that has already been settled via a liability bill has also reduced `balance`, so it is not counted again here. |
+| `payable_amount` | number | `balance − withheld_amount`. What the supplier can actually be paid, and what the bulk payment popup prefills its "To Pay" input with. Negative on a credit note. |
+
+Both are omitted when `withholdings` is not loaded (e.g. a resource rendered from a create/update
+response).
 
 ### Credit-note indicator fields
 

@@ -361,11 +361,13 @@ Create/update payload example:
     {
       "utility_id": 6,
       "utility_bill_distribution_method": "utility provider rate",
+      "bill_indirect_consumption": true,
       "vendor_id": 1
     },
     {
       "utility_id": 7,
       "utility_bill_distribution_method": "defined",
+      "bill_indirect_consumption": false,
       "vendor_id": 1
     }
   ],
@@ -417,12 +419,19 @@ Create/update payload example:
 ```
 
 Allowed values for `utility_bill_distribution_method`:
-- `utility provider rate`
-- `distribute to tenants`
-- `defined`
+- `utility provider rate` — tenants pay their metered units at the provider's own per-unit
+  rate (`total bill / bill consumption`)
+- `distribute to tenants` — the whole bill is spread over tenant consumption
+  (`total bill / Σ tenant consumption`)
+- `defined` — per-lease editable rate, seeded from the provider rate
 
 Notes:
 - `utilities[*].utility_id` maps to `lease_components.id` (not `utilities.id`).
+- `utilities[*].bill_indirect_consumption` (boolean, default `false`) — only meaningful with
+  `utility provider rate`. When `true`, the units the provider billed that no tenant meter
+  accounts for are shared across tenants by `lease space / total facility space` and billed
+  as a second invoice line. See
+  [utility-billing.md](../lease-management/utility-billing.md).
 - `legal_fee_type` allowed values are `per space unit` and `fixed`.
 
 Backend-required baseline fields in DTO:

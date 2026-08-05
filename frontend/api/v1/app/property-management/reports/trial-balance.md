@@ -78,7 +78,7 @@ Active bank accounts that are either:
 
 - of type `system`, **or**
 - of type `user` **and** belonging to the user group named by the company's
-  `trial_balance_bank_user_group` setting (the landlord group by default).
+  `landlord_user_group_id` setting (the landlord group by default).
 
 The setting is editable under `Settings > General` (module `pm`, group `finance`). When it is blank,
 no `user` account is included.
