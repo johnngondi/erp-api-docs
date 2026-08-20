@@ -106,16 +106,43 @@ With `T = total_bill_amount`, `X = bill_tax_amount`, `Cb = bill_consumption`,
 |---|---|---|
 | `utility provider rate` | Commercial | `(T − X) / Cb` for every lease (tenants are taxed on the invoice) |
 | `utility provider rate` | Residential | `T / Cb` for every lease (no invoice tax) |
-| `utility provider rate` | Mixed Use | base `T / Cb`; taxable lease → `base·(1 − v)`, else `base` |
-| `distribute to tenants` | any | base `T / Ct`; taxable lease → `base·(1 − v)`, else `base` |
-| `defined` | any | base `T / Cb` seeds an editable per-lease rate; taxable lease → `base·(1 − v)` |
+| `utility provider rate` | Mixed Use | base `T / Cb`; taxable lease → `base / (1 + v)`, else `base` |
+| `distribute to tenants` | any | base `T / Ct`; taxable lease → `base / (1 + v)`, else `base` |
+| `defined` | any | base `T / Cb` seeds an editable per-lease rate; taxable lease → `base / (1 + v)` |
 
 If no lease is taxable (or the utility tax is zero-rated) every branch collapses to the plain
 rate with no invoice tax.
 
+The taxable reduction **divides by `(1 + v)`**, it does not multiply by `(1 − v)`. The provider
+bill total is tax-inclusive, so the tax-exclusive rate is `T / (1 + v)`; re-adding `v` on the
+invoice then rebuilds the gross share exactly. Under `distribute to tenants` this makes
+`Σ(amount + tax) = T` to the cent. (Multiplying by `(1 − v)` would yield `(1 − v)(1 + v) = 1 − v²`
+of the bill — a silent shortfall of `v²`, 2.56% at `v = 0.16`.)
+
+Note the invoice tax is the **lease's own** tax value, so `bill_tax_amount` from the provider
+bill is reproduced only when the provider taxed at that same rate. A bill carrying non-VATable
+levies has a lower implied tax rate, so the invoice `tax` will exceed the bill's `X` while
+`amount + tax` still reconciles to `T`.
+
 The response returns the resolved **base** rate as `resolved_charge_rate` and the applied
 `distribution_method`; each row also carries its own reduced `charge_rate`, plus `is_taxable`
 and `tax_id` (for the `defined` method the FE may edit the rates before processing).
+
+Alongside it the response returns **`bill_rate`** — the provider's own per-unit price,
+`total_bill_amount / bill_consumption` (**gross**, tax included), read straight off the bill
+and independent of the distribution method. Display it beside `resolved_charge_rate` so the
+user can see what the tenants are charged versus what the provider charged. It is `null`
+when `total_bill_amount` or `bill_consumption` was not supplied (e.g. a flat `charge_rate`
+override). Note that for a **commercial** facility `resolved_charge_rate` is derived net of
+tax (`(T − X) / Cb`), so it is legitimately lower than `bill_rate`.
+
+### Tenant vs. bill consumption
+
+For the same side-by-side comparison on units, the response returns
+**`total_tenant_consumption`** (`Ct`, the units the tenant meters actually recorded) next to
+the **`bill_consumption`** that was submitted. `summary.tenant_consumption`,
+`summary.bill_consumption` and `summary.indirect_consumption` repeat them in the summary
+block. The gap between the two is what the indirect split spreads (or the landlord absorbs).
 
 ### Indirect consumption
 
@@ -131,9 +158,8 @@ amt = u × the lease's charge_rate
 It is only computed when the utility has `facility_utilities.bill_indirect_consumption =
 true`; otherwise `total_indirect_consumption` is `0` and the landlord absorbs it. The
 denominator is **all** space in the property, including vacant and non-leased space, so the
-share belonging to unlet space also stays with the landlord. A lease served by several
-meters produces several rows but is given its indirect share on **one** of them, so it is
-never charged twice.
+share belonging to unlet space also stays with the landlord. A lease gets **one** row, so it
+receives its indirect share exactly once however many meters serve it.
 
 At the process step this becomes a **second invoice line** — see
 [Process Utility Billing](#process-utility-billing).
@@ -142,6 +168,27 @@ The response includes a **`cache_key`** — an opaque token holding the server-c
 rows. Pass it back to `utility-billing-process` so it bills exactly what was previewed
 without trusting client-supplied amounts. Each row also carries `lease_id`,
 `previous_utility_meter_reading_id`, and `current_utility_meter_reading_id`.
+
+### One row per lease
+
+Rows are **per lease**, never per meter — `summary.total_rows` counts leases.
+
+- **A lease with several meters** gets a single row: consumptions are summed, and the
+  readings are summed too (so `current_reading − previous_reading` still equals the row's
+  `consumption`). Reading images become an **array** (`meter.previous_reading.images` /
+  `meter.current_reading.images`), and `meters[]` carries the per-meter breakdown for a
+  drill-down. `meter.number` is the meter numbers joined with `", "`; `meter.numbers` is the
+  same as an array and `meter.count` is how many. The plural
+  `previous_utility_meter_reading_ids` / `current_utility_meter_reading_ids` list every
+  reading the row was billed from; the singular keys keep the first meter's.
+- **Leases sharing a meter** (e.g. Jisaidie and ELOG) are returned **consecutively** and tagged
+  with the same `meter_group` (a 1-based integer) plus `shared_with_lease_ids` (the other
+  leases in that group), so the split is easy to read without hunting across the table.
+  Leases with a meter of their own keep their natural position and get their own
+  `meter_group` with an empty `shared_with_lease_ids`.
+- **`lease.spaces`** lists only the spaces a meter for the selected utility is attached to —
+  other spaces on the lease are omitted. Each entry carries the `meter_number` serving it.
+- **Reading images** are trimmed to `{ title, type, source_url }`.
 
 ### How readings are resolved
 
@@ -153,6 +200,8 @@ without trusting client-supplied amounts. Each row also carries `lease_id`,
 - **Consumption** = `current_reading − previous_reading`.
 - **Shared meters:** when one meter serves spaces belonging to multiple leases,
   consumption is split proportionally by space `size`.
+- **Several meters on one lease:** each meter's consumption is computed on its own and the
+  results are summed into the lease's single row (see [One row per lease](#one-row-per-lease)).
 - Amount formula: `consumption × charge_rate`; `tax = amount × v` for taxable leases and
   `0` otherwise; `total = amount + tax`. The `charge_rate` is the method-derived (and, for
   taxable leases, tax-reduced) rate — see above.
@@ -161,15 +210,21 @@ without trusting client-supplied amounts. Each row also carries `lease_id`,
 
 | Field | Type | Notes |
 |---|---|---|
-| `lease` | object | `{ id, user: { name }, spaces: [{ id, name, size }] }` |
-| `meter` | object\|null | `null` when the lease has no meter for the utility |
-| `meter.number` | string | Meter number |
-| `meter.is_faulty` / `meter.fault_reason` | bool / string | Meter fault status |
-| `meter.previous_reading` | object | Full reading record incl. image `source_url` (or `{ current_reading, is_initial_reading: true }` on first bill) |
-| `meter.current_reading` | object\|null | Full reading record incl. image `source_url` |
-| `consumption` | number\|null | Units for this lease |
-| `consumption_type` | string\|null | `individual` or `shared` |
-| `consumption_notes` | string\|null | Sharing breakdown when `shared` |
+| `lease` | object | `{ id, user: { name }, spaces: [{ id, name, size, meter_number }] }` — **metered spaces only** |
+| `meter_group` | integer\|null | Groups leases that share a meter; rows of a group are returned consecutively. `null` on a no-meter row |
+| `shared_with_lease_ids` | integer[] | The other leases in this `meter_group` (empty when the lease has its meter to itself) |
+| `meter` | object\|null | The lease's meters merged into one block. `null` when the lease has no meter for the utility |
+| `meter.number` | string | Meter number(s), joined with `", "` when a lease has several |
+| `meter.numbers` / `meter.count` | string[] / integer | The same numbers as an array, and how many meters the row merges |
+| `meter.is_faulty` / `meter.fault_reason` | bool / string | True if **any** of the row's meters is faulty; the reason(s), prefixed by meter number |
+| `meter.previous_reading` | object | `{ current_reading, is_initial_reading, images[] }` — reading **summed** across the row's meters; `is_initial_reading` is true when a meter baselined off its `initial_reading` |
+| `meter.current_reading` | object\|null | `{ current_reading, images[] }`, summed the same way. `null` when no meter has an unbilled reading |
+| `meter.*.images[]` | object[] | `{ title, type, source_url }` per reading image; empty when none were captured |
+| `meters[]` | object[] | Per-meter breakdown: `{ number, is_faulty, fault_reason, previous_reading, current_reading, consumption, consumption_type, consumption_notes, previous/current_utility_meter_reading_id }`. Single entry for a one-meter lease |
+| `previous_utility_meter_reading_ids` / `current_utility_meter_reading_ids` | integer[] | Every reading the row was billed from. The singular keys hold the first meter's (that is the one the invoice line links) |
+| `consumption` | number\|null | Units for this lease, summed across its meters |
+| `consumption_type` | string\|null | `individual` or `shared` (`shared` if **any** of the row's meters is shared) |
+| `consumption_notes` | string\|null | Sharing breakdown, one sentence per shared meter |
 | `charge_rate` | number\|null | The per-unit rate applied to this lease (tax-reduced for taxable leases; editable per-lease for `defined`) |
 | `is_taxable` | bool | Whether this lease is taxed on its invoice (from `lease.tax_id`) |
 | `tax_id` | integer\|null | The tax applied to this lease's invoice line (`null` when not taxable) |
@@ -188,48 +243,108 @@ without trusting client-supplied amounts. Each row also carries `lease_id`,
 
 ### Example response
 
+Lease 101 below is served by **two** meters, so its row merges them (readings summed,
+images collected, `meters[]` holding the detail). Lease 102 has no meter for the utility.
+
 ```json
 {
   "message": "Utility billing readings fetched.",
   "cache_key": "8Kd2...q9",
   "distribution_method": "utility provider rate",
   "resolved_charge_rate": 25,
+  "bill_rate": 29,
   "bill_indirect_consumption": true,
   "total_indirect_consumption": 20,
+  "total_tenant_consumption": 50,
+  "bill_consumption": 70,
   "rows": [
     {
       "lease_id": 101,
+      "meter_group": 1,
+      "shared_with_lease_ids": [],
       "previous_utility_meter_reading_id": 900,
       "current_utility_meter_reading_id": 950,
+      "previous_utility_meter_reading_ids": [900, 901],
+      "current_utility_meter_reading_ids": [950, 951],
       "lease": {
         "id": 101,
         "user": { "name": "Jane Tenant" },
-        "spaces": [{ "id": 12, "name": "Shop A", "size": 100 }]
+        "spaces": [
+          { "id": 12, "name": "Shop A", "size": 100, "meter_number": "WM-0012" },
+          { "id": 13, "name": "Store A", "size": 40, "meter_number": "WM-0031" }
+        ]
       },
       "meter": {
-        "number": "WM-0012",
+        "number": "WM-0012, WM-0031",
+        "numbers": ["WM-0012", "WM-0031"],
+        "count": 2,
         "is_faulty": false,
         "fault_reason": null,
         "previous_reading": {
-          "id": 900,
-          "current_reading": "120.00000",
-          "billed_at": "2026-06-01T00:00:00.000000Z",
-          "image": { "id": 44, "source_url": "https://.../uploads/uuid/preview" }
+          "current_reading": 220,
+          "is_initial_reading": false,
+          "images": [
+            { "title": "June reading", "type": "image", "source_url": "https://.../uploads/uuid/preview" }
+          ]
         },
         "current_reading": {
-          "id": 950,
-          "current_reading": "150.00000",
-          "billed_at": null,
-          "image": { "id": 61, "source_url": "https://.../uploads/uuid/preview" }
+          "current_reading": 270,
+          "images": [
+            { "title": "July reading", "type": "image", "source_url": "https://.../uploads/uuid/preview" }
+          ]
         }
       },
-      "consumption": 30,
+      "meters": [
+        {
+          "number": "WM-0012",
+          "is_faulty": false,
+          "fault_reason": null,
+          "previous_utility_meter_reading_id": 900,
+          "current_utility_meter_reading_id": 950,
+          "previous_reading": {
+            "id": 900,
+            "current_reading": 120,
+            "is_initial_reading": false,
+            "is_faulty": false,
+            "fault_reason": null,
+            "billed_at": "2026-06-01T00:00:00.000000Z",
+            "recorded_at": "2026-06-01T00:00:00.000000Z",
+            "image": { "title": "June reading", "type": "image", "source_url": "https://.../uploads/uuid/preview" }
+          },
+          "current_reading": {
+            "id": 950,
+            "current_reading": 150,
+            "is_initial_reading": false,
+            "is_faulty": false,
+            "fault_reason": null,
+            "billed_at": null,
+            "recorded_at": "2026-07-01T00:00:00.000000Z",
+            "image": { "title": "July reading", "type": "image", "source_url": "https://.../uploads/uuid/preview" }
+          },
+          "consumption": 30,
+          "consumption_type": "individual",
+          "consumption_notes": null
+        },
+        {
+          "number": "WM-0031",
+          "is_faulty": false,
+          "fault_reason": null,
+          "previous_utility_meter_reading_id": 901,
+          "current_utility_meter_reading_id": 951,
+          "previous_reading": { "id": 901, "current_reading": 100, "is_initial_reading": false, "image": null },
+          "current_reading": { "id": 951, "current_reading": 120, "is_initial_reading": false, "image": null },
+          "consumption": 20,
+          "consumption_type": "individual",
+          "consumption_notes": null
+        }
+      ],
+      "consumption": 50,
       "consumption_type": "individual",
       "consumption_notes": null,
       "charge_rate": 25,
-      "amount": 750,
-      "tax": 120,
-      "total": 870,
+      "amount": 1250,
+      "tax": 200,
+      "total": 1450,
       "indirect_consumption": 5,
       "indirect_amount": 125,
       "indirect_tax": 20,
@@ -240,8 +355,16 @@ without trusting client-supplied amounts. Each row also carries `lease_id`,
       "error_notes": null
     },
     {
+      "lease_id": 102,
       "lease": { "id": 102, "user": { "name": "Bob Tenant" }, "spaces": [] },
+      "meter_group": null,
+      "shared_with_lease_ids": [],
       "meter": null,
+      "meters": [],
+      "previous_utility_meter_reading_id": null,
+      "current_utility_meter_reading_id": null,
+      "previous_utility_meter_reading_ids": [],
+      "current_utility_meter_reading_ids": [],
       "consumption": null,
       "consumption_type": null,
       "consumption_notes": null,
@@ -263,14 +386,28 @@ without trusting client-supplied amounts. Each row also carries `lease_id`,
     "total_rows": 2,
     "billable_rows": 1,
     "error_rows": 1,
-    "amount": 750,
-    "tax": 120,
+    "tenant_consumption": 50,
+    "bill_consumption": 70,
+    "indirect_consumption": 20,
+    "amount": 1250,
+    "tax": 200,
     "indirect_amount": 125,
     "indirect_tax": 20,
     "indirect_total": 145,
-    "total": 1015
+    "total": 1595
   }
 }
+```
+
+Two leases sharing one meter come back next to each other, cross-referenced:
+
+```json
+[
+  { "lease_id": 101, "meter_group": 1, "shared_with_lease_ids": [103], "consumption_type": "shared",
+    "consumption_notes": "Shared meter WM-0012 across 2 leases; this lease's share 25% (size 100 of 400)." },
+  { "lease_id": 103, "meter_group": 1, "shared_with_lease_ids": [101], "consumption_type": "shared",
+    "consumption_notes": "Shared meter WM-0012 across 2 leases; this lease's share 75% (size 300 of 400)." }
+]
 ```
 
 ## Process Utility Billing
@@ -293,9 +430,19 @@ Both are priced at the same `charge_rate`. Only the direct line links the meter 
 (`previous_utility_meter_reading_id` / `current_utility_meter_reading_id`), so it is the
 one that shows the reading images.
 
-Leases whose `utility_billed_at` is already set for the current period are skipped
-(cleared monthly by the `leases:reset-utility-billing` command). Rows with zero/negative
-consumption or an error are skipped.
+A lease served by several meters is billed **once**, on its merged row: one invoice with a
+single direct line for the summed consumption, whose notes carry the summed readings
+(`Prev:1600 Curr:2100 Cons: 500`). **Every** reading in the row's
+`current_utility_meter_reading_ids` is marked billed, not just the one the line links, so no
+meter is re-billed next period.
+
+A lease is skipped only when its `utility_billed_at` falls **inside the current period**
+(on or after the first of the current month). A lease with no `utility_billed_at` has simply
+never been billed and is read as *last billed in the previous period*, so it qualifies — a
+lease onboarded today bills on the very first run, and a lease last billed in an earlier
+period reopens on its own. The `leases:reset-utility-billing` command is therefore no longer
+required monthly; it remains a manual override to force a re-bill within the current period.
+Rows with zero/negative consumption or an error are skipped.
 
 Body fields:
 
