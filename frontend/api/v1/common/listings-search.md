@@ -68,4 +68,3 @@ notice is still let until the lease ends.
 Per-unit indicative rates come from the facility-level unit type and are null when
 unset. The facility-level `indicative_*_rate_per_space_unit` fields are per space
 unit, so they price commercial space rather than residential units.
-
