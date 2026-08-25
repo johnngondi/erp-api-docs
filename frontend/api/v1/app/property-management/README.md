@@ -1,0 +1,50 @@
+# Property Management API (Frontend)
+
+Base prefix:
+
+`/api/v1/app/{company}/property-management`
+
+## Modules
+
+- Dashboard
+  - `docs/frontend/app/property-management/dashboard.md`
+- Facilities
+  - `docs/frontend/app/property-management/facilities/facilities.md`
+  - `docs/frontend/app/property-management/facilities/floor_generation.md`
+  - `docs/frontend/app/property-management/facilities/utility-meters.md`
+  - `docs/frontend/app/property-management/facilities/meter-reading-extraction.md`
+  - `docs/frontend/app/property-management/facilities/space-occupancy.md`
+  - `docs/frontend/app/property-management/facilities/budget-settings.md`
+- Tickets
+  - `docs/frontend/app/property-management/tickets.md`
+- Procurement
+  - `docs/frontend/app/property-management/procurement.md`
+- Finance
+  - `docs/frontend/app/property-management/finance.md`
+  - `docs/frontend/app/property-management/finance/bill.md`
+  - `docs/frontend/app/property-management/finance/expense.md`
+  - `docs/frontend/app/property-management/finance/payment-voucher.md`
+  - `docs/frontend/app/property-management/finance/remittance.md`
+  - `docs/frontend/app/property-management/finance/settlement.md`
+  - `docs/frontend/app/property-management/finance/vendor-statement.md`
+  - `docs/frontend/app/property-management/finance/bank-statement-reconciliation.md`
+- Reports
+  - `docs/frontend/app/property-management/reports/README.md`
+  - `docs/frontend/app/property-management/reports/billings-and-collections.md`
+- Settings
+  - `docs/frontend/app/property-management/settings.md`
+- Lease Management
+  - `docs/frontend/app/property-management/lease-management/lease-applications.md`
+  - `docs/frontend/app/property-management/lease-management/leases.md`
+  - `docs/frontend/app/property-management/lease-management/invoices.md`
+  - `docs/frontend/app/property-management/lease-management/credit-notes.md`
+  - `docs/frontend/app/property-management/lease-management/receipts.md`
+  - `docs/frontend/app/property-management/lease-management/receipt-reallocation.md`
+  - `docs/frontend/app/property-management/lease-management/lease-deposits.md`
+  - `docs/frontend/app/property-management/lease-management/lease-escalations.md`
+  - `docs/frontend/app/property-management/lease-management/lease-opening-balances.md`
+  - `docs/frontend/app/property-management/lease-management/charges-imports.md`
+
+Apply shared auth, tenancy, and error handling guidance from:
+
+- `docs/frontend/app/README.md`

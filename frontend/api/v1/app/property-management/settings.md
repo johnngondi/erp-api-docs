@@ -1,0 +1,499 @@
+# Settings API
+
+Domain: `Property Management`
+
+Base prefix:
+
+`/api/v1/app/{company}/property-management/settings`
+
+
+## Procurement Settings
+
+### General
+
+UI placement:
+
+- `SettingsPage > Group Tab (Procurement) > General Tab`
+
+Endpoints:
+
+- `GET /general`
+- `PATCH /general/{setting}`
+
+How to fetch procurement general settings:
+
+- Use `filter[group]=procurement`
+- Example: `GET /general?filter[group]=procurement`
+
+List query support:
+
+- Filters:
+  - `filter[key]`, `filter[name]`, `filter[description]`, `filter[value]`, `filter[group]`
+- Sort:
+  - `sort=id,key,name,created_at,updated_at`
+- Pagination:
+  - `per_page` (defaults to `config('app.query.default_per_page')`)
+
+Frontend metadata fields returned by `SettingResource`:
+
+- `type`: frontend input type hint (examples: `select`, `number`, `date`, `text`, )
+- `options`: input options source or static options
+- `dependency_key`: setting key this field depends on
+- `dependency_value`: value required on `dependency_key` for this setting to be active/visible
+
+Frontend behavior for `options`:
+
+- If `options` is `null`, no selectable options are required.
+- If `options` is a key-value object (example: `{ "yes": "Yes", "no": "No" }`), render those as static select options.
+- If `options` is an array with exactly one element and that element is a link/URI, treat it as a remote options endpoint.
+- For remote options endpoint behavior:
+  - Send an authenticated request to that URI using the currently authenticated user's API key/token (same `Authorization` context as the logged-in user).
+  - You may add a new endpoint inside src\api\endpoints\portals\app\property-management\settings.api.js which will be receiving the endpoint and then transforming the response to proper data consumable by options renderer use searchable select for all options
+  - Use the returned payload to populate selectable options in the UI.
+  - Do not call the URI anonymously.
+
+Dependency behavior:
+
+- If both `dependency_key` and `dependency_value` are set, only show that setting when the setting identified by `dependency_key` currently equals `dependency_value`.
+- If both are `null`, the setting is always available.
+
+Update payload (`PATCH /general/{setting}`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `value` | Yes (present) | scalar or null | Only this field is updated |
+
+Seeded Procurement General settings:
+
+| Key | Default Value | Type | Options | Dependency | Description |
+|---|---|---|---|---|---|
+| `rfq_default_deadline_days` | `3` | `number` | `null` | none | Number of days added to RFQ issue date to compute default deadline. |
+| `emergency_rfq_auto_send_enabled` | `no` | `select` | static: `yes/no` | none | Whether emergency RFQs should be auto-sent when default vendor does not respond. |
+| `emergency_rfq_send_after_hours` | `24` | `number` | `null` | `emergency_rfq_auto_send_enabled=yes` | Hours to wait before sending emergency RFQs when default vendor has not submitted a bid. |
+| `rfq_prioritize_default_vendor` | `yes` | `select` | static: `yes/no` | none | Whether default vendor gets first chance to bid before RFQ is sent to other vendors. |
+| `rfq_default_vendor_exclusive_window_hours` | `24` | `number` | `null` | `rfq_prioritize_default_vendor=yes` | Hours granted to default vendor before RFQ goes to other vendors. |
+| `rfq_default_vendor_auto_accept_max_amount` | `50000` | `number` | `null` | `rfq_prioritize_default_vendor=yes` | Maximum default-vendor bid amount that can be accepted directly. |
+
+### Request Step Template Groups
+
+Endpoints:
+
+- `GET /procurement/request-steps-template-groups`
+- `POST /procurement/request-steps-template-groups`
+- `GET /procurement/request-steps-template-groups/{request_steps_template_group}`
+- `PUT/PATCH /procurement/request-steps-template-groups/{request_steps_template_group}`
+- `DELETE /procurement/request-steps-template-groups/{request_steps_template_group}`
+
+List query support:
+
+- Filters:
+  - `filter[description]`, `filter[title]`, `filter[created_at]`, `filter[is_default]`, `filter[facilities]`
+- Sort: not documented
+- Include: not documented
+- Fields: not documented
+
+Create/Update payload (`ProcurementRequestStepTemplateGroupData`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `title` | Yes | string | Must be unique |
+| `description` | No | string | Optional |
+| `is_default` | No | boolean | Default `false` |
+| `facilities` | No | array | Optional facility bindings |
+
+### Request Step Templates (inside a group)
+
+Endpoints:
+
+- `POST /procurement/request-steps-template-groups/{group}/templates`
+- `GET /procurement/request-steps-template-groups/{group}/templates/{template}`
+- `PUT/PATCH /procurement/request-steps-template-groups/{group}/templates/{template}`
+- `DELETE /procurement/request-steps-template-groups/{group}/templates/{template}`
+
+Notes:
+
+- Nested template `index` route exists but is currently not implemented in the controller.
+
+Create/Update payload (`ProcurementRequestStepTemplateData`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `title` | Yes | string | Must be unique |
+| `role_id` | Yes | integer | Role id used for step actor |
+| `description` | No | string | Optional |
+| `select_preferred_vendor` | No | boolean | Default `false` |
+| `handle_procurement` | No | boolean | Default `false` |
+
+## Lease Management Settings
+
+### Property/Facility Types
+
+UI placement:
+
+- `SettingsPage > Lease Management > Property/Facility Types`
+
+Endpoints:
+
+- `GET /api/v1/app/{company}/property-management/facility-types`
+- `POST /api/v1/app/{company}/property-management/facility-types`
+- `GET /api/v1/app/{company}/property-management/facility-types/{facility_type}`
+- `PUT/PATCH /api/v1/app/{company}/property-management/facility-types/{facility_type}`
+- `DELETE /api/v1/app/{company}/property-management/facility-types/{facility_type}`
+
+List query support:
+
+- Filters:
+  - `filter[id]`, `filter[title]`, `filter[has_tax]`, `filter[division_type]`, `filter[created_at]`
+- Sort:
+  - `sort=id,title,has_tax,division_type,created_at`
+- Pagination:
+  - `per_page` (defaults to `config('app.query.default_per_page')`)
+
+Create/Update payload (`FacilityTypeData`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `title` | Yes | string | Facility type display name |
+| `has_tax` | No | boolean | Defaults to `false` |
+| `division_type` | No | string | `size`, `unit`, `both` (defaults to `both`) |
+
+Response item shape (`FacilityTypeResource`):
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | Record id |
+| `name` | string | Mirrors model field `title` |
+| `has_tax` | boolean | Tax applicability flag |
+| `division_type` | string | One of `size`, `unit`, `both` |
+
+Authorization:
+
+- `GET`: `view-facility-type`
+- `POST`: `create-facility-type`
+- `PUT/PATCH`: `update-facility-type`
+- `DELETE`: `delete-facility-type`
+
+
+### Lease Components
+- `GET|POST /settings/lease-management/lease-components`
+- `GET|PUT|PATCH|DELETE /settings/lease-management/lease-components/{leaseComponent}`
+- `PATCH /settings/lease-management/lease-components/{leaseComponent}/activate`
+- `PATCH /settings/lease-management/lease-components/{leaseComponent}/deactivate`
+
+### Lease Component Payment Priorities
+
+Endpoints:
+
+- `GET /lease-management/payment-priorities`
+- `POST /lease-management/payment-priorities`
+- `GET /lease-management/payment-priorities/{payment_priority}`
+- `PUT/PATCH /lease-management/payment-priorities/{payment_priority}`
+- `DELETE /lease-management/payment-priorities/{payment_priority}`
+
+List query support:
+
+- Filters:
+  - `filter[lease_component_id]`, `filter[facility_id]`
+- Sort:
+  - `sort=lease_component_id,facility_id`
+
+Create/Update payload (`LeaseComponentsPaymentPriorityData`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `facility_id` | Yes | integer | Must exist in `facilities.id` |
+| `lease_component_id` | Yes | integer | Must exist in `lease_components.id` |
+| `priority` | Yes | integer | Numeric order/weight |
+
+## Finance Settings
+
+### General Settings
+
+UI placement:
+
+- `SettingsPage > Group Tab (e.g. Finance) > General Tab`
+
+Endpoints:
+
+- `GET /general`
+- `PATCH /general/{setting}`
+
+Notes:
+
+- `GET /general` is always scoped to Property Management settings only.
+- Backend applies a default module constraint of `module contains "pm"`.
+- `module` is not exposed in the API response.
+- This section is intended to grow over time as more PM general settings are added.
+
+List query support:
+
+- Filters:
+  - `filter[key]`, `filter[name]`, `filter[description]`, `filter[value]`
+  - `filter[group]` (single or CSV, e.g. `filter[group]=finance,tax`)
+- Sort:
+  - `sort=id,key,name,created_at,updated_at`
+- Pagination:
+  - `per_page` (defaults to `config('app.query.default_per_page')`)
+
+Examples:
+
+- `GET /general`
+- `GET /general?filter[group]=finance`
+- `GET /general?filter[group]=finance,tax&sort=-updated_at`
+
+`GET /general` response item shape:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | Setting id |
+| `key` | string | Setting key |
+| `name` | string|null | Display name |
+| `description` | string|null | Help text |
+| `value` | string|null | Current value |
+| `group` | array|string|null | Group used for SettingsPage grouping |
+| `type` | string|null | Frontend input type hint (`select`, `number`, etc.) |
+| `options` | array|object|string|null | Static options or remote options URI container |
+| `dependency_key` | string|null | Key of controlling setting |
+| `dependency_value` | string|null | Required controlling value to show this setting |
+| `created_at` | object | `{ raw, formatted, diff }` |
+| `updated_at` | object | `{ raw, formatted, diff }` |
+
+`options` handling rule (applies to all general settings groups):
+
+- When `options` is an array containing only one URI/link value, the frontend must call that URI to fetch option values.
+- That request must use the authenticated user's API key/token (`Authorization` header), not an anonymous request.
+
+Update payload (`PATCH /general/{setting}`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `value` | Yes (present) | scalar or null | Only this field is updated |
+
+Update response:
+
+- Wrapped in `DataResource`:
+  - `message`: `Setting updated successfully.`
+  - `setting`: updated setting resource item
+
+PM seeded general settings starter catalog:
+
+| Key | Group | Type | Options | Dependency | Description |
+|---|---|---|---|---|---|
+| `default_tax` | `finance`, `tax` | `select` | remote URI array (taxes endpoint) | none | Default tax for PM financial transactions |
+| `default_management_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for management fees |
+| `default_letting_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for letting/reletting fees |
+
+### Bank Accounts
+
+Endpoints (prefixed with `/api/v1/app/{company}/property-management/settings`):
+
+- `GET /finance/banks/accounts`
+- `POST /finance/banks/accounts`
+- `GET /finance/banks/accounts/{account}`
+- `PUT/PATCH /finance/banks/accounts/{account}`
+- `DELETE /finance/banks/accounts/{account}`
+
+List query support:
+
+- Filters:
+  - `filter[search]`, `filter[type]`, `filter[account_name]`, `filter[account_number]`, `filter[status]`
+  - `filter[user_group_id]`, `filter[user_id]`, `filter[bank_branch_id]`
+- Sort:
+  - `sort=id,account_name,status`
+- Include:
+  - `include=userGroup,user,bankBranch`
+  - `bankBranch` (with `bank`), `currency`, and `payment_methods` are eager-loaded on the index response by default
+
+Create/Update payload (`BankAccountData`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `bank_branch_id` | Yes | integer | Must exist in `bank_branches.id` |
+| `currency_id` | No | integer | Nullable; must exist in `currencies.id` |
+| `account_name` | Yes | string | - |
+| `account_number` | Yes | string | - |
+| `account_number_confirmation` | Yes | string | - |
+| `type` | No | string | `system`, `user` (defaults to `system`) |
+| `user_group_id` | If `type` is 'user' | integer | Must exist in `user_groups.id` |
+| `user_id` | If `type` is 'user' | integer | Must exist in `users.id` |
+| `alias` | No | string | Optional |
+| `payment_methods` | No | array | Allowed payment methods for this account. Omit to leave existing links untouched on update; send `[]` to clear them. |
+| `payment_methods[].payment_method_id` | Yes (per item) | integer | Must exist in `payment_methods.id` |
+| `payment_methods[].cancellation_fee` | No | decimal | Required if selected payment method `has_cancellation_fee` is true |
+| `payment_methods[].notes` | No | string | Nullable |
+
+Immutable on update — for `PUT/PATCH`, `account_number`, `type`, `user_group_id`, and `user_id`
+
+The response embeds the selected `currency` (`id`, `name`, `code`) and the linked methods under `payment_methods`. Each `payment_methods` item has:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | The link (pivot) row id in `bank_account_payment_methods` |
+| `payment_method_id` | integer | The payment method id |
+| `payment_method` | object | `{ id, name, code, has_cancellation_fee }` |
+| `cancellation_fee` | decimal\|null | Per-account cancellation fee for this method |
+| `notes` | string\|null | Per-account notes for this method |
+
+### Expense Categories
+
+Expense categories endpoints:
+
+- `GET /finance/expense-categories`
+- `POST /finance/expense-categories`
+- `GET /finance/expense-categories/{category}`
+- `PUT/PATCH /finance/expense-categories/{category}`
+- `DELETE /finance/expense-categories/{category}`
+
+Expense categories list query support:
+
+- Filters:
+  - `filter[id]`, `filter[name]`, `filter[description]`, `filter[created_at]`
+- Sort:
+  - `sort=id,name,created_at`
+- Include:
+  - `include=expenseTypes`
+
+Expense category create/update payload:
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `name` | Yes | string | Expense category name |
+| `description` | No | string/null | Optional |
+
+Response envelope for create/update/delete:
+
+- Wrapped in `DataResource`.
+- Payload key: `category`
+
+### Expense Types and Sub-Types
+
+Expense types endpoints:
+
+- `GET /finance/expense-types`
+- `POST /finance/expense-types`
+- `GET /finance/expense-types/{type}`
+- `PUT/PATCH /finance/expense-types/{type}`
+- `DELETE /finance/expense-types/{type}`
+
+Expense sub-types endpoints:
+
+- `GET /finance/expense-types/{type}/sub-types`
+- `POST /finance/expense-types/{type}/sub-types`
+- `GET /finance/expense-types/{type}/sub-types/{subType}`
+- `PUT/PATCH /finance/expense-types/{type}/sub-types/{subType}`
+- `DELETE /finance/expense-types/{type}/sub-types/{subType}`
+
+Notes:
+
+- Expense sub-type routes are nested under an expense type.
+- A sub-type must belong to the provided `{type}`; otherwise API returns `404`.
+
+Expense types list query support:
+
+- Filters:
+  - `filter[id]`, `filter[name]`, `filter[description]`, `filter[expense_category_id]`
+  - `filter[is_procurable]`, `filter[can_have_default_vendor]`, `filter[can_have_preferred_vendor]`, `filter[created_at]`
+- Include:
+  - `include=expenseSubTypes`
+
+Expense type create/update payload:
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `name` | Yes | string | Expense type name |
+| `description` | No | string/null | Optional |
+| `expense_category_id` | Yes | integer | Must exist in `expense_categories.id`. |
+| `is_procurable` | No | boolean | Optional |
+| `can_have_default_vendor` | No | boolean | Optional |
+| `can_have_preferred_vendor` | No | boolean | Optional |
+
+Expense sub-type create/update payload:
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `name` | Yes | string | Expense sub-type name |
+| `description` | No | string/null | Optional |
+| `is_procurable` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
+| `can_have_default_vendor` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
+| `can_have_preferred_vendor` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
+
+Response envelope for create/update/delete:
+
+- Wrapped in `DataResource`.
+- Expense type key: `type`
+- Expense sub-type key: `sub_type`
+
+## Budget Settings
+
+UI placement:
+
+- `SettingsPage > Finance > Budget Tab`
+
+These are standard PM general settings (group `budget`). They share the same controller, routes and `SettingResource` as every other general setting — there is no dedicated budget settings endpoint. Read and persist them exactly like the Finance/Procurement general settings above.
+
+> **These are company-wide defaults.** Each property can override any of these eight
+> keys for itself; a property with no override inherits the value set here. The
+> per-property equivalents live at
+> [Property Budget Settings](facilities/budget-settings.md), and reuse this exact
+> layout, `type`/`options` metadata and dependency rules.
+
+Endpoints (shared):
+
+- `GET /general`
+- `PATCH /general/{setting}`
+
+How to fetch budget settings:
+
+- Use `filter[group]=budget`
+- Example: `GET /general?filter[group]=budget`
+
+Saving:
+
+- One `PATCH /general/{setting}` per changed setting, body `{ "value": <scalar|null> }`.
+- The "Save" button on the sketch should issue a PATCH for each field the user changed (there is no bulk-save endpoint).
+- `value` is always stored/returned as a string (e.g. `"annually"`, `"90"`, `"10"`).
+
+Seeded Budget settings:
+
+| Key | Default | Type | Options | Dependency | Description |
+|---|---|---|---|---|---|
+| `facility_budget_cycle` | `annually` | `select` | static: `monthly`, `quarterly`, `semi_annually`, `annually` | none | How often a budget is prepared and the period each budget covers. |
+| `residential_units_income_estimate` | `90` | `number` | `null` | none | Assumed % occupancy for residential units; multiplied by indicative rents to project budgeted income. |
+| `commercial_units_income_estimate` | `85` | `number` | `null` | none | Assumed % occupancy for commercial units; multiplied by indicative rents to project budgeted income. |
+| `expenditure_budget_derivative` | `same_as_last_cycle` | `select` | static: `same_as_last_cycle`, `add_or_less`, `average` | none | How budgeted expenditure is derived from historical spend. |
+| `expenditure_budget_derivative_operation` | `add` | `select` | static: `add`, `less` | `expenditure_budget_derivative=add_or_less` | Whether the adjustment % is added to or subtracted from the last cycle. |
+| `expenditure_budget_derivative_operation_amount` | `10` | `number` | `null` | `expenditure_budget_derivative=add_or_less` | The adjustment percentage applied to the last cycle's expenditure. |
+| `expenditure_budget_derivative_average_periods` | `5` | `number` | `null` | `expenditure_budget_derivative=average` | Number of previous cycles to average when deriving the budget. |
+| `budget_at_risk_threshold_percent` | `10` | `number` | `null` | none | Tolerance band (%) before a budget is flagged "at risk"; applies to both over-spend on expenses and under-collection on income, measured against the period-prorated budget. |
+
+UI mapping (matches the layout sketch):
+
+- **Budgeting Cycle** → `facility_budget_cycle` (dropdown).
+- **Income Budget Estimate at** (two `% occupancy` inputs):
+  - Commercial Units → `commercial_units_income_estimate`
+  - Residential Units → `residential_units_income_estimate`
+- **Expenditure Budget** (single-choice radio group bound to `expenditure_budget_derivative`):
+  - `same_as_last_cycle` — "Same as last period". No extra inputs.
+  - `add_or_less` — "Add / less X% from last period". Reveals the operation dropdown (`expenditure_budget_derivative_operation`) and the percentage input (`expenditure_budget_derivative_operation_amount`).
+  - `average` — "Average last periods". Reveals the periods input (`expenditure_budget_derivative_average_periods`), labelled in years/cycles.
+- **At-Risk Threshold (%)** → `budget_at_risk_threshold_percent` (number). The allowed variance before the `budgets:monitor` job flags a budget as at-risk.
+
+Dependency behavior (same rule as all general settings):
+
+- Only show/enable a dependent field when its `dependency_key` setting currently equals its `dependency_value`. The three `expenditure_budget_derivative_*` fields are mutually exclusive in this way, driven by the radio selection.
+- When the user switches the radio choice, hide the now-irrelevant dependent inputs. Persist them only when their controlling option is selected.
+
+Per-property overrides:
+
+- The same eight fields can be set on an individual property under
+  `Property > Budget Settings`. See
+  [Property Budget Settings](facilities/budget-settings.md) — it uses a single
+  `PUT` with a partial payload rather than one `PATCH` per field, and each field
+  can be cleared back to the company default by sending `null`.
+
+## Errors
+
+Use shared behavior in `docs/frontend/app/README.md`:
+
+- Render `4xx` messages and validation details.
+- Show generic fallback for `5xx`.
