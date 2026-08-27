@@ -64,10 +64,26 @@ GET …/reports/tenants/tenancy-schedule/export?format=pdf&facility_id=1&period_
 - `format` is **required** and must be `excel` or `pdf`. Anything else ⇒ `422` on `format`.
 
 > Exports return an attachment immediately. Use `format=excel` for an `.xlsx` workbook or
-> `format=pdf` for a PDF. Filenames follow `{report-slug}_{company}_{period-from}_{period-to}`;
-> Trial Balance uses `{report-slug}_{company}_as-at_{as-at}`. The response uses `attachment`
+> `format=pdf` for a PDF. Filenames follow
+> `{report-slug}_{company}[_{landlord}][_{property}]_{period-from}_{period-to}`; Trial Balance uses
+> `{report-slug}_{company}_as-at_{as-at}`. The `landlord` and `property` segments are slugged names
+> and only appear when the export was filtered by `landlord_id` / `facility_id` (either or both), so
+> a filtered download is identifiable without opening it. The response uses `attachment`
 > `Content-Disposition` and the corresponding Excel or PDF `Content-Type`.
 > Each report bucket is a separate worksheet in Excel and a separate page in PDF.
+
+#### The PDF first page
+
+> A PDF opens with the company's letterhead — logo (inlined from the stored file), name, tagline and
+> contact details, all taken from the company the export was made under — and, under it, a panel
+> naming what the report is: **Landlord** / **Property** on the left, **Report** / **Period** on the
+> right. The landlord and property lines come from `header.landlord.name` / `header.property.name`,
+> so they are printed only when the export was filtered down to one, and any company detail the
+> company has not filled in is left out too. **Period** is the resolved window formatted
+> `01 Aug, 2026 – 31 Aug, 2026`, suffixed with the cycle when the report declares one
+> (`header.filters.report_type` / `report_cycle`) or when the window is exactly one calendar week,
+> month, quarter or year; Trial Balance shows `As at 19 Aug, 2026` instead. The Excel workbook has no
+> letterhead — each sheet still starts at its bucket label — so the filename is what identifies it.
 
 ### Large reports
 
@@ -140,11 +156,13 @@ order.** A report with no buckets returns `[]`.
   selected. **Currency lives on the property** (its reporting currency). When `property` is `null`,
   a top-level `header.currency` fallback (the company default currency, or a report-selected currency)
   is included instead.
+- `landlord` — `{ id, name }` when a `landlord_id` filter is supplied, otherwise `null`. Present on
+  every report that accepts `landlord_id` (i.e. all but Trial Balance).
 - `period` — `{ from, to }` (the resolved period, after defaults).
 - `filters` — every filter echoed back (nulls included) so the UI can show the active scope.
 - `generated_at` — ISO-8601 timestamp.
-- A report **may add** header fields — e.g. Income & Expenditure adds `landlord` (`{ id, name }` when a
-  `landlord_id` filter is applied, else `null`). Per-report pages document any such additions.
+- A report **may add** header fields — e.g. Trial Balance adds `as_at` and `notes` in place of
+  `period`. Per-report pages document any such additions.
 
 > Not to be confused with a **bucket's** `header` (below), which describes one bucket. This one
 > describes the whole report.
@@ -261,6 +279,20 @@ Three placements share **one color palette**, so a dev learns the meanings once:
 
 `type` appears on **both** fields (the column's role) and rows (the row's role). The backend also sets
 `weight` on emphasised columns; the template may add its own emphasis keyed off `type`.
+
+**How the Excel / PDF exports render it** — worth matching on screen so an export looks like the report
+it came from:
+
+| `type` | Weight | Size |
+|---|---|---|
+| `grosstotal` | bold (700) | one step above `subtotal` |
+| `subtotal` | semi-bold (600) | one step above normal |
+| `normal` | the field's declared `weight`, or normal | normal |
+
+A cell takes the **strongest** tier of its own `type`, its column's and its row's — so an ordinary
+column inside a grand-total row is still bold. A `normal` cell is only ever emphasised by an explicit
+`weight` on its field, and a declared `weight` never changes the size. (In xlsx the semi-bold step is
+unavailable — its font model is bold or not — so there the size step alone separates the two tiers.)
 
 ### Colors
 

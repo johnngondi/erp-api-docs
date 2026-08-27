@@ -122,6 +122,7 @@ five-key shape (see the bucket table above for their columns) and the same cell 
         "name": "Riverside Mixed-Use Plaza",
         "currency": { "code": "KES", "name": "Kenya Shilling" }
       },
+      "landlord": null,
       "period": { "from": "2026-07-01", "to": "2026-07-31" },
       "filters": {
         "landlord_id": null,

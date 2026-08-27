@@ -6,14 +6,9 @@ A lease application is a prospective tenant's request to lease space. Applicants
 (tenants) submit and maintain their own applications; staff list, review, and
 approve/reject them.
 
-An application must identify its facility and the specific facility spaces it is
-for. The server derives company ownership from that facility and verifies every
-selected space belongs to the same facility company; staff see the application
-only under that company. While the application is
-open (`pending` / `review`), each selected space shows as
-`under consideration` and is hidden from other applicants' space pickers;
-approving or rejecting the application releases them. See
-[space occupancy](../facilities/space-occupancy.md).
+An application identifies one facility and the residential unit types requested
+at that facility. The server derives company ownership from the facility, so
+staff can retrieve the application under the correct company.
 
 ## Surfaces
 
@@ -83,17 +78,16 @@ Request body:
 | `registration_type` | Yes | string | `national_id`, `business_license` or `passport` |
 | `registration_number` | Yes | string | |
 | `tax_pin` | Yes | string | |
-| `registration_upload_id` | Yes | integer | Must exist in `uploads.id` |
-| `tax_pin_cert_upload_id` | Yes | integer | Must exist in `uploads.id` |
-| `financial_upload_id` | Yes | integer | Must exist in `uploads.id` |
+| `registration_upload_id` | No | integer | Must exist in `uploads.id` |
+| `tax_pin_cert_upload_id` | No | integer | Must exist in `uploads.id` |
+| `financial_upload_id` | No | integer | Must exist in `uploads.id` |
 | `other_docs_upload_id` | No | integer | Must exist in `uploads.id` |
 | `region` | No | string | |
 | `parking_required` | No | boolean | Defaults to `true` |
 | `generator_required` | No | boolean | Defaults to `true` |
 | `occupants` | No | integer | `0`–`100` |
 | `space_size` | No | integer | `0`–`1,000,000` |
-| `preferred_facilities` | No | array | Free-form preference list only. It does not establish the application's company or replace `facility_space_ids`. |
-| `facility_space_ids` | Yes | int[] | One or more specific FacilitySpace IDs. Every ID must exist in `facility_spaces.id` and belong to the selected facility's company. These spaces are marked `under consideration` while the application is open. |
+| `residential_unit_types` | Yes | array | One or more requested unit types, each with a facility-level `FacilityResidentialUnit` `id` and a positive integer `quantity`. Each unit type must belong directly to `facility_id`. |
 | `status` | No | string | Defaults to `pending` |
 | `comments` | No | string | |
 | `application_submitted_at` | No | date | Defaults to now |
@@ -116,33 +110,25 @@ Example:
   "registration_type": "business_license",
   "registration_number": "BRN-12345",
   "tax_pin": "A001234567B",
-  "registration_upload_id": 101,
-  "tax_pin_cert_upload_id": 102,
-  "financial_upload_id": 103,
-  "preferred_facilities": [12],
-  "facility_space_ids": [345, 346]
+  "residential_unit_types": [
+    {
+      "id": 345,
+      "quantity": 5
+    }
+  ]
 }
 ```
 
-`345` and `346` must belong to facility `12` and its company. `preferred_facilities`
-may be sent for preference information, but it does not replace the required
-facility and selected spaces.
+Every residential unit type must belong directly to facility `12`. The server
+stores the requested quantity on the application/unit-type relationship.
 
 ## Update Application
 
 `PUT/PATCH /api/v1/tenant/lease-applications/{application}`
 
-Accepts the same body as create. Notes on `facility_space_ids`:
-
-- **Omit** the field to leave the current selection unchanged, provided the
-  application already has selected spaces.
-- Send an **array** to replace the selection (a full `sync`); spaces added and
-  spaces removed are both re-evaluated for occupancy.
-- When changing `facility_space_ids`, also send `facility_id`; the server
-  derives and updates the application's company from the selected facility.
-- The array must contain at least one valid FacilitySpace ID, and all selected
-  spaces must belong to the selected facility and its company. An empty array
-  is rejected.
+Accepts the same body as create. `residential_unit_types` replaces the current
+unit-type requests as a full sync, and the application company is refreshed
+from the selected `facility_id`.
 
 ## Review Application
 
@@ -156,11 +142,10 @@ Staff-only. Request body:
 | `comments` | No | string | Reviewer notes |
 | `signed_agreement_upload_id` | No | integer | Must exist in `uploads.id` |
 
-Approving or rejecting closes the application and releases any spaces it held as
-`under consideration`.
+Approving or rejecting records the review outcome for the application.
 
 ## Delete Application
 
 `DELETE .../lease-applications/{application}`
 
-Deletes the application; any spaces it held as `under consideration` are released.
+Deletes the application and its residential-unit-type requests.
