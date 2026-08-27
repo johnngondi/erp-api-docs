@@ -25,6 +25,8 @@ Staff (this domain):
 - `GET /lease-applications/{application}`
 - `DELETE /lease-applications/{application}`
 - `PATCH /lease-applications/{application}/review`
+- `GET /lease-applications/{application}/vetting-results` — staff-only vetting summary
+- `POST /lease-applications/{application}/vet` — re-run vetting for one application
 
 Applicant (tenant):
 
@@ -38,6 +40,7 @@ Applicant (tenant):
 - `PUT/PATCH /lease-applications/{application}/documents/{documentType}`
 - `GET|POST /lease-applications/{application}/guarantors`
 - `GET|PUT|PATCH|DELETE /lease-applications/{application}/guarantors/{guarantor}`
+- `PUT/PATCH /lease-applications/{application}/guarantors/{guarantor}/documents/{documentType}`
 
 ## List Applications
 
@@ -349,6 +352,48 @@ they are written by the verification pipeline, not by the client, and are `null`
 until it has run. Only `id` and `tax_pin` are verified; the guarantor's
 `financial_statement` feeds the income-to-rent score instead and has no status.
 
+### Submit a Guarantor Document
+
+`PUT|PATCH /api/v1/tenant/lease-applications/{application}/guarantors/{guarantor}/documents/{documentType}`
+
+The guarantor equivalent of [Submit a Document](#submit-a-document), and it
+behaves the same way — one endpoint that both attaches and replaces.
+
+`{documentType}` is one of `id`, `tax_pin` or `financial_statement`. `tcc` and
+`vat_exemption` are asked of the applicant only, so passing either — or any
+unknown value — returns `404`.
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `upload_id` | Yes | integer | Must exist in `uploads.id` |
+
+Response `200` returns the full guarantor:
+
+```json
+{
+  "message": "Guarantor document submitted successfully.",
+  "guarantor": {
+    "id": 7,
+    "id_upload": { "id": 802, "file_name": "id-front.png" },
+    "id_status": { "value": "pending", "color": "warning" },
+    "id_reason": null
+  }
+}
+```
+
+Replacing `id` or `tax_pin` with a different `upload_id` resets that field's
+`_status` to `pending` and clears its `_reason`, then re-runs verification.
+Replacing `financial_statement` re-runs the income-to-rent score instead — the
+guarantor has no `financial_statement_status`, and the resulting score is
+staff-only, so nothing about it comes back here.
+
+The same two checks as the guarantor CRUD endpoints apply: the applicant must
+own the application and it must still be open to them, and the guarantor named
+in the path must belong to that application — pairing your own application with
+someone else's guarantor is rejected.
+
 ## Review Application
 
 `PATCH .../lease-applications/{application}/review`
@@ -368,6 +413,27 @@ Approving or rejecting records the review outcome for the application.
 `DELETE .../lease-applications/{application}`
 
 Deletes the application and its residential-unit-type requests.
+
+## Who sees what
+
+Two different things are easy to confuse, so to state the split once:
+
+| | Staff (`/api/v1/app/...`) | Applicant (`/api/v1/tenant/...`) |
+|---|---|---|
+| `income_to_rent_ratio_score`, `_reason`, `ratio_indicator` | Yes | **Never** |
+| `frc_check_status` | Yes | **Never** |
+| Document `status` / `reason`, guarantor `id_status` / `tax_pin_status` | Yes | Yes |
+| Raw AI extraction and iTax cross-check output | **Never** | **Never** |
+
+**Vetting** is the server's assessment *of* the applicant — an affordability
+score and a watchlist outcome. It is staff-only, on every endpoint, without
+exception. **Document verification** is the outcome of checking a file the
+applicant uploaded, and the uploader sees it so they know what to fix.
+
+The two are enforced separately. Vetting fields are gated on the `viewVetting`
+ability, which — unlike `view` — has no ownership fallback, so an applicant is
+refused them on their own application. Verification internals are never
+serialised anywhere, on either surface.
 
 ## Vetting fields (staff only)
 
@@ -412,7 +478,77 @@ render "pending vetting" for `null` rather than treating it as a final result.
   nothing feeding the FRC check has changed. Replacing any other document type
   does not re-run vetting.
 
-Later edits to an application do not re-run vetting.
+Later edits to an application do not re-run vetting. Two things fill that gap:
+the [manual trigger](#re-run-vetting-manually) for a reviewer who knows the
+inputs have changed, and an [hourly sweep](#the-hourly-sweep) for runs that
+never completed at all.
+
+### Re-run Vetting Manually
+
+`POST .../lease-applications/{application}/vet`
+
+**Staff only.** Requires the `view-lease-application` permission — the same
+`viewVetting` gate as reading the results, so an applicant cannot trigger a run
+on their own application. No request body.
+
+Automatic vetting covers submission and a replaced financial statement, which is
+not everything that changes the answer. Use this endpoint after the inputs have
+moved underneath a stored result:
+
+- A **guarantor was added** after submission, or an existing one's documents
+  changed. The FRC check and the income picture both read wider than the
+  applicant's own row.
+- **Documents arrived late** — an identity document uploaded after submission
+  changes what the FRC name check has to match against.
+- A **failed run** needs retrying: the queue was down at submission, or the AI
+  provider was unavailable and the job exhausted its retries.
+- The **FRC watchlist was re-imported** and applications vetted against the
+  previous list need re-checking.
+
+It is `POST` rather than `GET` because it queues work and overwrites the stored
+results — a prefetch, a link crawler or a cache warmer must not be able to
+trigger it.
+
+Response `202`-style, returned as `200`:
+
+```json
+{ "message": "Lease Application vetting started successfully." }
+```
+
+The response says the run was **queued**, not that it finished. Re-read
+[the vetting results](#vetting-results-endpoint) afterwards to see the outcome;
+the previous values stay in place until the new run completes and replaces them.
+A run that throws leaves the stored results untouched rather than half-replaced.
+
+Both checks run — this is a full re-vet, not the income-only refresh that a
+replaced financial statement triggers.
+
+| Status | When |
+|---|---|
+| `403` | The caller lacks `view-lease-application`, including an applicant on their own application |
+| `404` | No such application under this company |
+| `405` | The request used `GET` |
+
+### The Hourly Sweep
+
+An application whose vetting never completed is picked up automatically. The
+scheduled command `lease-applications:vet-pending` runs every hour and queues a
+full run for anything still unvetted, which covers a worker killed mid-run, a
+queue drained or reset, an application created while the queue was down, or a
+run that exhausted its retries against a provider outage.
+
+This is why the API has no "vetting failed" state to render: a stalled
+application is `null` across the vetting fields and is retried within the hour,
+so a staff screen should keep showing "pending vetting" rather than offering the
+reviewer an error to act on. The [manual trigger](#re-run-vetting-manually) is
+there for the impatient case, not as the recovery path.
+
+The sweep is driven by a `vetted` flag on the application, set only once every
+check has returned. It is **not** part of any API response — `null` results and
+"never vetted" are the same thing to a client, and the distinction only matters
+to the sweep. A run is skipped for applications created in the last 15 minutes
+(their own submission already queued one) and for applications staff have
+already approved or rejected.
 
 ### Reading `income_to_rent_ratio_score`
 
@@ -463,3 +599,80 @@ the submitted identity document are checked, and a hit on either flags.
 A `flagged` result is advisory. It does not block review, approval or any other
 step — it is recorded for staff to weigh, so the UI should surface it to the
 reviewer rather than gate on it.
+
+### Vetting Results Endpoint
+
+`GET .../lease-applications/{application}/vetting-results`
+
+**Staff only.** Requires the `view-lease-application` permission. Unlike
+`GET /lease-applications/{application}`, holding the application's ownership is
+*not* enough — this endpoint is authorised with `viewVetting`, which is the bare
+permission with no ownership fallback, so an applicant reading their own
+application is refused `403`. There is no tenant equivalent of this route.
+
+The same fields are also returned inline on every staff read of the application
+itself, so this endpoint is a convenience for a dedicated vetting screen, not
+the only way to reach them. It exists so that screen can fetch the assessment
+and the per-document outcomes together without pulling the full application.
+
+Response `200`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | The application's id |
+| `income_to_rent_ratio_score` | string \| null | 0-100, 100 is best. See [Reading the score](#reading-income_to_rent_ratio_score) |
+| `income_to_rent_ratio_score_reason` | string \| null | Prose explanation of the score, or of why it could not be scored |
+| `ratio_indicator` | object \| null | `{ "value", "color" }` — `weak` / `fair` / `strong` |
+| `frc_check_status` | object \| null | `{ "value", "color" }` — `safe` (`success`) or `flagged` (`danger`) |
+| `documents` | array | Applicant documents with their verification state — the same shape as [Reading documents](#reading-documents), uploads included |
+| `guarantors` | array | Guarantors with `id_status` / `tax_pin_status` and reasons — the same shape as [Guarantor Response](#guarantor-response) |
+
+```json
+{
+  "data": {
+    "id": 18,
+    "income_to_rent_ratio_score": "82.50",
+    "income_to_rent_ratio_score_reason": "Scored 82.50 out of 100. Declared monthly income of KES 495,000.00 covers the expected monthly cost of KES 200,000.00 2.48 times, against the 3.00 times needed for a full score.",
+    "ratio_indicator": { "value": "strong", "color": "success" },
+    "frc_check_status": { "value": "flagged", "color": "danger" },
+    "documents": [
+      {
+        "id": 41,
+        "document_type": { "value": "tax_pin", "color": "primary" },
+        "status": { "value": "verified", "color": "success" },
+        "reason": null,
+        "upload": { "id": 902, "file_name": "kra-pin.pdf" },
+        "verified_at": { "raw": "2026-08-27T09:14:00.000000Z", "formatted": "27 Aug, 2026", "diff": "2 hours ago" }
+      }
+    ],
+    "guarantors": [
+      {
+        "id": 7,
+        "name": "Jane Guarantor",
+        "id_status": { "value": "verified", "color": "success" },
+        "id_reason": null,
+        "tax_pin_status": { "value": "failed", "color": "danger" },
+        "tax_pin_reason": "PIN does not match the applicant name"
+      }
+    ]
+  }
+}
+```
+
+The application's own attributes are deliberately not repeated in this payload
+beyond `id` — fetch the application itself for those.
+
+Neither the score nor the FRC result is returned as raw integration output. The
+AI extraction and iTax cross-check responses behind a document verification stay
+server-side on every surface, including this one, so `verification_result` is
+never present.
+
+Both results are **advisory**. Nothing here blocks review or approval; a
+`flagged` FRC result and a `weak` score are recorded for the reviewer to weigh.
+
+Errors:
+
+| Status | When |
+|---|---|
+| `403` | The caller lacks `view-lease-application`, including an applicant on their own application |
+| `404` | No such application under this company |
