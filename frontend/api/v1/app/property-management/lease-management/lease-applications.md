@@ -377,22 +377,24 @@ under `/api/v1/tenant/...` omit the keys entirely, so an applicant never sees
 their own score or FRC outcome. Document `status` and `reason` remain the only
 verification data an applicant sees.
 
-All three are read-only: no request body accepts them, and they appear on every
+All four are read-only: no request body accepts them, and they appear on every
 staff read — `GET /lease-applications`, `GET /lease-applications/{application}`
 and the `PATCH .../review` response.
 
 | Field | Type | Notes |
 |---|---|---|
-| `income_to_rent_ratio_score` | string \| null | Decimal with 2 places, serialised as a string (e.g. `"3.25"`) — how many times the applicant's declared monthly income covers the expected monthly cost of the space requested. `null` means *not scored*, which is a normal outcome, not an error |
-| `income_to_rent_ratio_score_reason` | string \| null | Prose explanation, always present once vetting has run. For a score it names both sides of the ratio and where each came from; for a `null` score it says why it could not be scored |
+| `income_to_rent_ratio_score` | string \| null | **0-100, where 100 is best.** Decimal with 2 places, serialised as a string (e.g. `"50.00"`). `null` means *not scored*, which is a normal outcome, not an error |
+| `ratio_indicator` | object \| null | `{ "value", "color" }` for the score's band — `weak` (`danger`), `fair` (`warning`), `strong` (`success`). `null` whenever the score is `null` |
+| `income_to_rent_ratio_score_reason` | string \| null | Prose explanation, always present once vetting has run. For a score it names both sides of the comparison and where each came from; for a `null` score it says why it could not be scored |
 | `frc_check_status` | object \| null | `{ "value", "color" }`. One of `safe` (`success`), `flagged` (`danger`) |
 
 ```json
 {
   "id": 18,
   "status": { "value": "pending", "color": "warning" },
-  "income_to_rent_ratio_score": "3.25",
-  "income_to_rent_ratio_score_reason": "Declared monthly income of KES 650,000.00 covers the expected monthly cost of KES 200,000.00 3.25 times. Cost basis: 5 x 2 Bedroom at KES 40,000.00 per unit per month = KES 200,000.00. Income read from the submitted bank statement covering 2026-01-01 to 2026-06-30.",
+  "income_to_rent_ratio_score": "100.00",
+  "ratio_indicator": { "value": "strong", "color": "success" },
+  "income_to_rent_ratio_score_reason": "Scored 100.00 out of 100. Declared monthly income of KES 650,000.00 covers the expected monthly cost of KES 200,000.00 3.25 times, at or above the 3.00 times needed for a full score. Cost basis: 5 x 2 Bedroom at KES 40,000.00 per unit per month = KES 200,000.00. Income read from the submitted bank statement covering 2026-01-01 to 2026-06-30.",
   "frc_check_status": { "value": "safe", "color": "success" }
 }
 ```
@@ -414,13 +416,37 @@ Later edits to an application do not re-run vetting.
 
 ### Reading `income_to_rent_ratio_score`
 
+The score runs **0 to 100, where 100 is the best**. An applicant reaches 100
+once their declared monthly income is at least **three times** the expected
+monthly cost of the space they applied for — the usual affordability rule that
+rent should sit under a third of income. Below that the score is proportional,
+so covering the cost exactly scores about 33 rather than full marks, and a very
+high earner is simply capped at 100.
+
+| Income vs. expected monthly cost | Score | `ratio_indicator` |
+|---|---|---|
+| 0.5x (half the cost) | 16.67 | `weak` / `danger` |
+| 1.0x (exactly the cost) | 33.33 | `weak` / `danger` |
+| 1.5x | 50.00 | `fair` / `warning` |
+| 2.0x | 66.67 | `fair` / `warning` |
+| 2.5x | 83.33 | `strong` / `success` |
+| 3.0x or more | 100.00 | `strong` / `success` |
+
+The multiple is server configuration
+(`config('vetting.income_to_rent.target_multiple')`, default `3`), so it can be
+tuned without an API change — read the score, never re-derive it. The
+`ratio_indicator` bands are fixed: **below 50** is `weak`, **50 to 70
+inclusive** is `fair`, and **above 70** is `strong`. Use `ratio_indicator.color`
+for the badge rather than re-implementing the thresholds in the frontend.
+
 The expected monthly cost is derived server-side from the property's own
 indicative rates — the requested residential unit types, plus the requested
 `space_size` where the application has one. The income is read from the
 submitted financial statement. A `null` score with a populated reason means one
 of those inputs was missing or unusable: no financial statement submitted, the
 property has no indicative rates for the space requested, the statement could
-not be read, or no income figure could be found in it.
+not be read, or no income figure could be found in it. `ratio_indicator` is
+`null` in exactly those cases too — it is never a misleading `weak`.
 
 Amounts in the reason are stated in the property's reporting currency. If the
 statement reports a different currency the reason says so explicitly — **no
