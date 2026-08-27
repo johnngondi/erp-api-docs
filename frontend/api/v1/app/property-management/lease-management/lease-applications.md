@@ -250,6 +250,9 @@ call, and no `DELETE`:
   are cleared.
 - **Re-sending the same `upload_id`** is a no-op, so an already verified document
   is never reset by a repeated call.
+- **A new `financial_statement`** re-runs the income-to-rent score instead of a
+  verification — see [Vetting fields](#vetting-fields-staff-only). The score is
+  staff-only, so nothing about it comes back in this response.
 
 Requires the `update` ability on the application — the same authorisation as
 editing the application itself, so an applicant cannot submit onto someone
@@ -366,11 +369,71 @@ Approving or rejecting records the review outcome for the application.
 
 Deletes the application and its residential-unit-type requests.
 
-## Vetting fields (not exposed here)
+## Vetting fields (staff only)
 
-The application also stores staff-only auto-vetting results
-(`income_to_rent_ratio_score`, `income_to_rent_ratio_score_reason`,
-`frc_check_status`). They are not returned by any endpoint yet — a separate
-staff-only vetting endpoint will serve them. They must never appear on the
-applicant-facing application resource; document `status` and `reason` are the
-only verification data an applicant sees.
+The application also carries automatic vetting results. They are returned **only
+on the staff surface** (`/api/v1/app/{company}/...`) — the applicant endpoints
+under `/api/v1/tenant/...` omit the keys entirely, so an applicant never sees
+their own score or FRC outcome. Document `status` and `reason` remain the only
+verification data an applicant sees.
+
+All three are read-only: no request body accepts them, and they appear on every
+staff read — `GET /lease-applications`, `GET /lease-applications/{application}`
+and the `PATCH .../review` response.
+
+| Field | Type | Notes |
+|---|---|---|
+| `income_to_rent_ratio_score` | string \| null | Decimal with 2 places, serialised as a string (e.g. `"3.25"`) — how many times the applicant's declared monthly income covers the expected monthly cost of the space requested. `null` means *not scored*, which is a normal outcome, not an error |
+| `income_to_rent_ratio_score_reason` | string \| null | Prose explanation, always present once vetting has run. For a score it names both sides of the ratio and where each came from; for a `null` score it says why it could not be scored |
+| `frc_check_status` | object \| null | `{ "value", "color" }`. One of `safe` (`success`), `flagged` (`danger`) |
+
+```json
+{
+  "id": 18,
+  "status": { "value": "pending", "color": "warning" },
+  "income_to_rent_ratio_score": "3.25",
+  "income_to_rent_ratio_score_reason": "Declared monthly income of KES 650,000.00 covers the expected monthly cost of KES 200,000.00 3.25 times. Cost basis: 5 x 2 Bedroom at KES 40,000.00 per unit per month = KES 200,000.00. Income read from the submitted bank statement covering 2026-01-01 to 2026-06-30.",
+  "frc_check_status": { "value": "safe", "color": "success" }
+}
+```
+
+### When they are populated
+
+Vetting runs on the queue, not in the request. All three fields are `null` in
+the create response and fill in shortly afterwards, so a staff screen should
+render "pending vetting" for `null` rather than treating it as a final result.
+
+- **On submission.** Creating an application *is* submitting it, so both checks
+  run once the application is created.
+- **On a new financial statement.** Submitting or replacing the
+  `financial_statement` document re-runs the income-to-rent score only —
+  nothing feeding the FRC check has changed. Replacing any other document type
+  does not re-run vetting.
+
+Later edits to an application do not re-run vetting.
+
+### Reading `income_to_rent_ratio_score`
+
+The expected monthly cost is derived server-side from the property's own
+indicative rates — the requested residential unit types, plus the requested
+`space_size` where the application has one. The income is read from the
+submitted financial statement. A `null` score with a populated reason means one
+of those inputs was missing or unusable: no financial statement submitted, the
+property has no indicative rates for the space requested, the statement could
+not be read, or no income figure could be found in it.
+
+Amounts in the reason are stated in the property's reporting currency. If the
+statement reports a different currency the reason says so explicitly — **no
+conversion is applied**, so a cross-currency score is not comparable and the
+note is there for the reviewer to catch it.
+
+### Reading `frc_check_status`
+
+`flagged` means the applicant's name matched the current FRC watchlist import
+exactly, once casing and spacing are normalised — there is no fuzzy matching, so
+a near-miss reads `safe`. Both the name on the application and the name read off
+the submitted identity document are checked, and a hit on either flags.
+
+A `flagged` result is advisory. It does not block review, approval or any other
+step — it is recorded for staff to weigh, so the UI should surface it to the
+reviewer rather than gate on it.
