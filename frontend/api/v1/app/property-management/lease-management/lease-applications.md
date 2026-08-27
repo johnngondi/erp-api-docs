@@ -10,6 +10,11 @@ An application identifies one facility and the residential unit types requested
 at that facility. The server derives company ownership from the facility, so
 staff can retrieve the application under the correct company.
 
+The applicant's documents are **not** part of the application payload. They live
+in their own collection, `documents`, and are submitted one at a time through a
+dedicated endpoint — see [Application Documents](#application-documents).
+Guarantors are a nested resource — see [Guarantors](#guarantors).
+
 ## Surfaces
 
 Staff (this domain):
@@ -30,7 +35,9 @@ Applicant (tenant):
 - `GET /lease-applications/{application}`
 - `PUT/PATCH /lease-applications/{application}`
 - `DELETE /lease-applications/{application}`
-- `.../{application}/guarantors` (nested resource)
+- `PUT/PATCH /lease-applications/{application}/documents/{documentType}`
+- `GET|POST /lease-applications/{application}/guarantors`
+- `GET|PUT|PATCH|DELETE /lease-applications/{application}/guarantors/{guarantor}`
 
 ## List Applications
 
@@ -52,7 +59,7 @@ Supported query params:
   - `filter[generator_required]`
   - `filter[registration_type]`
   - `filter[created_at]`
-- Includes: `include=guarantors`
+- Includes: `include=guarantors`, `documents`, `documents.upload`, `facility`, `residentialUnitTypes`
 - Sort: `sort=id,created_at,application_submitted_at,reviewed_at`
 - Pagination: `per_page`, `page`
 
@@ -78,10 +85,6 @@ Request body:
 | `registration_type` | Yes | string | `national_id`, `business_license` or `passport` |
 | `registration_number` | Yes | string | |
 | `tax_pin` | Yes | string | |
-| `registration_upload_id` | No | integer | Must exist in `uploads.id` |
-| `tax_pin_cert_upload_id` | No | integer | Must exist in `uploads.id` |
-| `financial_upload_id` | No | integer | Must exist in `uploads.id` |
-| `other_docs_upload_id` | No | integer | Must exist in `uploads.id` |
 | `region` | No | string | |
 | `parking_required` | No | boolean | Defaults to `true` |
 | `generator_required` | No | boolean | Defaults to `true` |
@@ -122,13 +125,226 @@ Example:
 Every residential unit type must belong directly to facility `12`. The server
 stores the requested quantity on the application/unit-type relationship.
 
+The application no longer carries any document upload fields. Create the
+application first, then submit each document to
+[its own endpoint](#submit-a-document).
+
 ## Update Application
 
 `PUT/PATCH /api/v1/tenant/lease-applications/{application}`
 
 Accepts the same body as create. `residential_unit_types` replaces the current
 unit-type requests as a full sync, and the application company is refreshed
-from the selected `facility_id`.
+from the selected `facility_id`. Documents are not part of this payload.
+
+## Application Documents
+
+`documents` is where every applicant document lives. Each entry pairs one upload
+with one `document_type` and carries its own verification state. An application
+holds **at most one document per type**.
+
+The allowed types come from `App\Enums\LeaseApplicationDocumentType`, not from
+the database schema, so the set can grow without a migration:
+
+| `document_type` | Meaning |
+|---|---|
+| `id` | Applicant's identity / registration document (national ID, passport or business licence) |
+| `tax_pin` | Tax PIN certificate |
+| `tcc` | Tax compliance certificate |
+| `vat_exemption` | VAT exemption certificate |
+| `financial_statement` | Financial statement — feeds the income-to-rent score |
+| `other` | Anything else the applicant attaches |
+
+### Reading documents
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | |
+| `document_type` | object | `{ "value", "color" }` — see the table above |
+| `status` | object | `{ "value", "color" }`. One of `pending` (`warning`), `verified` (`success`), `failed` (`danger`) |
+| `reason` | string \| null | Why verification failed, or the note recorded against the outcome |
+| `upload` | object | `UploadResource`, present when `documents.upload` is loaded |
+| `verified_at` | object \| null | `raw` / `formatted` / `diff` |
+| `created` | object | `raw` / `formatted` / `diff` |
+
+Where they appear:
+
+- `GET .../lease-applications?include=documents,documents.upload` — opt in on the list endpoint
+- `GET .../lease-applications/{application}` — always loaded, with uploads
+- Create and update responses — always loaded, with uploads
+
+```json
+{
+  "documents": [
+    {
+      "id": 41,
+      "document_type": { "value": "tax_pin", "color": "primary" },
+      "status": { "value": "verified", "color": "success" },
+      "reason": null,
+      "upload": { "id": 902, "file_name": "kra-pin.pdf" },
+      "verified_at": { "raw": "2026-08-27T09:14:00.000000Z", "formatted": "27 Aug, 2026", "diff": "2 hours ago" }
+    },
+    {
+      "id": 42,
+      "document_type": { "value": "financial_statement", "color": "primary" },
+      "status": { "value": "pending", "color": "warning" },
+      "reason": null,
+      "upload": { "id": 903, "file_name": "accounts-2025.pdf" },
+      "verified_at": null
+    }
+  ]
+}
+```
+
+The raw extraction and cross-check output behind a verification is stored
+server-side and is never returned by the API — clients get the outcome
+(`status`) and the explanation (`reason`) only.
+
+`financial_statement` is not pass/fail verified. It feeds the income-to-rent
+score rather than a verification, so its `status` stays `pending`.
+
+> **Current behaviour:** automatic verification is not wired up yet, so every
+> document stays `pending` and `reason`/`verified_at` stay `null`. Build against
+> all three statuses — `verified` and `failed` start appearing once the
+> verification pipeline lands, with no API change.
+
+### Submit a Document
+
+`PUT|PATCH /api/v1/tenant/lease-applications/{application}/documents/{documentType}`
+
+`{documentType}` is one of the `document_type` values above. An unknown value
+returns `404`.
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `upload_id` | Yes | integer | Must exist in `uploads.id` |
+
+```json
+{ "upload_id": 902 }
+```
+
+Response `200`:
+
+```json
+{
+  "message": "Lease Application document submitted successfully.",
+  "document": {
+    "id": 41,
+    "document_type": { "value": "tax_pin", "color": "primary" },
+    "status": { "value": "pending", "color": "warning" },
+    "reason": null,
+    "upload": { "id": 902, "file_name": "kra-pin.pdf" },
+    "verified_at": null
+  }
+}
+```
+
+This one endpoint both submits and replaces — there is no separate resubmit
+call, and no `DELETE`:
+
+- **First submission** creates the document with `status` `pending`.
+- **Replacing** it with a *different* `upload_id` restarts verification: the
+  status resets to `pending` and the previous `reason`, result and `verified_at`
+  are cleared.
+- **Re-sending the same `upload_id`** is a no-op, so an already verified document
+  is never reset by a repeated call.
+
+Requires the `update` ability on the application — the same authorisation as
+editing the application itself, so an applicant cannot submit onto someone
+else's application.
+
+## Guarantors
+
+Guarantors are a nested resource on the application. Unlike applicant documents,
+a guarantor's documents are **fixed fields on the guarantor itself** — there is
+no document-type collection here.
+
+`/api/v1/tenant/lease-applications/{application}/guarantors`
+
+| Method | Path | Ability required on the application |
+|---|---|---|
+| `GET` | `/guarantors` | `view` |
+| `POST` | `/guarantors` | `update` |
+| `GET` | `/guarantors/{guarantor}` | `view` |
+| `PUT/PATCH` | `/guarantors/{guarantor}` | `update` |
+| `DELETE` | `/guarantors/{guarantor}` | `update` |
+
+`GET /guarantors` is paginated. Guarantors also come back on the application
+itself via `include=guarantors`.
+
+### Create / Update Guarantor
+
+`POST /guarantors` and `PUT/PATCH /guarantors/{guarantor}` take the same body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `name` | Yes | string | |
+| `email_address` | Yes | email | |
+| `phone_number` | Yes | string | |
+| `registration_type` | Yes | string | `national_id`, `business_license` or `passport` |
+| `registration_number` | Yes | string | |
+| `registration_upload_id` | Yes | integer | Scan of the registration document. Must exist in `uploads.id` |
+| `id_upload_id` | No | integer | Guarantor's ID document. Must exist in `uploads.id` |
+| `tax_pin_upload_id` | No | integer | Guarantor's tax PIN certificate. Must exist in `uploads.id` |
+| `financial_statement_upload_id` | No | integer | Feeds the income-to-rent score. Must exist in `uploads.id` |
+
+```json
+{
+  "name": "Jane Guarantor",
+  "email_address": "jane@acme.test",
+  "phone_number": "+254700000000",
+  "registration_type": "national_id",
+  "registration_number": "12345678",
+  "registration_upload_id": 801,
+  "id_upload_id": 802,
+  "tax_pin_upload_id": 803
+}
+```
+
+### Guarantor Response
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | |
+| `name` | string | |
+| `email_address` | string | |
+| `phone_number` | string | |
+| `registration_type` | string | `national_id`, `business_license` or `passport` |
+| `registration_number` | string | |
+| `registration_upload` | object \| null | `UploadResource` |
+| `id_upload` | object \| null | `UploadResource` |
+| `id_status` | object \| null | `{ "value", "color" }` — `pending` / `verified` / `failed` |
+| `id_reason` | string \| null | Why ID verification failed |
+| `tax_pin_upload` | object \| null | `UploadResource` |
+| `tax_pin_status` | object \| null | `{ "value", "color" }` — `pending` / `verified` / `failed` |
+| `tax_pin_reason` | string \| null | Why tax PIN verification failed |
+| `financial_statement_upload` | object \| null | `UploadResource` |
+
+```json
+{
+  "id": 7,
+  "name": "Jane Guarantor",
+  "email_address": "jane@acme.test",
+  "phone_number": "+254700000000",
+  "registration_type": "national_id",
+  "registration_number": "12345678",
+  "registration_upload": { "id": 801, "file_name": "national-id.pdf" },
+  "id_upload": { "id": 802, "file_name": "id-front.png" },
+  "id_status": { "value": "verified", "color": "success" },
+  "id_reason": null,
+  "tax_pin_upload": { "id": 803, "file_name": "guarantor-pin.pdf" },
+  "tax_pin_status": { "value": "failed", "color": "danger" },
+  "tax_pin_reason": "PIN does not match the applicant name",
+  "financial_statement_upload": null
+}
+```
+
+`id_status`/`id_reason` and `tax_pin_status`/`tax_pin_reason` are **read-only** —
+they are written by the verification pipeline, not by the client, and are `null`
+until it has run. Only `id` and `tax_pin` are verified; the guarantor's
+`financial_statement` feeds the income-to-rent score instead and has no status.
 
 ## Review Application
 
@@ -149,3 +365,12 @@ Approving or rejecting records the review outcome for the application.
 `DELETE .../lease-applications/{application}`
 
 Deletes the application and its residential-unit-type requests.
+
+## Vetting fields (not exposed here)
+
+The application also stores staff-only auto-vetting results
+(`income_to_rent_ratio_score`, `income_to_rent_ratio_score_reason`,
+`frc_check_status`). They are not returned by any endpoint yet — a separate
+staff-only vetting endpoint will serve them. They must never appear on the
+applicant-facing application resource; document `status` and `reason` are the
+only verification data an applicant sees.
