@@ -64,3 +64,36 @@ Authorization:
 - user must be allowed on the current pending step only
 - user must hold the step role
 - if `actors` is populated, user must be in `actors`
+
+## Step fields added by the edit grant
+
+Every step in the `approval_steps` array now also carries:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `attempt` | int | Which run of the chain this step belongs to. See [Attempts](./approval-templates.md#attempts) |
+| `allowed_to_edit` | boolean | Whether this step lends its actor editing rights at all |
+| `editable_fields` | array[string] \| null | Which fields that grant covers; `null` means all of them |
+| `can_edit` | boolean \| null | Whether **you**, the current viewer, may edit the resource right now |
+
+`allowed_to_edit` describes the step; `can_edit` describes you. A step may lend
+the right out while you are not the one it is waiting on — then `allowed_to_edit`
+is `true` and `can_edit` is `false`, exactly as `can_act` behaves.
+
+These are copied onto the step when the chain is initiated, not read live off the
+template. Editing a template does not change a chain already in flight.
+
+When `can_edit` is `true`, the resource's normal update endpoint accepts your
+changes even without its update permission. Fields outside `editable_fields` are
+refused with **403** naming them, and the request is rejected whole — nothing is
+half-saved.
+
+## Attempts and re-submission
+
+Rejecting terminates the chain and sends the resource to its rejection status.
+Where that status is still editable, the resource can be corrected and submitted
+again; that opens a **new attempt** rather than reopening the rejected one.
+
+The `approval_steps` array on a resource always shows the **current** attempt
+only. Earlier attempts remain in the database as the record of what happened, but
+they are not part of the chain anybody is being asked to act on.
