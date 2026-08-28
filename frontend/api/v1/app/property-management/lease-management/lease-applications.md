@@ -63,13 +63,14 @@ Supported query params:
   - `filter[city_id]`
   - `filter[applicant_registered_country_id]`
   - `filter[application_submitted_at]`
+  - `filter[proposed_start_date]`
   - `filter[reviewed_at]`
   - `filter[parking_required]`
   - `filter[generator_required]`
   - `filter[registration_type]`
   - `filter[created_at]`
 - Includes: `include=guarantors`, `documents`, `documents.upload`, `facility`, `residentialUnitTypes`
-- Sort: `sort=id,created_at,application_submitted_at,reviewed_at`
+- Sort: `sort=id,created_at,application_submitted_at,proposed_start_date,reviewed_at`
 - Pagination: `per_page`, `page`
 
 ## Create Application
@@ -95,6 +96,10 @@ Request body:
 | `registration_number` | Yes | string | |
 | `tax_pin` | Yes | string | |
 | `region` | No | string | |
+| `proposed_start_date` | No | date (`YYYY-MM-DD`) | When the applicant wants the tenancy to begin. Their own choice, and what the offer is priced and dated against. |
+| `bank_account_name` | No | string | Name on the applicant's own bank account. |
+| `bank_account_number` | No | string | The applicant's own account number. |
+| `bank_branch_id` | No | integer | Must exist in `bank_branches.id`. Resolved for display as `{branch.name}, {branch.bank.name}`. |
 | `parking_required` | No | boolean | Defaults to `true` |
 | `generator_required` | No | boolean | Defaults to `true` |
 | `occupants` | No | integer | `0`–`100` |
@@ -122,6 +127,10 @@ Example:
   "registration_type": "business_license",
   "registration_number": "BRN-12345",
   "tax_pin": "A001234567B",
+  "proposed_start_date": "2027-03-01",
+  "bank_account_name": "Acme Trading Ltd",
+  "bank_account_number": "0123456789",
+  "bank_branch_id": 44,
   "residential_unit_types": [
     {
       "id": 345,
@@ -150,6 +159,41 @@ application first, then submit each document to
 Accepts the same body as create. `residential_unit_types` replaces the current
 unit-type requests as a full sync, and the application company is refreshed
 from the selected `facility_id`. Documents are not part of this payload.
+
+## Proposed start date
+
+`proposed_start_date` is the calendar day the applicant asks the tenancy to begin.
+It is stored as a `DATE` — no time of day — and is returned in the usual shape:
+
+```json
+"proposed_start_date": {
+  "raw": "2027-03-01",
+  "formatted": "01 Mar, 2027",
+  "diff": "6 months from now"
+}
+```
+
+Visible on **both** surfaces, written on one: the applicant chooses it on their
+own form (create and update), and staff read it back — and can sort and filter
+the application list by it — when scheduling and pricing the offer. It is
+optional, so it can be `null`.
+
+It is not validated as a future date. Staff editing an older application should
+not be forced to move a start date that has since passed.
+
+Downstream, this is the source of the Letter of Offer's `{{start_date}}` tag for
+`new lease` offers — see the [LOO workflow](loo/README.md).
+
+## Applicant bank details
+
+`bank_account_name`, `bank_account_number` and `bank_branch_id` are the
+**applicant's own** account — captured at application time and printed on the
+offer's banking tags. They are not the landlord's payment-instruction account,
+and nothing bills against them.
+
+All three are optional and independent; `bank_branch_id` resolves through
+`bank_branches` to its bank, which is how the `{{bank}}` tag renders
+`{branch.name}, {branch.bank.name}`.
 
 ## Application Documents
 
@@ -630,6 +674,8 @@ Two different things are easy to confuse, so to state the split once:
 | `frc_check_status` | Yes | **Never** |
 | `spaces` (allocated units and their prices) | Yes | **Never** |
 | Document `status` / `reason`, guarantor `id_status` / `tax_pin_status` | Yes | Yes |
+| `proposed_start_date` | Yes | Yes |
+| `bank_account_name`, `bank_account_number`, `bank_branch_id` | Yes | Yes |
 | Raw AI extraction and iTax cross-check output | **Never** | **Never** |
 
 **Vetting** is the server's assessment *of* the applicant — an affordability
