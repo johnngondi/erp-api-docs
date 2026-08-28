@@ -6,11 +6,12 @@ A Letter of Offer is the document a landlord issues to a prospective or
 continuing tenant: an **offer** and the **agreement** that follows it, both
 drafted from a reusable template.
 
-> **Status: schema only.** This describes the data model and the contracts built
-> in Milestone 8 / 14.2 **Ticket 1**. There are no LOO endpoints yet — generation,
-> editing, export, send, signature and promotion land in Ticket 4, and the
-> approval chain in Ticket 3. Read this to know what the shapes will be; do not
-> build against endpoints here, because there are none.
+> **Status: schema and tag resolution.** This describes the data model built in
+> Milestone 8 / 14.2 **Ticket 1** and the resolution service built in **Ticket 2**.
+> There are still no LOO endpoints — generation, editing, export, send, signature
+> and promotion land in Ticket 4, and the approval chain in Ticket 3. Read this to
+> know what the shapes will be; do not build against endpoints here, because there
+> are none.
 
 ## The idea in one paragraph
 
@@ -140,6 +141,74 @@ than something printed into text, and `lawyer_id` no longer exists as a field.
 One row per `(loo_id, tag_key)`. `is_overridden` is what tells a re-resolution
 pass the difference between a stale computed value and a deliberate correction.
 
+## Tag resolution
+
+`App\Services\PropertyManagement\Loo\TagResolutionService` turns the registry
+into the values above. It is called once at generation, and again whenever the
+data underneath a LOO moves.
+
+```php
+$service->resolve($loo);                       // read only
+$service->resolveAndStore($loo);               // generation
+$service->refreshSpaceDerived($loo);           // after a space is added or removed
+$service->pendingConfirmation($loo->type);     // what it will not resolve, and why
+```
+
+**Where a value comes from** is the LOO's `loo_preparation_type`. A `maps_to` is a
+dot path read against four roots — `loo.`, `facility.`, `lease_application.` and
+`lease.` — and `LooTag::pathFor()` picks `maps_to` or `lease_maps_to` for you. A
+path rooted at the source the LOO was *not* prepared from resolves to `null`
+rather than erroring.
+
+**Formats.** Four names are reserved; anything else is read as a PHP date format,
+which is what lets the editor's FORMAT picker offer `jS F Y`, `d/m/Y` and the rest
+without a fixed list. A per-request override (`['start_date' => 'd/m/Y']`) beats
+the tag's `default_format`.
+
+| `format` | Renders as |
+|---|---|
+| `currency` | `KES 125,000.00` — the **property's** reporting currency, two decimals |
+| `yes_no` | `Yes` / `No` |
+| `list` | prose, not bullets: `A, B and C` |
+| `raw` / `null` | the value as it stands; whole floats lose their decimals, integers never gain separators |
+| anything else | a PHP date format |
+
+**The premises tags read `loo_spaces`.** `floor_unit` (`Ground Floor - Shop 4`),
+`premises_size`, `service_charge` and `rent_first_period` are all derived from the
+spaces the LOO currently grants and the components priced on them — never from
+what the applicant originally asked for. `service_charge` is therefore the *live*
+figure off `loo_space_components`, as against `monthly_service_charge`, which is
+the stored, hand-editable one and has its own tag.
+
+**Overrides survive.** An ordinary re-resolution skips any row with
+`is_overridden`, so a reviewer's correction is not undone. `refreshSpaceDerived()`
+forces by default and clears the flag, because a recompute re-derives those
+figures from the LOO's current spaces — a hand-adjusted figure it replaces has
+stopped being current. Pass `force: false` to leave corrections standing.
+
+### What it will not resolve
+
+Tags whose source has not been agreed are reported as **unresolved with a reason**
+rather than filled from the nearest plausible column. They still get a
+`loo_tag_values` row, with a `null` value, so the editor shows them as fields a
+reviewer can fill by hand.
+
+| `key` | Unresolved on | Why |
+|---|---|---|
+| `rent_review` | both | Nothing on an application or a lease records an escalation basis |
+| `landlord_address` | both | Neither `users` nor `landlord_default_accounts` carries an address |
+| `lease_term` | `new lease` | An application records no proposed duration; a renewal reads `lease.period_in_years` |
+| `tenant_address`, `guarantors`, `bank`, `bank_account_name`, `bank_account_number` | `renewal` / `addendum` | Their `lease_maps_to` routes back through the lease holder's own applications, and which application wins is undecided |
+
+The last row is matched against the registry rather than hard-coded, so the day a
+confirmed `lease_maps_to` is seeded those tags start resolving with no code change.
+
+`TagResolution` keeps the two apart deliberately: `values()` are tags that
+resolved — a `null` there means the source is genuinely empty — and `unresolved()`
+are tags nobody has decided the source for. Collapsing them would make a pending
+decision read as an empty field.
+
+
 ## Granted spaces
 
 `loo_spaces` is the authoritative record of what the LOO actually covers — not
@@ -226,8 +295,15 @@ finished:
   the lease holder's own application. If a lease holder has more than one
   application, which one wins is undecided — and an address on `users` may be the
   better answer.
-- **`landlord_address`.** Mapped to `facility.landlord.address`; confirm that is
-  the intended source rather than the landlord default accounts record.
+- **`landlord_address`.** Mapped to `facility.landlord.address`, which has nothing
+  behind it — `users` has no address column and neither does
+  `landlord_default_accounts`. Left unresolved until a source is agreed.
+- **`rent_review` and `lease_term` on a new lease.** No column on a lease
+  application answers either. Both are left unresolved and filled by hand.
+- **How long the first rent period runs.** `rent_first_period` totals the granted
+  spaces' rent components, which are monthly figures, so it resolves to one
+  month's rent. A landlord billing quarterly wants three — nothing on a LOO states
+  the period, and the figure is hand-editable either way.
 - **"Suggesting" mode and the "Agent" toolbar button** in the editor designs.
   Neither has any backend scoped. Both need a call on whether they are in this
   milestone, a later one, or frontend-only.
