@@ -27,6 +27,12 @@ Staff (this domain):
 - `PATCH /lease-applications/{application}/review`
 - `GET /lease-applications/{application}/vetting-results` — staff-only vetting summary
 - `POST /lease-applications/{application}/vet` — re-run vetting for one application
+- `GET /lease-applications/{application}/spaces` — the spaces allocated to the application
+- `POST /lease-applications/{application}/spaces` — allocate a space
+- `PUT/PATCH /lease-applications/{application}/spaces/{applicationSpace}` — reprice one
+- `DELETE /lease-applications/{application}/spaces/{applicationSpace}` — release one
+- `GET /lease-applications/{application}/spaces/{facilitySpace}/component-options` — what a
+  space may be billed, and what to charge
 
 Applicant (tenant):
 
@@ -127,6 +133,11 @@ Example:
 
 Every residential unit type must belong directly to facility `12`. The server
 stores the requested quantity on the application/unit-type relationship.
+
+On submission the server also allocates real units against that request where it
+can — see [Application Spaces](#application-spaces). The request itself is never
+altered by that, so a request for five units that only found three free still
+reads as five here.
 
 The application no longer carries any document upload fields. Create the
 application first, then submit each document to
@@ -394,6 +405,200 @@ own the application and it must still be open to them, and the guarantor named
 in the path must belong to that application — pairing your own application with
 someone else's guarantor is rejected.
 
+## Application Spaces
+
+Staff only. `/api/v1/app/{company}/property-management/lease-management/lease-applications/{application}/spaces`
+
+An application states its request as `residential_unit_types` — how many of each
+type the applicant wants. That is what they chose from, but it is not something
+anyone can price, hold or sign. **Spaces** are the other half: which actual units
+they have been allocated, and what each will cost per month.
+
+The two coexist and are never reconciled against each other. `residential_unit_types`
+stays exactly as the applicant submitted it, so a shortfall between what was asked
+for and what was free stays visible rather than being quietly rewritten.
+
+Allocating a space marks it `under consideration`, which takes it out of
+`is_available_for_application` for everyone else. Approving or rejecting the
+application releases it again.
+
+### Automatic allocation
+
+On submission the server allocates free units of each requested type and prices them
+from the property's indicative rates, so a reviewer opens the application onto a
+concrete, costed allocation rather than a list of unit types.
+
+It is provisional in three ways, all deliberate:
+
+- **Best effort.** Five requested with three free allocates three. The submission
+  does not fail, and the request still reads as five.
+- **Not exclusive.** Two applications submitted for the last free unit both get it.
+  `under consideration` means someone is looking at it, not that it is taken —
+  choosing between competing applicants is a letting decision, not a queue.
+- **Overridable.** These endpoints exist to correct it. Nothing re-runs the
+  allocation afterwards, so editing an application's requested unit types will not
+  undo staff's work.
+
+Only spaces mapped to a requested unit type
+(`facility_spaces.facility_residential_unit_id`) are allocated automatically.
+Commercial space-let applications, parking and signage are allocated by hand.
+
+### When the allocation may be changed
+
+Only while the application is **open** — `pending` or `review`. Once it is `approved`
+or `rejected` every write here returns `403`: the decision was made against a
+particular allocation at a particular price, and moving spaces underneath it
+afterwards would silently invalidate it. This is the same rule that applies to
+[documents](#submit-a-document).
+
+Reading stays available on a closed application.
+
+Writes need `update-lease-application`; reads need `view-lease-application`. Unlike
+`view`, there is no ownership fallback — which units an applicant gets and what they
+pay is a letting decision, not something the applicant fills in about themselves.
+The `spaces` key is never serialised on the tenant surface.
+
+### Component options (prefill)
+
+`GET .../lease-applications/{application}/spaces/{facilitySpace}/component-options`
+
+Call this when staff pick a space, to populate the component picker. `{facilitySpace}`
+is a facility space id — the space being priced, before it is attached.
+
+```json
+{
+  "data": {
+    "facility_space_id": 88,
+    "size": 10,
+    "is_lettable": true,
+    "components": [
+      { "lease_component_id": 1, "name": "Rent",           "cost_per_space_unit": 100, "amount": 1000, "tax_id": 2 },
+      { "lease_component_id": 2, "name": "Service Charge", "cost_per_space_unit": 20,  "amount": 200,  "tax_id": 2 }
+    ]
+  }
+}
+```
+
+`size` is the multiplier behind every `amount` (`amount = cost_per_space_unit × size`),
+returned so the frontend can recompute a total live as staff edit a rate instead of
+round-tripping for it.
+
+**Which components are offered** — always those flagged `is_autobilled` and `active`,
+then narrowed by what kind of space it is:
+
+| Space | Components offered |
+|---|---|
+| `is_parking` | the parking fee |
+| `is_signage` | the signage fee |
+| `space_type` = `leasable` | rent and service charge |
+| `space_type` = `landlord` or `common` | none — `is_lettable` is `false` and the space cannot be attached |
+
+**Where the suggested cost comes from.** All of these are net of tax.
+
+| Component | Source |
+|---|---|
+| Rent | `indicative_rent_per_unit` on the space's residential unit type, else the facility's `indicative_rent_rate_per_space_unit` |
+| Service charge | `indicative_service_charge_per_unit`, else the facility's `indicative_service_charge_rate_per_space_unit` |
+| Parking fee | the facility's open or closed lot fee, chosen by the space's `parking_type` |
+| Signage fee | **none exists** — `cost_per_space_unit` and `amount` come back `null` and staff enter the figure |
+
+A residential unit type quotes a rate for the whole unit, not per space unit, so it is
+divided by `size` on the way out — multiplying it back by `size` returns the figure the
+property actually quotes. A `null` cost anywhere else means the property has no rate
+recorded for that component; the field simply starts empty.
+
+Everything here is a suggestion. What gets stored is whatever staff submit.
+
+### List allocated spaces
+
+`GET .../lease-applications/{application}/spaces`
+
+- Filters: `filter[facility_space_id]`
+- Sort: `sort=id,facility_space_id,created_at` (default `id`)
+- Pagination: `per_page`, `page`
+
+```json
+{
+  "data": [
+    {
+      "id": 14,
+      "facility_space_id": 88,
+      "facility_space": { "id": 88, "name": "Unit A1", "size": 10, "...": "..." },
+      "amount": 1200,
+      "components": [
+        {
+          "id": 31,
+          "lease_component_id": 1,
+          "lease_component": { "id": 1, "name": "Rent" },
+          "cost_per_space_unit": "100.00000",
+          "amount": "1000.00000",
+          "tax_id": 2,
+          "tax": { "id": 2, "name": "VAT Standard", "value": "0.16" }
+        }
+      ]
+    }
+  ]
+}
+```
+
+`amount` on the space is the sum of its components' amounts — what the space costs per
+month, net of tax. It is only present once `components` is loaded, so it is never a
+misleading zero.
+
+The same shape appears as `spaces` on the staff `GET .../lease-applications/{application}`
+response, and via `?include=applicationSpaces` on the staff list.
+
+### Allocate a space
+
+`POST .../lease-applications/{application}/spaces`
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `facility_space_id` | Yes | integer | Must exist, belong to the application's `facility_id`, be lettable, and be available |
+| `components` | Yes | array | At least one entry |
+| `components[].lease_component_id` | Yes | integer | Must be one of the components [on offer for that space](#component-options-prefill); `distinct` within the payload |
+| `components[].cost_per_space_unit` | Yes | numeric | `≥ 0`, **excluding tax** |
+| `components[].tax_id` | No | integer\|null | Defaults to the component's own tax. Send `null` for no tax; omit the key to inherit |
+
+```json
+{
+  "facility_space_id": 88,
+  "components": [
+    { "lease_component_id": 1, "cost_per_space_unit": 100, "tax_id": 2 },
+    { "lease_component_id": 2, "cost_per_space_unit": 20 }
+  ]
+}
+```
+
+`amount` is **not** accepted — it is computed as `cost_per_space_unit × size` so a
+client cannot submit a total that does not follow from the rate beside it.
+
+Prices are held net of tax throughout. `tax_id` is carried for reference and is applied
+downstream at invoice time; it never changes the stored figures. Overriding it on one
+row does not touch the component's global tax.
+
+`422` with a `facility_space_id` error when the space is on another property, is
+landlord or common space, is not available, or is already on this application.
+`422` with a `components` error when a component is not billable on that space —
+rent on a parking lot, for instance.
+
+### Reprice a space
+
+`PUT/PATCH .../lease-applications/{application}/spaces/{applicationSpace}`
+
+Accepts `components` only, and **replaces the set outright** — the same full-sync
+convention as `residential_unit_types`. Dropping a component means leaving it out of
+the payload, not a second call.
+
+The space itself cannot be moved; release it and allocate the other one instead.
+
+### Release a space
+
+`DELETE .../lease-applications/{application}/spaces/{applicationSpace}`
+
+Removes the allocation and its component pricing, and returns the space to whatever
+its leases say it is.
+
 ## Review Application
 
 `PATCH .../lease-applications/{application}/review`
@@ -412,7 +617,8 @@ Approving or rejecting records the review outcome for the application.
 
 `DELETE .../lease-applications/{application}`
 
-Deletes the application and its residential-unit-type requests.
+Deletes the application, its residential-unit-type requests, and its space
+allocation.
 
 ## Who sees what
 
@@ -422,6 +628,7 @@ Two different things are easy to confuse, so to state the split once:
 |---|---|---|
 | `income_to_rent_ratio_score`, `_reason`, `ratio_indicator` | Yes | **Never** |
 | `frc_check_status` | Yes | **Never** |
+| `spaces` (allocated units and their prices) | Yes | **Never** |
 | Document `status` / `reason`, guarantor `id_status` / `tax_pin_status` | Yes | Yes |
 | Raw AI extraction and iTax cross-check output | **Never** | **Never** |
 
@@ -575,13 +782,19 @@ tuned without an API change — read the score, never re-derive it. The
 inclusive** is `fair`, and **above 70** is `strong`. Use `ratio_indicator.color`
 for the badge rather than re-implementing the thresholds in the frontend.
 
-The expected monthly cost is derived server-side from the property's own
-indicative rates — the requested residential unit types, plus the requested
-`space_size` where the application has one. The income is read from the
-submitted financial statement. A `null` score with a populated reason means one
-of those inputs was missing or unusable: no financial statement submitted, the
-property has no indicative rates for the space requested, the statement could
-not be read, or no income figure could be found in it. `ratio_indicator` is
+The expected monthly cost is derived server-side. Where the application has
+[allocated spaces](#application-spaces) that are priced, the cost is the sum of
+their components — so parking and signage fees count, which the indicative
+estimate never covered. Where it has none, or where the allocation totals
+nothing because the property records no rates for it, the cost falls back to the
+property's own indicative rates: the requested residential unit types, plus the
+requested `space_size` where the application has one.
+
+The income is read from the submitted financial statement. A `null` score with a
+populated reason means one of those inputs was missing or unusable: no financial
+statement submitted, the property has no indicative rates for the space
+requested, the statement could not be read, or no income figure could be found
+in it. `ratio_indicator` is
 `null` in exactly those cases too — it is never a misleading `weak`.
 
 Amounts in the reason are stated in the property's reporting currency. If the
