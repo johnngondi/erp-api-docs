@@ -6,8 +6,9 @@ A Letter of Offer is the document a landlord issues to a prospective or
 continuing tenant: an **offer** and the **agreement** that follows it, both
 drafted from a reusable template.
 
-> **Status: schema and tag resolution.** This describes the data model built in
-> Milestone 8 / 14.2 **Ticket 1** and the resolution service built in **Ticket 2**.
+> **Status: schema, tag resolution and the rent schedule.** This describes the data
+> model built in Milestone 8 / 14.2 **Ticket 1**, the resolution service built in
+> **Ticket 2**, and the escalation-driven rent schedule that followed it.
 > There are still no LOO endpoints — generation, editing, export, send, signature
 > and promotion land in Ticket 4, and the approval chain in Ticket 3. Read this to
 > know what the shapes will be; do not build against endpoints here, because there
@@ -69,7 +70,7 @@ default clears the previous one.
 ## The tag registry
 
 `loo_tags` is a **system-wide** catalogue (not per-company) of the tokens a
-template author can drag into clause text. 59 tags across nine categories.
+template author can drag into clause text. 62 tags across nine categories.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -91,7 +92,7 @@ Categories (`App\Enums\LooTagCategory`), with how many tags each holds:
 | `parties` | Parties | 5 |
 | `property` | Property | 7 |
 | `lease_terms` | Lease Terms | 12 |
-| `financials` | Financials | 14 |
+| `financials` | Financials | 17 |
 | `legal` | Legal | 7 |
 | `execution` | Execution & Signatures | 5 |
 | `banking` | Banking | 3 |
@@ -115,7 +116,7 @@ because a renewal has no application to read:
 | `start_date` | `lease_application.proposed_start_date` | `lease.start_at` |
 | `facility_type` | `lease_application.facilityType.title` | `lease.facilityType.title` |
 | `facility_residential_unit` | `lease_application.residentialUnitTypes` | `lease.leaseItems.facilitySpace.facilityResidentialUnit` |
-| `lease_term` | *(computed)* | `lease.period_in_years` |
+| `lease_term` | `loo.lease_term_years` | `lease.period_in_years` |
 | `bank` | `lease_application.bankBranch` | `lease.user.leaseApplications.bankBranch` |
 | `bank_account_name` | `lease_application.bank_account_name` | `lease.user.leaseApplications.bank_account_name` |
 | `bank_account_number` | `lease_application.bank_account_number` | `lease.user.leaseApplications.bank_account_number` |
@@ -195,9 +196,8 @@ reviewer can fill by hand.
 
 | `key` | Unresolved on | Why |
 |---|---|---|
-| `rent_review` | both | Nothing on an application or a lease records an escalation basis |
+| `rent_review` | both | The escalation *schedule* is recorded, but nothing records what the clause should say about the review basis |
 | `landlord_address` | both | Neither `users` nor `landlord_default_accounts` carries an address |
-| `lease_term` | `new lease` | An application records no proposed duration; a renewal reads `lease.period_in_years` |
 | `tenant_address`, `guarantors`, `bank`, `bank_account_name`, `bank_account_number` | `renewal` / `addendum` | Their `lease_maps_to` routes back through the lease holder's own applications, and which application wins is undecided |
 
 The last row is matched against the registry rather than hard-coded, so the day a
@@ -234,6 +234,90 @@ exists both commercial and residential grants are already spaces.
 This is the editable pricing surface: staff adjust components here, on the LOO,
 without touching the application they were copied from.
 
+## The rent schedule
+
+What the tenant pays, period by period, from the first period to the end of the term.
+A **period** runs from one escalation to the next: the first is everything before any
+escalation bites, and each one after it is the same figure escalated by whatever rates
+the schedule states.
+
+Built by `App\Services\PropertyManagement\Loo\RentScheduleBuilder` and **stored** on
+the LOO by `RecomputeLooRentScheduleAction`, which runs at generation and whenever an
+input moves. The tags read the stored schedule, not a fresh computation — what an offer
+prints should be what somebody approved, and a reviewer can correct a period by hand.
+A LOO that has never had one computed falls back to building it live.
+
+Three inputs, each with an application-side and a lease-side source, so one builder
+serves a `new lease` LOO and a renewal:
+
+| | prepared from an application | prepared from a lease |
+|---|---|---|
+| start | `proposed_start_date` | `lease.start_at` |
+| term | LOO term, then `proposed_period_in_*` | LOO term, then the lease's own period |
+| escalations | `lease_application_escalations` | `lease_escalations` |
+
+Amounts come off `loo_space_components` and nowhere else — rent, service charge,
+parking and signage alike, since all four reach a LOO the same way. Tax is the row's
+own `tax_id`: an explicit `NULL` means the space was priced tax-free on purpose, and
+inheriting the component default would quietly overrule that.
+
+Escalation is **compounding** — 10% twice is ×1.21, not ×1.2 — matching what
+`ProcessLeaseEscalationJob` does to a live lease. Where two components escalate on
+different cycles the term is cut on the **union** of their dates, so a period boundary
+exists wherever any figure changes.
+
+### Stored shape
+
+`loos.rent_breakdown`, one entry per period. Each row carries a `label`/`amount` pair
+as well as its structured figures — that pair is what `{{rent_breakdown}}` renders as
+prose, so the list needs no special casing.
+
+```json
+[{
+  "period": 1,
+  "label": "Year 1 (1st October 2026 - 30th September 2027)",
+  "amount": 4896000,
+  "starts_at": "2026-10-01", "ends_at": "2027-09-30", "months": 12,
+  "monthly": 408000, "quarterly": 1224000, "annual": 4896000,
+  "net": 4320000, "tax": 576000, "total": 4896000,
+  "components": [
+    {"lease_component_id": 3, "name": "Rent", "monthly_net": 300000, "monthly_tax": 48000, "monthly_gross": 348000}
+  ]
+}]
+```
+
+`ends_at` is the last day the period covers, not the first day of the next one — a
+clause reads "to 30th September", never "to 1st October".
+
+### The rent tags
+
+All five read the stored schedule. The four first-period figures come off row 1.
+
+| Tag | Is |
+|---|---|
+| `rent_first_period` | everything payable across the whole first period |
+| `rent_first_period_monthly` | the same, per month |
+| `rent_first_period_quarterly` | per quarter |
+| `rent_first_period_annual` | per annum |
+| `rent_breakdown` | every period, as prose |
+
+All are tax-inclusive and cover rent, service charge, parking and signage together.
+`service_charge` is unchanged and still means something different: service-charge
+components only, net of tax, live off `loo_space_components`.
+
+`lease_term` resolves too, now that both sides carry a term — the LOO's own, falling
+back to the applicant's proposed period, or the lease's on a renewal. It renders
+"6 years", "18 months", "6 years 6 months".
+
+### Parking
+
+`loos` carries no `parking_slots_count` or `cost_per_parking_slot`. A slot is a
+`facility_space` flagged `is_parking`, priced through a parking-fee component and
+granted through `loo_spaces` — the scalars restated that in a second place that could
+disagree with it. Both tags survive, recomputed: the count is how many granted spaces
+are parking, and the per-slot cost is the parking-fee total over that count.
+`parking_security_deposit_months` stays, because it is a term rather than a price.
+
 ## `our_ref`
 
 Assembled at issue time and then held on the LOO:
@@ -260,13 +344,16 @@ Every field below is staff-editable, **including the computed ones** — a figur
 recomputed from the granted spaces can still be hand-adjusted afterwards. Money
 is `decimal(50,5)` in currency units, matching the rest of the system.
 
+**Term** — `lease_term_years`, `lease_term_months`. Copied from the application's
+proposed period at generation; the LOO's own value wins wherever it is set.
+
 **Financials** — `monthly_service_charge`, `quarterly_service_charge`,
 `annual_service_charge`, `service_charge_security_deposit`,
-`rent_security_deposit`, `utility_security_deposit`, `deposit_held`,
-`cost_per_parking_slot` (all money, default `0`); `rent_breakdown` (json);
+`rent_security_deposit`, `utility_security_deposit`, `deposit_held` (all money,
+default `0`); `rent_breakdown` (json, the stored rent schedule);
 `apply_fitout_period_service_charge` (default `true`),
 `rent_and_service_charge_distinct` (default `false`), `has_vat` (default `true`);
-`parking_slots_count`, `parking_security_deposit_months` (default `0`).
+`parking_security_deposit_months` (default `0`).
 
 **Lease terms** — `quarterly_rent_due_dates` (default
 `1st January, 1st April, 1st July and 1st October`), `rent_due_day_of_month`
@@ -298,12 +385,10 @@ finished:
 - **`landlord_address`.** Mapped to `facility.landlord.address`, which has nothing
   behind it — `users` has no address column and neither does
   `landlord_default_accounts`. Left unresolved until a source is agreed.
-- **`rent_review` and `lease_term` on a new lease.** No column on a lease
-  application answers either. Both are left unresolved and filled by hand.
-- **How long the first rent period runs.** `rent_first_period` totals the granted
-  spaces' rent components, which are monthly figures, so it resolves to one
-  month's rent. A landlord billing quarterly wants three — nothing on a LOO states
-  the period, and the figure is hand-editable either way.
+- **`rent_review`.** No column on a lease application or a lease records an
+  escalation or rent-review *basis* in prose. The schedule itself is now recorded
+  (`lease_application_escalations`), but what the clause should say about it is not,
+  so the tag is left unresolved and filled by hand.
 - **"Suggesting" mode and the "Agent" toolbar button** in the editor designs.
   Neither has any backend scoped. Both need a call on whether they are in this
   milestone, a later one, or frontend-only.

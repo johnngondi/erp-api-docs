@@ -97,6 +97,8 @@ Request body:
 | `tax_pin` | Yes | string | |
 | `region` | No | string | |
 | `proposed_start_date` | No | date (`YYYY-MM-DD`) | When the applicant wants the tenancy to begin. Their own choice, and what the offer is priced and dated against. |
+| `proposed_period_in_years` | No | integer | How long a tenancy the applicant is asking for. Pairs with the months below. |
+| `proposed_period_in_months` | No | integer | The remainder of the proposed term, 0-11. |
 | `bank_account_name` | No | string | Name on the applicant's own bank account. |
 | `bank_account_number` | No | string | The applicant's own account number. |
 | `bank_branch_id` | No | integer | Must exist in `bank_branches.id`. Resolved for display as `{branch.name}, {branch.bank.name}`. |
@@ -183,6 +185,91 @@ not be forced to move a start date that has since passed.
 
 Downstream, this is the source of the Letter of Offer's `{{start_date}}` tag for
 `new lease` offers — see the [LOO workflow](loo/README.md).
+
+## Proposed term
+
+`proposed_period_in_years` and `proposed_period_in_months` are how long a tenancy the
+applicant is asking for. Both optional, both plain integers, and they pair with
+`proposed_start_date` to give an application the same start-plus-term shape a lease
+already has.
+
+Written by the applicant on their own form; read on both surfaces. The Letter of Offer
+copies them into its own `lease_term_years`/`lease_term_months` at generation, and
+staff may then move the offered term off the request — the LOO's value wins wherever
+it is set. Together with the escalation schedule below, this is what closes the LOO's
+rent breakdown: without an end date there is no last period to escalate to.
+
+## Escalations
+
+`lease-applications/{application}/escalations` is the escalation schedule the offer is
+priced against — one row per lease component, saying by what percentage that component
+escalates and how often.
+
+The application-side twin of a lease's own `lease_escalations`, with the same columns,
+so promoting an offer to a lease copies these rows rather than translating them.
+Nothing processes them on a timer: they exist to price an offer, and only become live
+escalations once there is a lease to escalate.
+
+### Who may read and write them
+
+| | Staff (`/api/v1/app/...`) | Applicant (`/api/v1/tenant/...`) |
+|---|---|---|
+| Read | Yes, on the escalations endpoints | Yes, as `escalations` on their own application |
+| Write | Yes, with `update-lease-application` | **Never** — no tenant route exists |
+
+Staff-written because which rates escalate, and by how much, is a letting decision
+rather than something an applicant states about themselves. Applicant-readable because
+the same rates are worked through period by period on the offer they are asked to
+sign — withholding the inputs would only make that document harder to check.
+
+Unlike the spaces surface, there is **no open-application window** on writing them. A
+LOO is drafted *after* an application is approved, so a schedule that locked on
+approval could never be set in time to price one.
+
+### Fields
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `lease_component_id` | Yes | integer | One schedule per component — a second is refused with a 422 |
+| `start_at` | Yes | date (`YYYY-MM-DD`) | The **first escalation date**, not the tenancy start |
+| `cycle` | Yes | `days` \| `weeks` \| `months` \| `years` | |
+| `period` | Yes | integer ≥ 1 | How many cycles between escalations |
+| `rate` | Yes | decimal | Percent, compounding — 10% twice is ×1.21, not ×1.2 |
+| `next_due` | No | date | Defaults to `start_at`; only exists to keep the row copyable onto `lease_escalations` |
+
+`start_at` being the first escalation date is the thing to get right: a schedule
+anchored on the tenancy's own start date does not escalate the first period — it walks
+forward and first bites one cycle in, which is what "escalates annually" is normally
+taken to mean.
+
+### Endpoints
+
+```
+GET    /lease-applications/{application}/escalations
+POST   /lease-applications/{application}/escalations
+GET    /lease-applications/{application}/escalations/{escalation}
+PUT    /lease-applications/{application}/escalations/{escalation}
+DELETE /lease-applications/{application}/escalations/{escalation}
+```
+
+Filter on `lease_component_id` and `cycle`; sort by `id`, `lease_component_id`,
+`start_at`, `rate` or `created_at`, defaulting to `start_at`.
+
+```json
+{
+  "lease_component_id": 3,
+  "start_at": "2027-10-01",
+  "cycle": "years",
+  "period": 1,
+  "rate": 7.5
+}
+```
+
+Every write reprices the rent breakdown on any LOO from this application that is still
+in `draft` or `pending_approval`. Approved, sent and accepted offers are left alone —
+that document is in a tenant's hands, and a schedule shifting underneath it is exactly
+what the editable-status rule exists to prevent. See
+[the LOO rent schedule](loo/README.md#the-rent-schedule).
 
 ## Applicant bank details
 
@@ -675,6 +762,8 @@ Two different things are easy to confuse, so to state the split once:
 | `spaces` (allocated units and their prices) | Yes | **Never** |
 | Document `status` / `reason`, guarantor `id_status` / `tax_pin_status` | Yes | Yes |
 | `proposed_start_date` | Yes | Yes |
+| `proposed_period_in_years`, `proposed_period_in_months` | Yes | Yes |
+| `escalations` (the schedule the offer is priced against) | Yes, read and write | Read only |
 | `bank_account_name`, `bank_account_number`, `bank_branch_id` | Yes | Yes |
 | Raw AI extraction and iTax cross-check output | **Never** | **Never** |
 
