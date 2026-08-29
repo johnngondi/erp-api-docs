@@ -6,14 +6,13 @@ A Letter of Offer is the document a landlord issues to a prospective or
 continuing tenant: an **offer** and the **agreement** that follows it, both
 drafted from a reusable template.
 
-> **Status: schema, tag resolution, the rent schedule and approval.** This
-> describes the data model built in Milestone 8 / 14.2 **Ticket 1**, the
-> resolution service built in **Ticket 2**, the escalation-driven rent schedule
-> that followed it, and the approval wiring from **Ticket 3** — which folded the
-> LOO into the generic approval framework rather than giving it a stack of its
-> own. There are still no LOO endpoints: generation, editing, export, send,
-> signature and promotion all land in Ticket 4. Read this to know what the shapes
-> will be; do not build against endpoints here, because there are none.
+> **Status: complete and callable.** The data model (**Ticket 1**), the
+> resolution service (**Ticket 2**), the escalation-driven rent schedule, the
+> approval wiring (**Ticket 3** — which folded the LOO into the generic approval
+> framework rather than giving it a stack of its own) and the full workflow
+> surface (**Ticket 4** — generation, editing, spaces, export, send, signature
+> and promotion) are all built. Endpoints are documented in
+> [loo.md](./loo.md#endpoints) and [loo-templates.md](./loo-templates.md#endpoints).
 
 ## The three documents
 
@@ -22,6 +21,33 @@ drafted from a reusable template.
 | **README.md** (this file) | The shared contract: type and status, the tag registry, resolved tag values, tag resolution |
 | [loo-templates.md](./loo-templates.md) | `LooTemplate` — clause text, scoping, defaults |
 | [loo.md](./loo.md) | The generated LOO — granted spaces, rent schedule, `our_ref`, fields, approval |
+
+## Where the endpoints live
+
+All under `api/v1/app/{company}/property-management/`.
+
+| Surface | Base | Documented in |
+|---|---|---|
+| Generating an offer | `lease-management/lease-applications/{application}/loos`, `lease-management/leases/{lease}/loos` | [loo.md](./loo.md#endpoints) |
+| The offer itself | `lease-management/loos/{loo}` | [loo.md](./loo.md#endpoints) |
+| Granted spaces | `lease-management/loos/{loo}/spaces` | [loo.md](./loo.md#endpoints) |
+| Tag registry | `lease-management/loo-tags` | [below](#the-tag-registry) |
+| Clause templates | `settings/loo-templates` | [loo-templates.md](./loo-templates.md#endpoints) |
+| Approval templates | `access-management/approval-templates` | [approval-templates.md](../../../access-management/approval-templates.md) |
+| Tenant portal | `api/v1/tenant/loos` | [loo.md](./loo.md#the-tenant-portal) |
+
+**A generated LOO is addressed on its own, not under the record it came from.**
+Generation is the only step that needs to know the source, and it has two
+endpoints for that reason — an application for a `new lease`, a lease for a
+`renewal` or `addendum`. Everything after it is a `{loo}`. To list the offers on
+one application or one lease, filter the index on `loo_preparation_type` +
+`loo_preparation_id`.
+
+**There is no `loo-approval-templates` endpoint, and that is deliberate.** A LOO
+goes through the generic approval framework, so its approval templates are the
+ordinary ones, with `App\Models\Loo` as the model type and the per-step
+`conditions` carrying the bypass rules. A second CRUD surface would be the
+parallel stack Ticket 3 deleted, coming back.
 
 ## The idea in one paragraph
 
@@ -67,6 +93,17 @@ document in [loo.md](./loo.md).
 
 `loo_tags` is a **system-wide** catalogue (not per-company) of the tokens a
 template author can drag into clause text. 62 tags across nine categories.
+
+```http
+GET lease-management/loo-tags
+    ?filter[category]=financials&filter[label]=rent
+```
+
+Unpaginated — it is a fixed catalogue the editor's sidebar renders whole, and
+paging it would only make the client reassemble something the server already has
+entire. Each entry carries `token` (`{{tenant_name}}`) alongside `key`, so the
+brace convention lives in one place. Authorised by `view-loo-template`: whoever
+may read the templates may read the vocabulary they are written in.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -223,8 +260,13 @@ finished:
   (`lease_application_escalations`), but what the clause should say about it is not,
   so the tag is left unresolved and filled by hand.
 - **"Suggesting" mode and the "Agent" toolbar button** in the editor designs.
-  Neither has any backend scoped. Both need a call on whether they are in this
+  Neither has any backend scoped, and Ticket 4 deliberately did not build one —
+  storing suggested edits and an AI clause-drafting endpoint are both real
+  features, not polish. Both still need a call on whether they are in this
   milestone, a later one, or frontend-only.
+- **What moves a LOO to `expired`.** The status exists and the tenant-visibility
+  rules account for it, but nothing sets it: no column records how long an offer
+  stands, and no job lapses one. An offer validity period is the missing input.
 
 ## Related
 
