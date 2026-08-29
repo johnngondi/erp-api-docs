@@ -97,5 +97,6 @@ so a template scoped elsewhere cannot be reached by id.
 
 ## Related
 
+- [Tag reference](./loo-tags.md) — every tag that can be dragged into this text, and how each resolves
 - [LOO document](./loo.md) — what a generated LOO holds, and its approval chain
 - [README](./README.md) — the tag registry, resolution, and the status lifecycle

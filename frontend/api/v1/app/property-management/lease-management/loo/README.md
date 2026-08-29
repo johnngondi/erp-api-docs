@@ -14,13 +14,14 @@ drafted from a reusable template.
 > and promotion) are all built. Endpoints are documented in
 > [loo.md](./loo.md#endpoints) and [loo-templates.md](./loo-templates.md#endpoints).
 
-## The three documents
+## The four documents
 
 | File | Covers |
 |---|---|
-| **README.md** (this file) | The shared contract: type and status, the tag registry, resolved tag values, tag resolution |
-| [loo-templates.md](./loo-templates.md) | `LooTemplate` — clause text, scoping, defaults |
-| [loo.md](./loo.md) | The generated LOO — granted spaces, rent schedule, `our_ref`, fields, approval |
+| **README.md** (this file) | The shared contract: type and status, the tag registry's shape, resolved tag values, how resolution works |
+| [loo-tags.md](./loo-tags.md) | **Every tag, one by one** — key, name, description and exactly how each is resolved |
+| [loo-templates.md](./loo-templates.md) | `LooTemplate` — clause text, scoping, defaults, CRUD |
+| [loo.md](./loo.md) | The generated LOO — granted spaces, rent schedule, `our_ref`, fields, approval, endpoints |
 
 ## Where the endpoints live
 
@@ -93,6 +94,10 @@ document in [loo.md](./loo.md).
 
 `loo_tags` is a **system-wide** catalogue (not per-company) of the tokens a
 template author can drag into clause text. 62 tags across nine categories.
+
+> **Looking for a particular tag?** [loo-tags.md](./loo-tags.md) lists all 62 with
+> their names, descriptions and the exact source each one resolves from. This
+> section describes the registry's shape; that one is its contents.
 
 ```http
 GET lease-management/loo-tags
@@ -270,6 +275,7 @@ finished:
 
 ## Related
 
+- [Tag reference](./loo-tags.md) — all 62 tags, and how each resolves
 - [LOO templates](./loo-templates.md) — the clause text a LOO is drafted from
 - [LOO document](./loo.md) — granted spaces, the rent schedule, and approval
 - [Lease Applications API](../lease-applications.md) — `proposed_start_date` and

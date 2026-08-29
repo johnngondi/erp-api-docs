@@ -570,6 +570,7 @@ reuses the existing `create-lease`.
 ## Related
 
 - [LOO templates](./loo-templates.md) — the clause text a LOO is drafted from
+- [Tag reference](./loo-tags.md) — all 62 tags, and how each resolves
 - [README](./README.md) — the tag registry, resolution, and the status lifecycle
 - [Approval templates](../../../access-management/approval-templates.md) — step conditions and the edit grant
 - [Leases API](../leases.md) — what a `new lease` LOO is promoted into
