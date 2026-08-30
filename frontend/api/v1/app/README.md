@@ -169,10 +169,27 @@ Treat `5xx` as backend/system failure:
 - Company Users:
   - `docs/frontend/api/v1/app/access-management/company-users.md`
 
-## Alerts Docs
+## Alerts, Pending Tasks and Notifications Docs
 
-- Alerts (user pop-ups):
+All three are readable from every portal, are scoped to the signed-in user, and need no permission.
+`domain` and `filter[domain]` exist on the App portal only.
+
+- App (staff):
   - `docs/frontend/api/v1/app/alerts.md`
+  - `docs/frontend/api/v1/app/pending-tasks.md`
+  - `docs/frontend/api/v1/app/notifications.md`
+- Tenant:
+  - `docs/frontend/api/v1/tenant/alerts.md`
+  - `docs/frontend/api/v1/tenant/pending-tasks.md`
+  - `docs/frontend/api/v1/tenant/notifications.md`
+- Landlord:
+  - `docs/frontend/api/v1/landlord/alerts.md`
+  - `docs/frontend/api/v1/landlord/pending-tasks.md`
+  - `docs/frontend/api/v1/landlord/notifications.md`
+- Vendor:
+  - `docs/frontend/api/v1/vendor/alerts.md`
+  - `docs/frontend/api/v1/vendor/pending-tasks.md`
+  - `docs/frontend/api/v1/vendor/notifications.md`
 
 ## Users Docs
 

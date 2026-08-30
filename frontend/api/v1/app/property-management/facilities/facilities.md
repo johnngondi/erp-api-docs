@@ -167,12 +167,20 @@ Create/update payload:
 {
   "utility_id": 6,
   "utility_bill_distribution_method": "utility provider rate",
-  "vendor_id": 1
+  "vendor_id": 1,
+  "alertable_facility_role_id": 11
 }
 ```
 
 Note:
 - `utility_id` maps to `lease_components.id`.
+- `alertable_facility_role_id` (optional) maps to `facilities/{facility}/roles` (the
+  `facility_role` pivot, not `roles.id`) - it names who is specifically responsible
+  for reading this utility's meters at this facility, and must be a role already
+  assigned to the same facility (a role from another facility is rejected with a
+  422). When left unset, the monthly missing-reading alert falls back to notifying
+  every user with any role at the facility, exactly as it did before this field
+  existed - leaving it unset never silences the alert, only widens who receives it.
 
 
 ## 4.5 Blocks
