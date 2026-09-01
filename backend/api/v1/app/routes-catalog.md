@@ -5,10 +5,10 @@ Base prefix for all routes below:
 /api/v1/app/{company}
 ```
 
-Total routes: **376**
+Total routes: **381**
 
 - Users: **26**
-- Property Management: **230**
+- Property Management: **235**
 - Facility Management: **97**
 - Project Management: **23**
 
@@ -55,6 +55,11 @@ Total routes: **376**
 | `PUT|PATCH` | `/api/v1/app/{company}/property-management/facilities/{facility}` | `app.property-management.facilities.update` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\FacilityController@update` |
 | `PATCH` | `/api/v1/app/{company}/property-management/facilities/{facility}/activate` | `app.property-management.facilities.` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\ActivateFacilityController` |
 | `GET` | `/api/v1/app/{company}/property-management/facilities/{facility}/admins` | `app.property-management.facilities.` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\FacilityAdminController` |
+| `GET` | `/api/v1/app/{company}/property-management/facilities/{facility}/bank-accounts` | `app.property-management.facilities.bank-accounts.index` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\FacilityBankAccountController@index` |
+| `POST` | `/api/v1/app/{company}/property-management/facilities/{facility}/bank-accounts` | `app.property-management.facilities.bank-accounts.store` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\FacilityBankAccountController@store` |
+| `GET` | `/api/v1/app/{company}/property-management/facilities/{facility}/bank-accounts/{facilityBankAccount}` | `app.property-management.facilities.bank-accounts.show` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\FacilityBankAccountController@show` |
+| `PUT|PATCH` | `/api/v1/app/{company}/property-management/facilities/{facility}/bank-accounts/{facilityBankAccount}` | `app.property-management.facilities.bank-accounts.update` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\FacilityBankAccountController@update` |
+| `DELETE` | `/api/v1/app/{company}/property-management/facilities/{facility}/bank-accounts/{facilityBankAccount}` | `app.property-management.facilities.bank-accounts.destroy` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\FacilityBankAccountController@destroy` |
 | `GET` | `/api/v1/app/{company}/property-management/facilities/{facility}/blocks` | `app.property-management.facilities.blocks.index` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\FacilityBlockController@index` |
 | `POST` | `/api/v1/app/{company}/property-management/facilities/{facility}/blocks` | `app.property-management.facilities.blocks.store` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\FacilityBlockController@store` |
 | `PATCH` | `/api/v1/app/{company}/property-management/facilities/{facility}/deactivate` | `app.property-management.facilities.` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Facility\DeactivateFacilityController` |
