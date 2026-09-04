@@ -45,11 +45,11 @@ Base: `api/v1/app/{company}/property-management/settings/loo-templates`
 | Method | Path | Permission |
 |---|---|---|
 | `GET` | `` | `view-loo-template` |
-| `POST` | `` | `manage-loo-template` |
+| `POST` | `` | `create-loo-template` |
 | `GET` | `/{looTemplate}` | `view-loo-template` |
-| `PUT`/`PATCH` | `/{looTemplate}` | `manage-loo-template` |
-| `DELETE` | `/{looTemplate}` | `manage-loo-template` |
-| `POST` | `/{looTemplate}/set-default` | `manage-loo-template` |
+| `PUT`/`PATCH` | `/{looTemplate}` | `update-loo-template` |
+| `DELETE` | `/{looTemplate}` | `delete-loo-template` |
+| `POST` | `/{looTemplate}/set-default` | `update-loo-template` |
 
 ### Payload
 

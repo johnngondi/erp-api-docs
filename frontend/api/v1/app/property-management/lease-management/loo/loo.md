@@ -7,9 +7,9 @@ climbs. For the clause templates it is drafted from see
 [loo-templates.md](./loo-templates.md); for the tag registry and the status
 lifecycle see [README.md](./README.md).
 
-> **Status: complete and callable.** Schema, rent schedule, approval and the full
-> workflow surface — generation, editing, spaces, export, send, signature and
-> promotion — are all built. See [Endpoints](#endpoints).
+> **Status: complete and callable.** Schema, rent schedule, approval, the review
+> conversation and the full workflow surface — generation, editing, spaces, export,
+> send, signature and promotion — are all built. See [Endpoints](#endpoints).
 >
 > One thing is deliberately **not** built: promoting a `renewal` or `addendum`.
 > That path amends the lease it was prepared from, and exactly what it amends was
@@ -263,6 +263,121 @@ Export, send, and everything the tenant portal is allowed to see are gated on
 approved because no step applied to it has no chain at all, and is no less
 approved for that.
 
+## Comments
+
+The review conversation on an offer: a reviewer raises a point, whoever sent the
+offer round answers it, and the thread is closed when it has been dealt with.
+
+Deliberately **not** `approval_steps.comment`, which already exists and stays what
+it is — the single reason attached to a review or rejection decision, and one the
+framework nulls out on approve. A discussion needs what a decision does not: many
+remarks against one document, answers to them, and a state saying whether the
+point was ever settled.
+
+### Who may take part
+
+**Anyone in the offer's approval chain** — whoever submitted it, plus anyone
+holding the role of any of its steps. That is the whole rule, and it is why the
+comment surface adds **no permission of its own**: no permission can express
+"the people being asked to approve this document". Reading falls back to
+`view-loo`, so a manager can follow a review they are not personally part of
+without being able to join it.
+
+Membership is role-based rather than actor-based, so a reviewer three steps down
+the chain — whose turn has not come and who therefore has no `actors` entry yet —
+can still comment. It also spans every `attempt`: somebody who reviewed the offer
+before it was rejected does not stop being party to the conversation when it comes
+round again.
+
+**An offer that has never been submitted has no chain, so nobody can comment on
+it** — not even the person who drafted it. The conversation opens when the
+document goes round.
+
+> **None of this reaches the tenant.** `viewComments` deliberately does not route
+> through `view()`, whose second branch hands an approved offer to the tenant it is
+> addressed to. The review thread is where staff say the deposit is too low; it
+> must not become visible the moment the chain clears. There is no comment
+> endpoint on the tenant portal at all.
+
+### What a comment is about
+
+A comment can be anchored to the passage it concerns. `comment_in` names which
+clause body the reader was in, and `highlighted_content` holds the text they
+highlighted inside it.
+
+| Field | Type | Notes |
+|---|---|---|
+| `comment_in` | enum \| null | `offer_content` or `agreement_content` — the `loos` columns of the same names. Serialised as `{ value, color }` |
+| `highlighted_content` | text \| null | The highlighted passage, verbatim |
+
+**Both are optional.** The highlight-then-comment flow is the usual one, but a
+reviewer also has document-level remarks — "this offer is missing a break clause"
+— that are about no particular sentence, and requiring an anchor would make those
+lie about one. A passage does require a clause, though: `highlighted_content`
+without `comment_in` is a validation error, while `comment_in` alone is a fine
+remark about that clause generally.
+
+**The passage is stored as text, not as character offsets.** Clause bodies stay
+editable right through approval, and an offset would silently come to point at
+different words after the first edit — the comment would still render, against the
+wrong sentence. The quoted text stays truthful even when the paragraph around it
+moves: find it by searching the clause, and where the search fails, say the
+passage is no longer in the document rather than highlighting something nobody
+meant. The same reasoning `document_upload_id` is held under.
+
+The anchor is fixed once a comment is raised. `PATCH` changes the body and nothing
+else — a remark that could be re-pointed after people had answered it would leave
+their answers attached to a question nobody asked.
+
+### Threads
+
+**A reply is a comment.** It can be replied to in turn, to any depth — there is no
+one-level limit. What makes a comment a reply is `parent_id` and nothing else.
+
+| Field | Notes |
+|---|---|
+| `parent_id` | The comment being answered. `null` on a thread opener |
+| `root_id` | The comment that opened the thread. `null` on a root, which is also what identifies one |
+| `depth` | `0` on a root, `parent.depth + 1` below it — indent by this without rebuilding the tree |
+
+`root_id` is carried denormalised so a whole conversation is one indexed read
+rather than a walk down a level at a time. The index endpoint uses it to return
+fully nested threads in two queries regardless of depth.
+
+A reply **inherits** two things from its thread rather than restating them:
+
+- **its anchor** — the passage under discussion belongs to the conversation, not to
+  each message in it. Sending `comment_in` or `highlighted_content` on a reply is
+  a validation error, not a silent discard;
+- **its `attempt`** — an answer posted during attempt 2 to a point raised in
+  attempt 1 belongs to that first exchange. Filing it under the current attempt
+  would split one conversation across two rounds and neither half would read.
+
+A new remark, by contrast, takes the attempt the offer is on now — so after a
+rejection the old threads stay readable at `attempt: 1` beside the fresh ones.
+
+### Resolving
+
+**Resolution belongs to the thread, not to a message in it.** Only the comment
+that opened one can be resolved, and closing it closes the conversation beneath
+it; a resolved reply with unanswered children hanging off it would be a state
+nobody could read. Resolving a reply is a `422`.
+
+Two people may close a thread: **the person who raised it**, and **whoever
+submitted the offer for the attempt it was raised under** (`initiated_by_id`).
+Not everyone in the chain — that would let the reviewer a question was aimed at
+close it without answering. Reopening is held to the same two.
+
+A resolved thread is frozen against edits: its author cannot reword or withdraw a
+comment inside it until it is reopened.
+
+### Editing and withdrawing
+
+Only the author, and only while the thread is open. Withdrawing a comment
+soft-deletes it **and every answer beneath it** — an answer whose question has
+gone is unreadable — while leaving its ancestors and its siblings standing.
+Deleting a root removes the whole conversation.
+
 ## Delivery, the answer, and what it became
 
 Set by the workflow, never by an edit — they are deliberately absent from the
@@ -331,7 +446,7 @@ property and space type.
 | `POST` | `loos/{loo}/submit` | `update-loo` |
 | `GET` | `loos/{loo}/export` | `export-loo` |
 | `POST` | `loos/{loo}/send` | `send-loo` |
-| `POST` | `loos/{loo}/signature` | `send-loo` |
+| `POST` | `loos/{loo}/signature` | `sign-loo` |
 | `POST` | `loos/{loo}/promote` | `create-lease` |
 
 There is **no `POST loos`**: an offer is generated from a source record, never
@@ -381,9 +496,9 @@ hands is fixed.
 | Method | Path | Permission |
 |---|---|---|
 | `GET` | `loos/{loo}/spaces` | `view-loo` |
-| `POST` | `loos/{loo}/spaces` | `manage-loo-spaces` |
-| `PUT`/`PATCH` | `loos/{loo}/spaces/{looSpace}` | `manage-loo-spaces` |
-| `DELETE` | `loos/{loo}/spaces/{looSpace}` | `manage-loo-spaces` |
+| `POST` | `loos/{loo}/spaces` | `update-loo` |
+| `PUT`/`PATCH` | `loos/{loo}/spaces/{looSpace}` | `update-loo` |
+| `DELETE` | `loos/{loo}/spaces/{looSpace}` | `update-loo` |
 
 ```json
 {
@@ -419,6 +534,76 @@ rate card's).
 > matching the components they come from. The rent *schedule* is tax-inclusive,
 > because that is what a tenant actually pays per period. `has_vat` tells the
 > clause whether tax is added on top.
+
+### Comments
+
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `loos/{loo}/comments` | `view-loo`, **or** membership of the approval chain |
+| `POST` | `loos/{loo}/comments` | membership of the approval chain |
+| `PUT`/`PATCH` | `loos/{loo}/comments/{looComment}` | the comment's author |
+| `DELETE` | `loos/{loo}/comments/{looComment}` | the comment's author |
+| `POST` | `loos/{loo}/comments/{looComment}/resolve` | the thread's author, or the submitter |
+| `DELETE` | `loos/{loo}/comments/{looComment}/resolve` | the thread's author, or the submitter |
+
+No permission of its own — see [Comments](#comments) for why, and for the rules
+behind the right-hand column. There is **no `GET loos/{loo}/comments/{looComment}`**:
+a single message out of its conversation is not a thing worth addressing.
+
+Raising a point, anchored to a passage:
+
+```json
+{
+  "body": "This deposit is two months short of policy.",
+  "comment_in": "offer_content",
+  "highlighted_content": "a deposit equal to one month's rent"
+}
+```
+
+Answering one. A reply carries neither `comment_in` nor `highlighted_content` —
+it inherits the thread's, and sending either is a `422`:
+
+```json
+{ "body": "Corrected to three months in the latest revision.", "parent_id": 41 }
+```
+
+`GET` paginates **threads, not messages** — a page of roots, each with its answers
+nested beneath it to whatever depth they run. Paginating a flat list would cut
+conversations in half at a page boundary. A leaf reports `"replies": []` rather
+than omitting the key.
+
+```json
+{ "data": [{
+  "id": 41,
+  "attempt": 1,
+  "body": "This deposit is two months short of policy.",
+  "comment_in": { "value": "offer_content", "color": "info" },
+  "highlighted_content": "a deposit equal to one month's rent",
+  "parent_id": null, "root_id": null, "depth": 0, "is_reply": false,
+  "author": { "id": 7, "name": "A. Reviewer" },
+  "is_resolved": true,
+  "resolved_at": { "raw": "2026-09-04T09:12:00Z", "formatted": "04 Sep, 2026", "diff": "2 hours ago" },
+  "resolved_by": { "id": 3, "name": "L. Manager" },
+  "approval_step": { "id": 88, "step_order": 1, "role": { "id": 12, "name": "Finance" } },
+  "replies": [{
+    "id": 42, "parent_id": 41, "root_id": 41, "depth": 1, "is_reply": true,
+    "body": "Corrected to three months in the latest revision.",
+    "comment_in": { "value": "offer_content", "color": "info" },
+    "replies": []
+  }]
+}] }
+```
+
+Filters: `attempt`, `comment_in`, `resolved`, `unresolved`. Sorts: `id`,
+`created_at`, `resolved_at`; newest thread first by default.
+
+```http
+GET loos/{loo}/comments?filter[unresolved]=1&filter[comment_in]=offer_content
+```
+
+`approval_step` is where the remark was raised, recorded only when its author was
+the person the chain was waiting on at the time. It is context, not authority — a
+thread outlives the step it started on.
 
 ### Export
 
@@ -523,19 +708,24 @@ inside one method with nothing above it to restructure.
 
 Base: `api/v1/tenant/loos`
 
-| Method | Path | |
-|---|---|---|
-| `GET` | `` | The tenant's offers |
-| `GET` | `/{loo}` | One offer, with its resolved tags |
-| `GET` | `/{loo}/download` | The document **as sent** |
-| `POST` | `/{loo}/signature` | Accept or decline |
+| Method | Path | Permission | |
+|---|---|---|---|
+| `GET` | `` | — | The tenant's offers |
+| `GET` | `/{loo}` | — | One offer, with its resolved tags |
+| `GET` | `/{loo}/download` | — | The document **as sent** |
+| `POST` | `/{loo}/signature` | `sign-loo` | Accept or decline |
 
-Authorised by **ownership**, not by a permission — a tenant holds none on this
-guard, and accepting your own offer is not a right anybody grants you. Two
-filters run on every query: the offer's preparation record must belong to this
-tenant, and the offer must have cleared its approval chain. Both are applied as
-scopes on the query, so anything short of an approved offer is a **404** here,
-never a 403 that would confirm it exists.
+The reads are authorised by **ownership** alone. Two filters run on every query:
+the offer's preparation record must belong to this tenant, and the offer must have
+cleared its approval chain. Both are applied as scopes on the query, so anything
+short of an approved offer is a **404** here, never a 403 that would confirm it
+exists.
+
+Signing asks ownership **first** — so somebody else's offer is still a 404, never a
+403 — and then `sign-loo`, which is held on the tenant guard as well as the staff
+one. The seeded tenant role carries every tenant-scoped permission, so a tenant has
+it unless it has been deliberately taken away; one name covers the act whether the
+answer arrives through the portal or over the counter.
 
 `download` serves the stored file, never a fresh render, and 404s when nothing
 has been filed — an offer the tenant can see but that carries no document has
@@ -544,28 +734,64 @@ been approved and not yet sent.
 The signature endpoint runs the same action as the staff one, so an acceptance
 recorded on the portal and one recorded over the counter are the same record.
 
+**There is no comment endpoint here, deliberately.** [Comments](#comments) are the
+internal review conversation — where staff say the deposit is too low and the term
+is wrong — and the staff-side `viewComments` check is written so that clearing the
+approval chain does not open that thread to the tenant it is addressed to.
+
 ## Permissions
 
 Added to `storage/app/seeders/permissions.json` under the `Property Management`
 tag.
 
-| Permission | Covers |
-|---|---|
-| `view-loo` | Reading offers |
-| `generate-loo` | Drafting one from a source record |
-| `update-loo` | Editing clauses, fields and resolved tags; submitting for approval |
-| `delete-loo` | Deleting a draft |
-| `manage-loo-spaces` | Granting, withdrawing and re-pricing spaces |
-| `export-loo` | Rendering to PDF or HTML |
-| `send-loo` | Delivering to the tenant, and recording their answer |
-| `view-loo-template` | Reading templates and the tag registry |
-| `manage-loo-template` | Authoring templates |
+Ordinary CRUD throughout, with `generate-` standing in for `create-` because an
+offer is drafted from a source record rather than posted into existence.
 
-`update-loo` and `delete-loo` are beyond the seven the milestone doc listed, and
-are needed: editing is the largest surface here and had no permission of its own,
-and `update-loo` is also the name the approval framework's edit grant checks
+| Permission | Guard | Covers |
+|---|---|---|
+| `view-loo` | app | Reading offers |
+| `generate-loo` | app | Drafting one from a source record |
+| `update-loo` | app | Editing clauses, fields and resolved tags; **granting, withdrawing and re-pricing spaces**; submitting for approval |
+| `delete-loo` | app | Deleting a draft |
+| `export-loo` | app | Rendering **either document** — offer or agreement — to PDF or HTML |
+| `send-loo` | app | Delivering to the tenant |
+| `sign-loo` | **app + tenant** | Answering an offer: the tenant in the portal, or staff recording one that came back on paper |
+| `view-loo-template` | app | Reading templates and the tag registry |
+| `create-loo-template` | app | Authoring a template |
+| `update-loo-template` | app | Editing one, and restoring a deleted one |
+| `delete-loo-template` | app | Deleting one |
+
+**[Comments](#comments) add no permission.** Who may raise and answer a point is
+membership of the offer's approval chain, which no permission can express; reading
+the thread falls back to `view-loo`. Nothing was added to `permissions.json` for
+it, and there is no patch seeder to run.
+
+**Spaces have no permission of their own.** What an offer covers and what it costs
+*is* the offer, and somebody trusted to rewrite the deposit clause is not
+separately untrusted to price the unit that clause is about — so `update-loo`
+covers both. The approval edit grant deliberately does not reach the spaces,
+though: a step lends out the right to correct named `editable_fields`, and a grant
+covering `rent_deposit_months` must not become a licence to re-price the letting.
+
+**`sign-loo` is held on both guards**, because signing is one act however it
+reaches the system. A tenant answers their own offer in the portal; staff record
+the same answer when it came back over the counter, and both go through
+`LooPolicy::recordSignature()`. It is separate from `send-loo` — putting an offer
+in front of a tenant and answering one are different jobs. The tenant portal still
+tests **ownership first**, so an offer that is not yours is a 404 before the
+permission is ever consulted.
+
+`update-loo` is also the name the approval framework's edit grant checks
 (`Approvable::approvalEditBypassPermission()` derives `update-{model}`). Promotion
 reuses the existing `create-lease`.
+
+> **Upgrading an existing install.** `manage-loo-template` and `manage-loo-spaces`
+> are gone, and `sign-loo` is new. Run
+> `php artisan db:seed --class=LooCrudPermissionsPatchSeeder`: it creates the new
+> names, **carries the existing grants across** — template authors keep authoring,
+> space pricers keep pricing, anyone who could record a signature still can, and
+> every tenant role gains `sign-loo` — and only then drops the two retired
+> permissions. It is idempotent.
 
 ## Related
 

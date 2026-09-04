@@ -11,8 +11,9 @@ drafted from a reusable template.
 > approval wiring (**Ticket 3** — which folded the LOO into the generic approval
 > framework rather than giving it a stack of its own) and the full workflow
 > surface (**Ticket 4** — generation, editing, spaces, export, send, signature
-> and promotion) are all built. Endpoints are documented in
-> [loo.md](./loo.md#endpoints) and [loo-templates.md](./loo-templates.md#endpoints).
+> and promotion) are all built, as is the review conversation that runs alongside
+> the approval chain — see [Comments](./loo.md#comments). Endpoints are documented
+> in [loo.md](./loo.md#endpoints) and [loo-templates.md](./loo-templates.md#endpoints).
 
 ## The four documents
 
@@ -21,7 +22,7 @@ drafted from a reusable template.
 | **README.md** (this file) | The shared contract: type and status, the tag registry's shape, resolved tag values, how resolution works |
 | [loo-tags.md](./loo-tags.md) | **Every tag, one by one** — key, name, description and exactly how each is resolved |
 | [loo-templates.md](./loo-templates.md) | `LooTemplate` — clause text, scoping, defaults, CRUD |
-| [loo.md](./loo.md) | The generated LOO — granted spaces, rent schedule, `our_ref`, fields, approval, endpoints |
+| [loo.md](./loo.md) | The generated LOO — granted spaces, rent schedule, `our_ref`, fields, approval, the review conversation, endpoints |
 
 ## Where the endpoints live
 
@@ -32,6 +33,7 @@ All under `api/v1/app/{company}/property-management/`.
 | Generating an offer | `lease-management/lease-applications/{application}/loos`, `lease-management/leases/{lease}/loos` | [loo.md](./loo.md#endpoints) |
 | The offer itself | `lease-management/loos/{loo}` | [loo.md](./loo.md#endpoints) |
 | Granted spaces | `lease-management/loos/{loo}/spaces` | [loo.md](./loo.md#endpoints) |
+| The review conversation | `lease-management/loos/{loo}/comments` | [loo.md](./loo.md#comments-1) |
 | Tag registry | `lease-management/loo-tags` | [below](#the-tag-registry) |
 | Clause templates | `settings/loo-templates` | [loo-templates.md](./loo-templates.md#endpoints) |
 | Approval templates | `access-management/approval-templates` | [approval-templates.md](../../../access-management/approval-templates.md) |
