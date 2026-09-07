@@ -62,6 +62,7 @@ Create payload table (root):
 | `email` | string | Yes | - | User email |
 | `phone` | string | Yes | - | User phone |
 | `company_ids` | array[object] | Yes | - | Company assignment entries |
+| `facilities` | array[int] | No | - | Property (facility) IDs the staff user is assigned to. Authoritative: the user ends up with exactly these. |
 
 Create payload table (`company_ids.*` entry):
 
@@ -90,7 +91,8 @@ Request shape:
       "company_department_id": 1,
       "company_department_division_id": 1
     }
-  ]
+  ],
+  "facilities": [3, 7]
 }
 ```
 
@@ -102,6 +104,7 @@ Rules:
 - If provided, `company_office_id` / `company_department_id` / `company_department_division_id` must belong to that assignment `company_id`.
 - If `company_department_division_id` is provided, `company_department_id` is required and division must belong to that department.
 - If user does not exist, backend creates user and assigns app user-group.
+- `facilities` is optional. Each id must exist. When sent, it becomes the user's full property access list, which is what drives property visibility across the app.
 
 ## Show / Update / Delete
 
@@ -118,6 +121,12 @@ Update payload supports:
 | `company_office_id` | int&#124;null | No | unchanged | Set `null` to clear |
 | `company_department_id` | int&#124;null | No | unchanged | Set `null` to clear; clearing also clears division |
 | `company_department_division_id` | int&#124;null | No | unchanged | Requires `company_department_id` when provided |
+| `facilities` | array[int] | No | unchanged | Property (facility) IDs. Omit to leave access untouched; send `[]` to remove all access; send a list to sync to exactly that list |
+
+Property assignment notes:
+
+- Read back from `data.company_user.facility_ids` (ids, for a multi-select) and `data.company_user.facilities` (`[{id, name}]`), on `index`, `show`, `store` and `update`.
+- Naming a user against a role on the property create/update payload (`roles: [{role_id, user_id}]`) also grants that user property access. That path is additive and never removes access the user holds to other properties.
 
 ## Lifecycle Actions
 
