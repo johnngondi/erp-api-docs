@@ -11,7 +11,7 @@ everything they **paid** for a period, with the opening (brought-forward) and cl
 (carried-forward) balances. It is **read-only** and computed on the fly.
 
 > **Read [the shared reports contract](./README.md) first.** This page only documents what is
-> specific to this report — its extra filters, its four buckets, and its balance conventions. The
+> specific to this report — its extra filters, its buckets, and its balance conventions. The
 > response envelope (`header` + a `report` array of buckets + `summary`), the bucket keys
 > (`bucket`/`header`/`fields`/`items`/`summary`), the field keys (`format`, `type`, `weight`,
 > `background_color`, …), the per-cell `{ value, color }` shape, the row `type` values, and the
@@ -29,7 +29,7 @@ everything they **paid** for a period, with the opening (brought-forward) and cl
 
 `GET /api/v1/app/{company}/property-management/reports/tenants/billings-and-collections`
 
-Returns a `header`, a `report` array of four buckets, and a report-level `summary`.
+Returns a `header`, a `report` array of four or five buckets, and a report-level `summary`.
 
 ### Filters (query params)
 
@@ -62,13 +62,16 @@ There is no pagination, sort, or include — a report is returned whole for the 
 
 ---
 
-## The four buckets
+## The buckets
 
-They always come back in this order, and this report's buckets are fixed — they don't vary with the
-filters.
+They always come back in this order. Four of them are fixed; `summary_by_property` is the one
+bucket that varies with the filters — it leads the list **only when `facility_id` is omitted**, and
+is dropped when a single property is selected (it would just restate the `overview` Total row).
+Read the order from the `bucket` keys rather than assuming an index.
 
 | `bucket` | `header.label` | One row per… | Columns |
 |---|---|---|---|
+| `summary_by_property` | Summary by Property | property — **only when `facility_id` is omitted** | `facility_id`, `name`, `balance_bf`, per-component `component_{id}_billings` (before `total_billings`), `total_billings`, `total_expected`, per-component `component_{id}_collections` (before `total_collections`), `total_collections`, `balance_cf` |
 | `overview` | Summary | lease | `lease_id`, `name`, `balance_bf`, `total_billings`, `total_collections`, `balance_cf` |
 | `summary_by_account` | Summary by Account | lease | overview columns **plus** per-account `account_{id}_billings` (before `total_billings`) and `account_{id}_collections` (before `total_collections`) |
 | `billings` | Billings | lease | `lease_id`, `name`, `balance_bf`, per-component `component_{id}` (before `total_amount`), `total_amount`, `total_tax`, `gross_total`, `balance_cf` |
@@ -77,6 +80,15 @@ filters.
 Each bucket's `header` carries only the standard `label` — this report's buckets are sections of one
 scope, not separate entities. Each bucket's `summary` holds that bucket's column totals (the same
 numbers as its Total row).
+
+**`summary_by_property`** lists **every property the filters match**, so a property with no leases —
+or no activity in the period — still comes back as a zero row. Its rows are ordered by property
+name. Its `Total` row reconciles with the `overview` bucket's `Total` row on `balance_bf`,
+`total_billings`, `total_collections` and `balance_cf`. Its per-component columns are the first in
+this API to ship `visible: false` alongside `togglable: true` — the breakdown is there for whoever
+opens the column picker, not for the default view. Because both sides share one row, those keys
+carry a side suffix (`component_{id}_billings` / `component_{id}_collections`) rather than the bare
+`component_{id}` the `billings` / `collections` buckets use.
 
 **Accounts vs components:** an *account* is an expense category; a *component* is a lease component
 (each component belongs to one account). `summary_by_account` rolls up to accounts; `billings` /
@@ -87,10 +99,13 @@ numbers as its Total row).
 ### Balance convention
 
 - `balance_bf` (brought forward) — activity strictly **before** `period_from`.
-  - `summary` / `summary_by_account`: prior billings **−** prior collections.
+  - `summary` / `summary_by_account` / `summary_by_property`: prior billings **−** prior collections.
   - `billings` bucket: prior **billings** only. `collections` bucket: prior **collections** only.
+- `total_expected` (`summary_by_property` only) — `balance_bf + total_billings`: everything the
+  property was owed in the period, arrears included.
 - `balance_cf` (carried forward):
   - `summary` / `summary_by_account`: `balance_bf + total_billings − total_collections`.
+  - `summary_by_property`: `total_expected − total_collections` (the same arithmetic).
   - `billings` / `collections`: `balance_bf + gross_total`.
 - In the billings/collections buckets, the per-component cells sum to `gross_total`, and
   `total_amount + total_tax = gross_total`.
@@ -111,7 +126,8 @@ Following the shared vocabulary, this report sets:
 ## Sample response
 
 Trimmed to the `header`, one full bucket, and the `summary`. The other buckets follow the same
-five-key shape (see the bucket table above for their columns) and the same cell shape.
+five-key shape (see the bucket table above for their columns) and the same cell shape. This call
+passed `facility_id=1`, so `summary_by_property` is absent and `overview` leads the array.
 
 ```json
 {
@@ -203,11 +219,24 @@ Example of the dynamic-column buckets (from the same call) — note the injected
 { "label": "Rent", "key": "component_1", "format": "money", "type": "normal",
   "weight": "font-normal", "background_color": "none", "alignment": "right", "togglable": true,
   "visible": true, "component_id": 1 }
+
+// The same idea in `summary_by_property`, but hidden by default — don't render it until the
+// user turns it on in the column picker
+{ "label": "Rent Billings", "key": "component_1_billings", "format": "money", "type": "normal",
+  "weight": "font-normal", "background_color": "none", "alignment": "right", "togglable": true,
+  "visible": false, "component_id": 1 }
 ```
 
 Column order (keys) for the dynamic buckets, for reference:
 
 ```jsonc
+// the `summary_by_property` bucket's fields (omitted entirely when facility_id is set)
+[ "facility_id", "name", "balance_bf",
+  "component_{id}_billings",    // ← per-component, injected before total_billings, visible: false
+  "total_billings", "total_expected",
+  "component_{id}_collections", // ← per-component, injected before total_collections, visible: false
+  "total_collections", "balance_cf" ]
+
 // the `summary_by_account` bucket's fields
 [ "lease_id", "name", "balance_bf",
   "account_{id}_billings",   // ← per-account, injected before total_billings
