@@ -26,6 +26,7 @@ Route exists but is not implemented in controller:
 Supported query params:
 
 - Filters:
+  - `filter[search]` (Scout search across name, email, phone and tax pin; supports CSV user ids e.g. `12,45`)
   - `filter[id]`, `filter[name]`, `filter[email]`, `filter[phone]`, `filter[created_at]`
 - Sort:
   - `sort=id,name,created_at` (prefix with `-` for descending)
