@@ -30,6 +30,8 @@ Base prefix:
   - `docs/frontend/api/v1/app/access-management/approvable-models.md`
 - Approval Steps:
   - `docs/frontend/api/v1/app/access-management/approvals.md`
+- Responsibility Transfers:
+  - `docs/frontend/api/v1/app/access-management/responsibility-transfers.md`
 
 Apply shared auth, tenancy, query, and error handling guidance from:
 
@@ -49,6 +51,7 @@ Apply shared auth, tenancy, query, and error handling guidance from:
 | Company Users | `POST /company-users` | `company-users.md` |
 | Approval Templates | `POST /approval-templates` | `approval-templates.md` |
 | Approval Steps (Action) | `POST /approval-steps/{approvalStep}` | `approvals.md` |
+| Responsibility Transfers | `POST /responsibility-transfers` | `responsibility-transfers.md` |
 
 ## Frontend Notes (Approvals)
 
