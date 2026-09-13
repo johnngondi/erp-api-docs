@@ -32,6 +32,69 @@ that report: its extra filters, its buckets, and its numbers.
 
 ---
 
+## How reports are organised — parties, parent groups, presets
+
+Every report lives in one backend registry, keyed by a stable string key, and the report nav is
+that registry's tree: **party → parent group → report → preset-filter child**. Three kinds of node
+appear in it, and only one of them is a report:
+
+| Node | What it is | URL | Permissions |
+|---|---|---|---|
+| **Report** | A computed report with its own endpoint, filters and export. | Its own: `…/reports/{party-segment}[/{parent}]/{key}` | Its own: `view-{key}-report` / `export-{key}-report` |
+| **Parent group** | A navigation heading holding reports and presets. Nav-only — no endpoint, no service, no filters. | **None** | **None** — show it when at least one child is visible |
+| **Preset-filter child** | A link that opens an existing report with a fixed filter payload pre-applied. | Its **report's** URL | Its **report's** — none of its own |
+
+### Parties
+
+The top level of the tree. A party is the audience a report is about, and it fixes the URL
+segment its reports sit under:
+
+| Party | URL segment | Holds today |
+|---|---|---|
+| `landlord` | `landlords` | Income & Expenditure, Facility Budget, Property Expenses |
+| `supplier` | `suppliers` | parent groups `expenditure-reports`, `supplier-withholding` |
+| `tenant` | `tenants` | Billings & Collections, Tenancy Schedule, parent groups `collections-reports`, `tenancy-reports`, `tenant-withholding` |
+| `system` | `system` | system reports (audit trail and the like) |
+| `accounting` | `accounting` | Trial Balance — a company-wide snapshot, not a party report |
+
+> Party names are singular (`landlord`, not `landlords`) but the URL segments stay plural, so no
+> existing report URL moved when the parties were renamed.
+
+### Parent groups
+
+A parent group has a key and a label and **nothing else**: no endpoint, no filters, no
+permission. It lists its children in display order, and its child reports are served **under its
+own segment** — a report `foo` inside `expenditure-reports` is
+`GET …/reports/suppliers/expenditure-reports/foo` and exports at `…/foo/export`. A report with no
+parent stays top-level under its party, exactly as before.
+
+Five parent groups exist: `expenditure-reports` and `supplier-withholding` (supplier);
+`collections-reports`, `tenancy-reports` and `tenant-withholding` (tenant). Reports are added
+beneath them ticket by ticket; a group with no visible child is simply not shown.
+
+### Preset-filter children
+
+Some nav entries are **not separate reports** but one report seen through a fixed filter — a
+withholding report split into an entry per withholding tax, say. The registry expresses that as a
+**preset-filter child**: a node with a key, a label, the `report` it opens and the `filters` to
+apply.
+
+To render one, call the **report's** URL with the preset's filter payload as query params,
+exactly as if the user had picked those filters — so a preset `{ "withholding_tax_id": 3 }` on the
+`supplier-withholding` report is `GET …/reports/suppliers/supplier-withholding?withholding_tax_id=3`,
+and its export is the same call on `…/export` with `format` appended. The user may change the
+filters afterwards; the preset is only a starting point.
+
+A preset has **no route and no permission of its own**. It is visible exactly when the user holds
+`view-{report}-report` for the report it opens, and exportable under that report's
+`export-{report}-report`. Never look for a `view-{preset-key}-report` permission — none exists.
+
+The two withholding parents are exactly this shape: `supplier-withholding` holds three preset
+children (one per `withholding_tax_id`) and `tenant-withholding` holds two (one per
+`payment_method_id`), each opening the withholding report of the same name.
+
+---
+
 ## Permissions & export
 
 Every report has **two** permissions, both named after the report's own slug:
@@ -47,6 +110,10 @@ The slugs are `income-and-expenditure`, `property-expenses`, `facility-budget`,
 exporting: they are granted independently on a role, so the UI should hide the report and the Export
 button separately. Both are listed by
 `GET /api/v1/app/{company}/access-management/permissions` under the `Property Management` tag.
+
+Only **reports** have permissions. A parent group has none — hide it when none of its children is
+visible — and a preset-filter child is governed by the permissions of the report it opens (see
+[How reports are organised](#how-reports-are-organised--parties-parent-groups-presets)).
 
 ### The export endpoint
 
