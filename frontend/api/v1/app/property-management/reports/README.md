@@ -25,8 +25,10 @@ that report: its extra filters, its buckets, and its numbers.
 - **Read-only** and **computed on the fly** — no persistence, no side effects.
 - **Self-describing** — the response tells you its own columns (`fields`) and rows (`items`), so the
   UI renders generically.
-- **Discoverable** — every report has a stable string key; the frontend calls the endpoint and
-  renders the returned buckets. Never assume a fixed column set — read `fields`.
+- **Discoverable** — every report has a stable string key, and
+  [`GET /reports`](#discovering-reports--get-reports) lists every report the caller may view with
+  its URL, filters, buckets and export details. Build the nav from that, call the report's URL,
+  and render the returned buckets. Never assume a fixed column set — read `fields`.
 - **Returned whole** — there is no pagination, sort, or include; a report is computed for the
   resolved period and returned in full.
 
@@ -92,6 +94,159 @@ A preset has **no route and no permission of its own**. It is visible exactly wh
 The two withholding parents are exactly this shape: `supplier-withholding` holds three preset
 children (one per `withholding_tax_id`) and `tenant-withholding` holds two (one per
 `payment_method_id`), each opening the withholding report of the same name.
+
+---
+
+## Discovering reports — `GET /reports`
+
+```
+GET /api/v1/app/{company}/property-management/reports
+```
+
+**Do not hardcode the report list.** This endpoint returns the registry tree above, already
+filtered to what the caller may see in the route company, with everything a client needs to call
+each report: URL, permissions, filter descriptors, buckets and columns, export details and the doc
+page. Build the nav from it, and read a report's filters and columns from it. It is the same
+catalogue an MCP server will consume, so it describes reports completely rather than minimally.
+
+- **Any authenticated app user may call it.** There is no permission for the endpoint itself;
+  authorization is the filtering. No filters, no pagination.
+- **A report is present only when the user holds its `view-{key}-report`** in the route company.
+  A preset-filter child follows the report it opens. A parent group — or a whole party — left
+  with no visible child is **dropped**, never returned empty. A user with no report permission
+  gets `{ "data": [] }`.
+- **Order is display order:** parties in the order below, top-level nodes in registry order
+  within a party, children in their parent's declared order.
+- **URLs are relative to the API host** (`/api/v1/app/{company}/…`) and already carry the route
+  company, so a different company answers with different URLs — and a different tree, since
+  permissions are company-scoped.
+
+### Response
+
+```jsonc
+{
+  "data": [                                   // parties, in display order; absent when empty
+    {
+      "type": "party",
+      "key": "landlord",
+      "label": "Landlord Reports",
+      "children": [ /* groups, reports and presets, in display order */ ]
+    }
+  ]
+}
+```
+
+Every node carries `type`, `key` and `label`. What else it carries depends on `type`:
+
+| `type` | Extra keys | Notes |
+|---|---|---|
+| `party` | `children` | Top level. Never has a URL or permissions. |
+| `group` | `children` | A parent group. Never has a URL or permissions; present only with at least one visible child. |
+| `report` | `description`, `party`, `url`, `permissions`, `can_export`, `export`, `filters`, `buckets`, `summary`, `docs`, `children` | The only node with an endpoint. `children` holds its preset-filter children, `[]` when none. |
+| `preset` | `report`, `url`, `permissions`, `can_export`, `export`, `preset_filters` | A preset-filter child. `url`, `permissions` and `export` are its **report's**; `report` is that report's key. Never has `children`. |
+
+#### A report node
+
+```jsonc
+{
+  "type": "report",
+  "key": "property-expenses",
+  "label": "Property Expenses",
+  "description": "A per-property register of expenses (supplier bills) for the period …",
+  "party": "landlord",
+  "url": "/api/v1/app/1/property-management/reports/landlords/property-expenses",
+  "permissions": { "view": "view-property-expenses-report", "export": "export-property-expenses-report" },
+  "can_export": true,                         // the caller holds permissions.export
+  "export": {
+    "url": "/api/v1/app/1/property-management/reports/landlords/property-expenses/export",
+    "param": "format",                        // append ?format=… to the report's own query string
+    "formats": ["excel", "pdf"]
+  },
+  "filters": [ /* one descriptor per accepted query param, in order — see below */ ],
+  "buckets": [ /* one entry per bucket the report can return — see below */ ],
+  "summary": { "total_amount": "Sum of expense amounts before tax.", "total_tax": "…", "total": "…", "expense_count": "…" },
+  "docs": "docs/frontend/api/v1/app/property-management/reports/property-expenses.md",
+  "children": []
+}
+```
+
+- `can_export` is the only per-user flag: the report is present because the user can view it,
+  and `can_export` says whether to show the Export button. Both permission names are still
+  listed so a client can explain what is missing.
+- `export.url` takes **every filter the report takes** plus `format`; the frontend exports what
+  is on screen by replaying the report's query string with `format` appended (see
+  [The export endpoint](#the-export-endpoint)).
+- `summary` maps each key of the report's `data.summary` to what it means. Per-bucket
+  `summary` objects use the same keys unless the report's page says otherwise.
+- `docs` is the report's contract page in this repository — the narrative that this node
+  summarises.
+
+#### A filter descriptor
+
+One per query param the report accepts, **in the order the report declares them**. Derived from
+the report's validation class, so it cannot drift from what the endpoint actually accepts.
+
+```jsonc
+{
+  "name": "facility_id",
+  "type": "integer",                          // integer | string | date | enum | boolean | number
+  "required": false,                          // true only for a param the endpoint rejects when absent
+  "default": "All properties",                // what omitting it means — prose, not a literal value
+  "description": "One property. When set the summaries use that property's reporting currency; …",
+  "references": { "table": "facilities", "column": "id" },   // present when the value is an entity id
+  "required_when": "facility_id is omitted",  // present when a param is conditionally required (422 otherwise)
+  "values": ["weekly", "monthly", "quarterly", "annually"],  // present for type: enum — the allowed literals
+  "format": "Y-m-d"                           // present for type: date
+}
+```
+
+`references`, `required_when`, `values` and `format` are **omitted when not applicable**; the
+other five keys are always present (`default` and `description` may be `null` for a filter
+nobody has annotated yet).
+
+#### A bucket entry
+
+One per bucket the report can return, in the order they appear in the response. Data-driven
+buckets are listed once with a placeholder id (`property_{id}`) and a `when` that says how many
+to expect.
+
+```jsonc
+{
+  "bucket": "property_{id}",                  // the response `bucket` id, or its pattern
+  "label": "The property's name",             // what header.label will say
+  "when": "one per property in scope, sorted by name",   // "always", or the condition it appears under
+  "description": "That property's expenses one per row plus a totals row, in its reporting currency …",
+  "dynamic_columns": null,                    // prose describing runtime columns, or null when the columns are fixed
+  "fields": [ /* the static column definitions, exactly as the response will carry them */ ]
+}
+```
+
+`fields` are the [column definitions](#fields--column-definitions) the report declares up front
+(`label`, `key`, `format`, `type`, `weight`, `background_color`, `alignment`, `visible`,
+`togglable`). Where `dynamic_columns` is set, the live response splices extra columns in at the
+position it describes — **always render from the response's own `fields`**; the catalogue tells
+you what to expect, the response tells you what you got.
+
+#### A preset-filter child
+
+```jsonc
+{
+  "type": "preset",
+  "key": "supplier-withholding-vat",
+  "label": "VAT Withholding",
+  "report": "supplier-withholding",
+  "url": "/api/v1/app/1/property-management/reports/suppliers/supplier-withholding",
+  "permissions": { "view": "view-supplier-withholding-report", "export": "export-supplier-withholding-report" },
+  "can_export": true,
+  "export": { "url": "…/supplier-withholding/export", "param": "format", "formats": ["excel", "pdf"] },
+  "preset_filters": { "withholding_tax_id": 3 }
+}
+```
+
+To open it: `GET {url}?{preset_filters as query params}` — here
+`…/supplier-withholding?withholding_tax_id=3`. The filter descriptors for those params live on
+the `report` node of the same key (find it by `report`); a preset carries only the values to
+pre-fill.
 
 ---
 

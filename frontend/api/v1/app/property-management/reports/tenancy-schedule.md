@@ -34,6 +34,9 @@ report template (indent by `depth`); the envelope, bucket keys and cell shape ar
 - `GET /reports/tenants/tenancy-schedule/export` — requires `export-tenancy-schedule-report`. Takes a
   required `format` (`excel` | `pdf`) plus the same filters as the report (below) and downloads the
   generated file — see [the shared contract](./README.md#permissions--export).
+- Listed by [`GET /reports`](./README.md#discovering-reports--get-reports) — the discovery
+  endpoint describes the report URL, permissions, filter descriptors, buckets and columns,
+  summary keys and export formats, so none of it needs hardcoding.
 
 ## Filters (query params)
 

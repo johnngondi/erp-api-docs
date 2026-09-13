@@ -20,6 +20,9 @@ owed and holds in cash, against what it owes. It is **read-only** and computed o
 - `GET /reports/accounting/trial-balance/export` — requires `export-trial-balance-report`. Takes a
   required `format` (`excel` | `pdf`) plus the same filters as the report and downloads the generated
   file — see [the shared contract](./README.md#permissions--export).
+- Listed by [`GET /reports`](./README.md#discovering-reports--get-reports) — the discovery
+  endpoint describes the report URL, permissions, filter descriptors, buckets and columns,
+  summary keys and export formats, so none of it needs hardcoding.
 
 ## What makes this report different
 
