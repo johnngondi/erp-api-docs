@@ -1,6 +1,6 @@
 # Property Expenses Report API
 
-Domain: `Property Management > Reports > Landlords`
+Domain: `Property Management > Reports > Suppliers > Expenditure Reports`
 
 Base route:
 
@@ -18,10 +18,18 @@ and computed on the fly.
 
 ## Endpoints
 
-- `GET /reports/landlords/property-expenses` — requires `view-property-expenses-report`
-- `GET /reports/landlords/property-expenses/export` — requires `export-property-expenses-report`.
-  Takes a required `format` (`excel` | `pdf`) plus the same filters as the report (below) and
-  downloads the generated file — see [the shared contract](./README.md#permissions--export).
+- `GET /reports/suppliers/expenditure-reports/property-expenses` — requires
+  `view-property-expenses-report`
+- `GET /reports/suppliers/expenditure-reports/property-expenses/export` — requires
+  `export-property-expenses-report`. Takes a required `format` (`excel` | `pdf`) plus the same
+  filters as the report (below) and downloads the generated file — see
+  [the shared contract](./README.md#permissions--export).
+
+> **Deprecated paths.** This report used to live under landlords. `GET /reports/landlords/property-expenses`
+> and `GET /reports/landlords/property-expenses/export` still answer — same controllers, same
+> permissions, same payload — but are **deprecated aliases**: migrate to the paths above, which
+> are the only ones [`GET /reports`](./README.md#discovering-reports--get-reports) lists. The
+> permission names did not change.
 - Listed by [`GET /reports`](./README.md#discovering-reports--get-reports) — the discovery
   endpoint describes the report URL, permissions, filter descriptors, buckets and columns,
   summary keys and export formats, so none of it needs hardcoding.
@@ -41,7 +49,7 @@ and computed on the fly.
 
 ## Get the report
 
-`GET /api/v1/app/{company}/property-management/reports/landlords/property-expenses`
+`GET /api/v1/app/{company}/property-management/reports/suppliers/expenditure-reports/property-expenses`
 
 ### Filters (query params)
 
@@ -69,8 +77,8 @@ All filters are **optional** and flat (not nested under `filter[...]`). The six
 Example:
 
 ```
-GET …/reports/landlords/property-expenses?facility_id=1&period_from=2026-01-01&period_to=2026-01-31
-GET …/reports/landlords/property-expenses?landlord_id=7&period_from=2026-01-01&period_to=2026-01-31&currency_id=1
+GET …/reports/suppliers/expenditure-reports/property-expenses?facility_id=1&period_from=2026-01-01&period_to=2026-01-31
+GET …/reports/suppliers/expenditure-reports/property-expenses?landlord_id=7&period_from=2026-01-01&period_to=2026-01-31&currency_id=1
 ```
 
 ### Currency

@@ -53,9 +53,9 @@ segment its reports sit under:
 
 | Party | URL segment | Holds today |
 |---|---|---|
-| `landlord` | `landlords` | Income & Expenditure, Facility Budget, Property Expenses |
-| `supplier` | `suppliers` | parent groups `expenditure-reports`, `supplier-withholding` |
-| `tenant` | `tenants` | Billings & Collections, Tenancy Schedule, parent groups `collections-reports`, `tenancy-reports`, `tenant-withholding` |
+| `landlord` | `landlords` | Income & Expenditure, Facility Budget |
+| `supplier` | `suppliers` | parent groups `expenditure-reports` (Property Expenses), `supplier-withholding` |
+| `tenant` | `tenants` | Billings & Collections, parent groups `collections-reports`, `tenancy-reports` (Tenancy Schedule), `tenant-withholding` |
 | `system` | `system` | system reports (audit trail and the like) |
 | `accounting` | `accounting` | Trial Balance — a company-wide snapshot, not a party report |
 
@@ -73,6 +73,21 @@ parent stays top-level under its party, exactly as before.
 Five parent groups exist: `expenditure-reports` and `supplier-withholding` (supplier);
 `collections-reports`, `tenancy-reports` and `tenant-withholding` (tenant). Reports are added
 beneath them ticket by ticket; a group with no visible child is simply not shown.
+
+### Deprecated paths
+
+Two reports moved into parent groups. Their old URLs **still answer** — same controllers, same
+permissions, same payload — but are deprecated aliases kept only so existing integrations do not
+break. Migrate to the canonical path; it is the only one `GET /reports` lists.
+
+| Report | Deprecated (still works) | Canonical |
+|---|---|---|
+| Property Expenses | `GET …/reports/landlords/property-expenses` and `…/export` | `GET …/reports/suppliers/expenditure-reports/property-expenses` and `…/export` |
+| Tenancy Schedule | `GET …/reports/tenants/tenancy-schedule` and `…/export` | `GET …/reports/tenants/tenancy-reports/tenancy-schedule` and `…/export` |
+
+The permission names (`view-property-expenses-report`, `export-property-expenses-report`,
+`view-tenancy-schedule-report`, `export-tenancy-schedule-report`) are unchanged and gate both
+spellings identically. No new permission was introduced.
 
 ### Preset-filter children
 
@@ -153,12 +168,12 @@ Every node carries `type`, `key` and `label`. What else it carries depends on `t
   "key": "property-expenses",
   "label": "Property Expenses",
   "description": "A per-property register of expenses (supplier bills) for the period …",
-  "party": "landlord",
-  "url": "/api/v1/app/1/property-management/reports/landlords/property-expenses",
+  "party": "supplier",
+  "url": "/api/v1/app/1/property-management/reports/suppliers/expenditure-reports/property-expenses",
   "permissions": { "view": "view-property-expenses-report", "export": "export-property-expenses-report" },
   "can_export": true,                         // the caller holds permissions.export
   "export": {
-    "url": "/api/v1/app/1/property-management/reports/landlords/property-expenses/export",
+    "url": "/api/v1/app/1/property-management/reports/suppliers/expenditure-reports/property-expenses/export",
     "param": "format",                        // append ?format=… to the report's own query string
     "formats": ["excel", "pdf"]
   },
@@ -276,7 +291,7 @@ Every report has an `…/export` sibling at its own URL:
 
 ```
 GET …/reports/landlords/facility-budget/export?format=excel
-GET …/reports/tenants/tenancy-schedule/export?format=pdf&facility_id=1&period_from=2026-07-01
+GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facility_id=1&period_from=2026-07-01
 ```
 
 - **It accepts every filter its report accepts** — same flat param names, same defaults, including

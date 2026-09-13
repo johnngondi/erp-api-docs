@@ -1,6 +1,6 @@
 # Tenancy Schedule Report API
 
-Domain: `Property Management > Reports > Tenants`
+Domain: `Property Management > Reports > Tenants > Tenancy Reports`
 
 Base route:
 
@@ -30,10 +30,18 @@ report template (indent by `depth`); the envelope, bucket keys and cell shape ar
 
 ## Endpoints
 
-- `GET /reports/tenants/tenancy-schedule` — requires `view-tenancy-schedule-report`
-- `GET /reports/tenants/tenancy-schedule/export` — requires `export-tenancy-schedule-report`. Takes a
-  required `format` (`excel` | `pdf`) plus the same filters as the report (below) and downloads the
-  generated file — see [the shared contract](./README.md#permissions--export).
+- `GET /reports/tenants/tenancy-reports/tenancy-schedule` — requires `view-tenancy-schedule-report`
+- `GET /reports/tenants/tenancy-reports/tenancy-schedule/export` — requires
+  `export-tenancy-schedule-report`. Takes a required `format` (`excel` | `pdf`) plus the same
+  filters as the report (below) and downloads the generated file — see
+  [the shared contract](./README.md#permissions--export).
+
+> **Deprecated paths.** This report used to sit directly under tenants.
+> `GET /reports/tenants/tenancy-schedule` and `GET /reports/tenants/tenancy-schedule/export` still
+> answer — same controllers, same permissions, same payload — but are **deprecated aliases**:
+> migrate to the paths above, which are the only ones
+> [`GET /reports`](./README.md#discovering-reports--get-reports) lists. The permission names did
+> not change.
 - Listed by [`GET /reports`](./README.md#discovering-reports--get-reports) — the discovery
   endpoint describes the report URL, permissions, filter descriptors, buckets and columns,
   summary keys and export formats, so none of it needs hardcoding.
