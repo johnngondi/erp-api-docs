@@ -14,6 +14,7 @@ lines recorded as receipts and payment vouchers are processed (see
 ## Endpoints
 
 - `GET /accounts/{account}/transactions`
+- `GET /accounts/{account}/transactions/export` — the same statement as a PDF or Excel download
 
 ## Get a bank account statement
 
@@ -121,6 +122,106 @@ Field notes (`BankAccountTransactionResource`):
 | `debit` / `credit` | string | Decimal (5 dp), currency units. |
 | `balance` | number | Running cash balance up to and including this line. |
 | `transaction_at` | object | `{ raw, formatted, diff }`. |
+
+## Export the statement
+
+`GET /api/v1/app/{company}/property-management/settings/finance/banks/accounts/{account}/transactions/export`
+
+Download the statement above as a file. **It accepts every filter the statement itself accepts** —
+same param names, same default period — plus a required `format`. The statement is regenerated
+server-side from those filters, so what you download is always what the table is showing: export by
+**replaying the current query string with `format` appended**.
+
+- `format` — **required**, `excel` or `pdf`. Anything else ⇒ `422` on `format`.
+- `filter[transaction_at]` — optional, exactly as above, and still **defaults to the current month**.
+
+Authorization: the `view` ability on the bank account — the same check the statement itself makes.
+Anyone who can read the cashbook can export it; there is no separate export permission.
+
+Example:
+
+```
+GET …/banks/accounts/12/transactions/export?format=pdf&filter[transaction_at][from]=2026-06-01&filter[transaction_at][to]=2026-06-30
+```
+
+### Response
+
+**Not JSON** — a binary file with `Content-Disposition: attachment`:
+
+| `format` | `Content-Type` | Extension |
+|---|---|---|
+| `excel` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | `.xlsx` |
+| `pdf` | `application/pdf` | `.pdf` |
+
+The filename is built server-side and sent in the `Content-Disposition` header, e.g.
+`cashbook-statement_acme-properties_equity-collections-account_2026-06-01_2026-06-30.pdf`. Read it
+from the header rather than composing your own; fall back to `cashbook-statement.pdf` / `.xlsx` if
+it is unreadable.
+
+> **Note:** `Content-Disposition` is only readable cross-origin when the API exposes it
+> (`Access-Control-Expose-Headers`). If you cannot read it, use the fallback name.
+
+Fetch as a blob, not JSON:
+
+```js
+// The same query string the statement table is already using.
+const qs = new URLSearchParams(currentStatementQuery)
+qs.set('format', 'pdf')
+
+const res = await fetch(`${base}/settings/finance/banks/accounts/${accountId}/transactions/export?${qs}`, {
+  headers: { Accept: '*/*' },
+})
+
+if (!res.ok) {
+  // Validation errors still come back as JSON.
+  throw new Error((await res.json())?.message ?? 'Export failed')
+}
+
+const blob = await res.blob()
+const name = res.headers.get('Content-Disposition')?.match(/filename="(.+?)"/)?.[1]
+  ?? 'cashbook-statement.pdf'
+```
+
+### What the files contain
+
+Both formats render the same single cashbook table, one row per statement line in the same order
+the endpoint returns them:
+
+| Column | Source |
+|---|---|
+| Date | the line's `transaction_at`, formatted `05 Jun, 2026` |
+| Ref | the line's `refference_number` |
+| Particulars | the line's `notes` |
+| Property | the line's `facility.name` |
+| Payee | the line's `payee.name` |
+| Debit | the line's `debit` (money in) |
+| Credit | the line's `credit` (money out) |
+| Balance | the line's running `balance` |
+
+`Property` and `Payee` are blank on lines that carry none — bank-side entries such as charges and
+interest, and vouchers spread across more than one property (see
+[How lines are recorded](#how-statement-lines-are-recorded)). Blank cells print as empty, not `null`.
+
+The table is opened by a **Balance B/F** row (`brought_forward`) and closed by a **Total** row (the
+period `totals`) and a **Balance C/F** row (`carried_forward`), matching the
+[balance convention](#balance-convention) exactly: `B/F + Total Debit − Total Credit = C/F`. B/F and
+Total are bold; C/F is bold and tinted. Amounts carry the **bank account's own currency code** —
+a cashbook is single-currency because the account is.
+
+- **PDF** — **landscape** A4, flowing onto further pages for a long period. Landscape rather than
+  the portrait the tenant and vendor statements use: this table is eight columns wide and would
+  squeeze `Particulars` unreadably in portrait. It opens with the company letterhead (logo, name,
+  tagline, contact details) and a panel naming the statement: **Bank Account** on the left, as
+  `{account name} - {account number}`, and **Report** / **Period** on the right.
+- **Excel** — a single worksheet, same rows and columns, no letterhead. The filename is what
+  identifies it.
+
+### Errors
+
+- `422` — `format` missing or not `excel`/`pdf`, or a `filter[transaction_at]` bound that is not a
+  date. Same JSON error shape as the statement endpoint.
+- `403` — the user lacks the `view` ability on the bank account.
+- `404` — no such bank account in this company.
 
 ## How statement lines are recorded
 

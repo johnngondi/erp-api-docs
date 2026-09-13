@@ -13,6 +13,7 @@ lifecycle (see [How lines are recorded](#how-statement-lines-are-recorded)).
 ## Endpoints
 
 - `GET /vendor-statements`
+- `GET /vendor-statements/export` — the same statement as a PDF or Excel download
 
 ## Get a vendor statement
 
@@ -115,6 +116,93 @@ Field notes (`FacilityVendorStatementResource`):
 | `debit` / `credit` | string | Decimal (5 dp), currency units. |
 | `balance` | number | Running balance up to and including this line. |
 | `transaction_at` | object | `{ raw, formatted, diff }`. |
+
+## Export the statement
+
+`GET /api/v1/app/{company}/property-management/finance/vendor-statements/export`
+
+Download the statement above as a file. **It accepts every filter the statement itself accepts** —
+same param names, same defaults — plus a required `format`. The statement is regenerated
+server-side from those filters, so what you download is always what the table is showing: export by
+**replaying the current query string with `format` appended**.
+
+- `format` — **required**, `excel` or `pdf`. Anything else ⇒ `422` on `format`.
+- `filter[vendor_id]` — **required**, as on the statement itself.
+- `filter[facility_contract_id]`, `filter[transaction_at]` — optional, exactly as above.
+
+Example:
+
+```
+GET …/finance/vendor-statements/export?format=pdf&filter[vendor_id]=7&filter[transaction_at][from]=2026-06-01&filter[transaction_at][to]=2026-06-30
+```
+
+### Response
+
+**Not JSON** — a binary file with `Content-Disposition: attachment`:
+
+| `format` | `Content-Type` | Extension |
+|---|---|---|
+| `excel` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | `.xlsx` |
+| `pdf` | `application/pdf` | `.pdf` |
+
+The filename is built server-side and sent in the `Content-Disposition` header, e.g.
+`vendor-statement_acme-properties_acme-plumbing_2026-06-01_2026-06-30.pdf`. Read it from the header
+rather than composing your own; fall back to `vendor-statement.pdf` / `.xlsx` if it is unreadable.
+
+> **Note:** `Content-Disposition` is only readable cross-origin when the API exposes it
+> (`Access-Control-Expose-Headers`). If you cannot read it, use the fallback name.
+
+Fetch as a blob, not JSON:
+
+```js
+// The same query string the statement table is already using.
+const qs = new URLSearchParams(currentStatementQuery)
+qs.set('format', 'pdf')
+
+const res = await fetch(`${base}/finance/vendor-statements/export?${qs}`, {
+  headers: { Accept: '*/*' },
+})
+
+if (!res.ok) {
+  // Validation errors still come back as JSON.
+  throw new Error((await res.json())?.message ?? 'Export failed')
+}
+
+const blob = await res.blob()
+const name = res.headers.get('Content-Disposition')?.match(/filename="(.+?)"/)?.[1]
+  ?? 'vendor-statement.pdf'
+```
+
+### What the files contain
+
+Both formats render the same single statement table:
+
+| Column | Source |
+|---|---|
+| Date | the line's `transaction_at`, formatted `05 Jun, 2026` |
+| Particulars | the line's `notes` |
+| Debit | the line's `debit` |
+| Credit | the line's `credit` |
+| Balance | the line's running `balance` |
+
+It is opened by a **Balance B/F** row (`brought_forward`) and closed by a **Total** row (the period
+`totals`) and a **Balance C/F** row (`carried_forward`). B/F and Total are bold; C/F is bold and
+tinted. Amounts carry the base currency code — vendor statements are single-currency.
+
+- **PDF** — portrait A4, flowing onto further pages for a long period. It opens with the company
+  letterhead (logo, name, tagline, contact details) and a panel naming the statement: **Vendor** on
+  the left — with the contract appended (`Acme Plumbing - Quarterly Maintenance`) when filtered by
+  `facility_contract_id` — and **Report** / **Period** on the right.
+- **Excel** — a single worksheet, same rows and columns, no letterhead. The filename is what
+  identifies it.
+
+### Errors
+
+- `422` — `format` missing or not `excel`/`pdf`, or `filter[vendor_id]` missing. Same JSON error
+  shape as the statement endpoint.
+- `403` — the user lacks `view-facility-bill`. That is the same permission the statement itself
+  requires: **anyone who can read the statement can export it**, there is no separate export
+  permission.
 
 ## How statement lines are recorded
 

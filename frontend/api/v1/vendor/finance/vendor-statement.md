@@ -14,6 +14,7 @@ lifecycle (the same data as the app-side statement — see the
 ## Endpoints
 
 - `GET /vendor-statements`
+- `GET /vendor-statements/export` — the same statement as a PDF or Excel download
 
 ## Get my statement
 
@@ -83,3 +84,60 @@ Sample response:
 
 Field notes match the app-side `FacilityVendorStatementResource` — see the
 [app doc](../../app/property-management/finance/vendor-statement.md#get-a-vendor-statement).
+
+## Export my statement
+
+`GET /api/v1/vendor/finance/vendor-statements/export`
+
+Download the statement above as a file. **It accepts every filter the statement itself accepts** —
+same param names, same defaults — plus a required `format`, and the vendor is inferred from the
+authenticated user exactly as it is on the statement. The statement is regenerated server-side, so
+export by **replaying the current query string with `format` appended**.
+
+- `format` — **required**, `excel` or `pdf`. Anything else ⇒ `422` on `format`.
+- `filter[facility_contract_id]`, `filter[transaction_at]` — optional, exactly as above.
+
+Example:
+
+```
+GET /api/v1/vendor/finance/vendor-statements/export?format=pdf&filter[transaction_at][from]=2026-06-01&filter[transaction_at][to]=2026-06-30
+```
+
+### Response
+
+**Not JSON** — a binary file with `Content-Disposition: attachment`:
+
+| `format` | `Content-Type` | Extension |
+|---|---|---|
+| `excel` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | `.xlsx` |
+| `pdf` | `application/pdf` | `.pdf` |
+
+The filename is built server-side and sent in the `Content-Disposition` header, e.g.
+`vendor-statement_acme-properties_acme-plumbing_2026-06-01_2026-06-30.pdf`. Read it from the header
+rather than composing your own; fall back to `vendor-statement.pdf` / `.xlsx` if it is unreadable.
+
+> **Note:** `Content-Disposition` is only readable cross-origin when the API exposes it
+> (`Access-Control-Expose-Headers`). If you cannot read it, use the fallback name.
+
+Fetch it as a blob, not JSON — see the
+[app doc](../../app/property-management/finance/vendor-statement.md#export-the-statement) for the
+snippet; only the URL differs.
+
+### What the files contain
+
+The same single statement table as the app-side export — Date / Particulars / Debit / Credit /
+Balance, opened by **Balance B/F** and closed by **Total** and **Balance C/F** — laid out portrait
+in the PDF and on one worksheet in Excel. See
+[What the files contain](../../app/property-management/finance/vendor-statement.md#what-the-files-contain).
+
+> **Letterhead is best-effort on this portal.** Portal routes carry no `{company}` segment, so the
+> managing company is derived from the statement's own lines (via their contract, else the bill or
+> voucher behind them). When a period's lines resolve to exactly one company its letterhead is
+> printed; when they span several, or none can be resolved, the PDF is produced **without a
+> letterhead** and the filename uses a generic `company` segment. The statement table itself is
+> unaffected.
+
+### Errors
+
+- `422` — `format` missing or not `excel`/`pdf`. Same JSON error shape as the statement endpoint.
+- No separate permission: if you can read your statement you can export it.

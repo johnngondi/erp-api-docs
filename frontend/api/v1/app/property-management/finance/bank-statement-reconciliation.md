@@ -24,7 +24,8 @@ Reconciling a bank statement is a four-step flow:
 4. **Report** — once the matches are worked through, generate the bank
    reconciliation statement. `full_account` proves the **adjusted cashbook balance**
    two ways — from our books (± omissions & errors) and from the bank (± timing,
-   bank issues, suspense) — and they must agree.
+   bank issues, suspense) — and they must agree. The finished
+   statement downloads as PDF or Excel (§4.1).
 
 The classification vocabulary is fetched once from the
 [classifications endpoint](#classification-taxonomy) so the classify pickers stay
@@ -675,6 +676,95 @@ one debit line:
 - All amounts 2 dp; no intermediate rounding.
 - The report is deterministic and read-only — regenerate freely after each resolve
   to watch the difference close.
+
+---
+
+## 4.1 Export the reconciliation report
+
+`POST .../{account}/reconciliations/report/export/pdf`
+`POST .../{account}/reconciliations/report/export/excel`
+
+Download the report from §4 as a file. **The request body is identical to
+`reconciliations/report`** — same `statement_token`, same optional `report_type` —
+so the export reuses the call you already make; only the URL changes. Both routes
+regenerate the report server-side from the cached statement, so what you download
+always matches what the table is showing.
+
+Request body (`application/json`):
+- `statement_token` (string, required) — the token from the extract step.
+- `report_type` (string, optional) — `full_account` (default) or `credits_only`.
+
+```json
+{ "statement_token": "9f1c2b6e-…", "report_type": "full_account" }
+```
+
+### Response
+**Not JSON** — a binary file with `Content-Disposition: attachment`:
+
+| Route | `Content-Type` | Extension |
+|---|---|---|
+| `.../export/pdf` | `application/pdf` | `.pdf` |
+| `.../export/excel` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | `.xlsx` |
+
+The filename is built server-side and sent in the `Content-Disposition` header, e.g.
+`bank-reconciliation_acme-properties_2026-07-01_2026-07-09.xlsx`. Read it from the
+header rather than composing your own; fall back to `bank-reconciliation.pdf` /
+`.xlsx` if the header is unreadable.
+
+Fetch as a blob, not JSON:
+
+```js
+const res = await fetch(`${base}/reconciliations/report/export/excel`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Accept: '*/*' },
+  body: JSON.stringify({ statement_token: token, report_type: reportType }),
+})
+
+if (!res.ok) {
+  // Validation errors still come back as JSON (see below).
+  throw new Error((await res.json())?.message ?? 'Export failed')
+}
+
+const blob = await res.blob()
+const name = res.headers.get('Content-Disposition')?.match(/filename="(.+?)"/)?.[1]
+  ?? 'bank-reconciliation.xlsx'
+```
+
+> **Note:** `Content-Disposition` is only readable cross-origin when the API exposes
+> it (`Access-Control-Expose-Headers`). If you cannot read it, fall back to the
+> default name above.
+
+### What the files contain
+Both formats are generated from the same §4 envelope, laid out so the statement
+comes first and each supporting working follows it:
+
+- **PDF** — portrait A4. **Page 1** is the reconciliation statement (the `rows[]`
+  table) under the company letterhead, with the account, period and report title.
+  **Each subsequent page** is one `detail_schedule` group, headed
+  `{group} ({op})` (e.g. `Unpresented Payments (Cheques / EFTs Issued) (LESS)`) and
+  closed by a `Total` row equal to that group's `subtotal`.
+- **Excel** — **tab 1** is the reconciliation statement, then **one tab per
+  `detail_schedule` group**, in the same order, each named `{n} {group}` (e.g.
+  `2 Unrecognised Credits on Ba`). Excel caps sheet names at 31 characters and
+  rejects `* : / \ ? [ ]`, so a long or punctuated group name is trimmed and its
+  slashes swapped for `-` in the **tab name only** — the heading inside the sheet
+  keeps the full label.
+
+Rendering matches the on-screen table: `ADD` / `LESS` rows are prefixed `ADD: ` /
+`LESS: `, `OPENING` and `SUBTOTAL` are bold, and `RESULT` is emphasised and
+coloured green when `reconciling_difference.status` is `balanced`, red otherwise.
+Amounts carry the bank account's currency code.
+
+**Groups with no items are omitted** from both formats. This matters for
+`credits_only`, which always returns its four `detail_schedule` groups even when
+empty (see §4) — an export of that sample produces a single PDF page and a
+single worksheet tab, not five of each.
+
+### Errors
+- `422` — `statement_token` expired, missing, or belonging to another account.
+  Same JSON error shape as §4; re-run the extract step and retry.
+- `403` — the user lacks `view-bank-account` (the same permission §4 requires, so
+  anyone who can see the report can export it — no separate export permission).
 
 ---
 
