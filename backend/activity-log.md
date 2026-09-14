@@ -17,8 +17,9 @@ row to `activity_log` carrying:
 | `log_name` | The kind of record, slugged from its label (`invoice`, `property`, …). |
 | `resource_url` | Where to send a reader who wants to see the record. **Relative.** |
 
-The package is [`spatie/laravel-activitylog`](https://spatie.be/docs/laravel-activitylog). Nothing
-below replaces its documentation — it covers the parts this codebase does differently.
+The package is [`spatie/laravel-activitylog`](https://spatie.be/docs/laravel-activitylog), and it
+is held behind a seam — see [Changing the logging package](#changing-the-logging-package). Nothing
+below replaces its documentation; this covers the parts this codebase does differently.
 
 ---
 
@@ -36,8 +37,9 @@ class FacilityInvoice extends Model
 }
 ```
 
-That is the whole change. The trait supplies `getActivitylogOptions()`, so a model never writes
-one, and a test (`ActivityLogFoundationTest`) fails if a model in `app/Models` is missing it.
+That is the whole change. The trait answers the package's model-side contract on the model's
+behalf, so a model never writes one, and a test (`ActivityLogFoundationTest`) fails if a model in
+`app/Models` is missing it.
 
 **Nothing else is required.** A model with no configuration logs with a conventional label (its
 class name, headlined), a conventional title (the first of `cu_invoice_number`, `invoice_number`,
@@ -55,8 +57,8 @@ App\Models\FacilityInvoice::class => [
 ```
 
 To stop a model logging entirely, add it to `audit.ignore`. That list is enforced at runtime, so a
-model keeps the trait and simply stays quiet — the activity model itself is there, because logging
-the log is a loop.
+model keeps the trait and simply stays quiet. The driver's own activity model is excluded
+automatically — logging a log is a loop — so it never needs naming there.
 
 ---
 
@@ -235,19 +237,56 @@ Every model being auditable means this table grows faster than any other in the 
 indexes are in place from the first migration, because adding them later is an `ALTER` on a table
 already holding millions of rows:
 
-| Index | Columns |
-|---|---|
-| `activity_log_causer_created_index` | `causer_id`, `causer_type`, `created_at` |
-| `activity_log_subject_type_created_index` | `subject_type`, `created_at` |
-| `activity_log_event_created_index` | `event`, `created_at` |
-| `activity_log_created_at_index` | `created_at` |
+| Index | Columns | Serves |
+|---|---|---|
+| `activity_log_subject_created_index` | `subject_type`, `subject_id`, `created_at` | One record's own history — the most common query the trail will run |
+| `activity_log_subject_id_index` | `subject_id` | A lookup by id alone, without naming the type |
+| `activity_log_subject_type_created_index` | `subject_type`, `created_at` | Everything that happened to one kind of record |
+| `activity_log_causer_created_index` | `causer_id`, `causer_type`, `created_at` | Everything one person did |
+| `activity_log_event_created_index` | `event`, `created_at` | Everything of one kind — every deletion, say |
+| `activity_log_created_at_index` | `created_at` | The unfiltered trail |
 
 Each leads with the column the audit endpoint filters on and carries `created_at` behind it: the
 filter narrows, the index supplies the newest-first order without a sort.
 
+`subject_id` is indexed on its own because an index is only usable from its leftmost column — the
+composite above cannot serve a query that gives an id without a type. The package's own
+`(subject_type, subject_id)` index is dropped by the same migration: it is exactly the leading pair
+of the composite, so it could only duplicate work on a table where every write pays for every
+index.
+
 The package's own retention command deletes rows older than
 `config('activitylog.delete_records_older_than_days')` (365). Schedule
 `activitylog:clean` before this table becomes a problem.
+
+---
+
+## Changing the logging package
+
+The package is confined to **two files**, and no model names it:
+
+| File | What it is |
+|---|---|
+| `App\Models\Concerns\Auditing\SpatieActivitylogBridge` | The model-side half. Translates this codebase's `AuditOptions` into the package's `LogOptions`, and stamps `resource_url` through the package's tap hook. |
+| `App\Services\Audit\Drivers\SpatieActivitylogDriver` | The runtime half, implementing `App\Services\Audit\Contracts\AuditDriver`: binding a causer, and naming the model that reads the rows back. |
+
+Everything else — `AuditRegistry`, `ActivityDescriber`, `ActivityContext`, the describers,
+`ResourceUrlResolver`, `AuditOptions`, `AuditOptionsFactory`, `config/audit.php` — takes an
+Eloquent model and an event name and returns a string or a URL. None of it knows what writes the
+row.
+
+To run on something else:
+
+1. Write a bridge implementing the new package's model-side contract in terms of `auditOptions()`
+   and `auditResourceUrl()`.
+2. Write a driver implementing `AuditDriver`.
+3. Change the one `use` line in `App\Models\Concerns\Auditable`, and point `audit.driver` at the
+   new driver.
+
+**No model changes.** What that does *not* buy you: the stored shape. Which Eloquent events are
+recorded, what "only if dirty" means, and `properties` holding `attributes` / `old` are behaviours
+of the current package, and the audit trail report reads that table and that column directly. A
+replacement has to reproduce them or the stored history changes shape.
 
 ---
 
