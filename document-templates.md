@@ -103,7 +103,7 @@ bank accounts collect rent/charges — see
 ## 3. The Block Registry
 
 Server-authoritative. Resolved as a singleton in `AppServiceProvider` with an
-explicit list of 25 block instances.
+explicit list of 34 block instances.
 
 ### Field (`Fields/Field.php`)
 
@@ -116,7 +116,7 @@ e.g. `tenant.tax_pin`), `default_label` (passed through `__()`), `data_path`,
 Each block declares:
 
 - `key()`, `label()`, `description()`, `icon()`
-- `presentation()` — how the frontend should draw it: `fields|table|image|qr|text|divider`.
+- `presentation()` — how the frontend should draw it: `fields|table|image|qr|text|divider|sign_off`.
   Orthogonal to `isFlow()`: several table blocks (`tax_summary`, `payments`,
   `invoice_ageing`, …) are tabular but must not paginate.
 - `documentTypes()` — which types it applies to (shared blocks use the
@@ -127,18 +127,21 @@ Each block declares:
   `tableSchema()` helper (`min_rows`, `min_row_height`, `show_row_numbers`,
   `zebra`, `background_color`, `label_color`, merged over `appearanceSchema()`).
 - `view()` — Blade partial (`document-blocks.{key}`)
-- `isFlow()` — only the three `*_items` blocks (`invoice_items`,
-  `credit_note_items`, `lpo_items`) return true (the paginating sections)
+- `isFlow()` — the `*_items` blocks (`invoice_items`, `credit_note_items`,
+  `lpo_items`, `voucher_items`) plus the two remittance tables
+  (`remittance_collections`, `remittance_expenses`) return true (the
+  paginating sections)
 - `resolveLabel($fieldKey, $config)` — 3-tier label resolution (see §5)
 
-### Blocks shipped (25)
+### Blocks shipped (34)
 
-**Shared / layout — all four types**
+**Shared / layout — all six types**
 
 | Block | Presentation | Notes |
 | --- | --- | --- |
 | `logo` | image | `company.logo_url`; `max_height_mm`, `min_height_mm` (own image sizing, distinct from the shared `style.min_height` block-box mechanism — see §4/§7), `align` |
 | `company_header` | fields | `company.name`, `.tax_pin`, `.address`, `.phone`, `.email`, `.website`, `.tagline`. No `show_logo` toggle — the logo is its own block. |
+| `document_title` | text | The document's own name in large type. Defaults to the mapper's `document.title` (TAX INVOICE / RECEIPT / CREDIT NOTE / LOCAL PURCHASE ORDER / PAYMENT VOUCHER / REMITTANCE ADVICE); `text` overrides it, `uppercase` (default true), `font_size` (8–48), `align`. |
 | `free_text` | text | `heading_text` + static `content` |
 | `divider_line` | divider | `orientation`, `line_color`, `line_width`, `margin_top`/`margin_bottom` (a visual nudge via `transform`, not a flow margin) |
 
@@ -146,7 +149,8 @@ Each block declares:
 
 | Block | Types | Fields |
 | --- | --- | --- |
-| `landlord_details` | all 4 | `landlord.name`, `.tax_pin`, `.phone`, `.email`, `property.name`, `.address`, `.lr_number` |
+| `landlord_details` | invoice, receipt, credit note, lpo, remittance | `landlord.name`, `.tax_pin`, `.phone`, `.email`, `property.name`, `.address`, `.lr_number`. Deliberately **not** `SharedAcrossDocuments`: a payment voucher has no landlord of its own, so the block would render only empty rows there. |
+| `payee_details` | payment voucher | `payee.name`, `.tax_pin`, `.address` — who the voucher pays (a user, per the voucher's `payable_as`) |
 | `tenant_details` | invoice, receipt, credit note | `tenant.name`, `.lease_id`, `.tax_pin`, `.phone`, `.email`, `.unit` |
 | `vendor_details` | lpo | `vendor.name`, `.tax_pin`, `.phone`, `.email`, `.address` |
 
@@ -158,6 +162,8 @@ Each block declares:
 | `credit_note_details` | credit note | `document.number` (`CN0001`), `.issued_at`, `.status`, `.currency`, `.invoice_number` |
 | `receipt_details` | receipt | `document.number` (`RCP0001`), `.issued_at`, `.served_by`, `.status`, `.currency` |
 | `lpo_details` | lpo | `document.number` (`LPO0001`), `.issued_at`, `.due_at` (delivery), `.status`, `.currency` |
+| `voucher_details` | payment voucher | `document.number` (`PV0001`), `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
+| `remittance_details` | remittance | `document.number` (`REM0001`), `landlord.name`, `property.name`, `document.period`, `.issued_at`, `.status` |
 
 **Content blocks**
 
@@ -177,6 +183,11 @@ Each block declares:
 | `payment_transactions` | receipt | table | `transactions.transaction_date`, `.transaction_number`, `.method`, `.amount` |
 | `invoice_allocations` | credit note, receipt | table | Invoices this document cleared: `allocations.invoice_number`, `.invoice_date`, `.invoice_total`, `.allocated`, `.balance` |
 | `signatories` | **lpo only** | fields | See §4.1 — replaces the generic signature block on LPOs specifically |
+| `sign_off` | payment voucher, remittance | sign_off | Rows of labelled fill-in slots to sign by hand. See §4.3 |
+| `voucher_items` | payment voucher | table, **flow** | What the voucher pays, with data-driven withholding columns and a total-paid footer. See §4.2 |
+| `remittance_summary` | remittance | fields | `summary.is_advance`, `.total_collections`, `.total_expenses`, `.advance_remittances`, `.total_withheld`, `.total_remitted`. See §4.4 for where each comes from |
+| `remittance_collections` | remittance | table, **flow** | `collections.receipt_number`, `.transaction_date`, `.credit_account`, `.method`, `.reference`, `.tenant`, `.amount` |
+| `remittance_expenses` | remittance | table, **flow** | `expenses.bill_number`, `.transaction_date`, `.reference`, `.supplier`, `.service`, `.amount` |
 
 ### Serialized form (`BlockRegistry::toArray($documentType)`)
 
@@ -197,7 +208,8 @@ landlord:       { name, tax_pin, phone, email }
 property:       { name, address, lr_number, city, country }
 tenant:         { name, lease_id, tax_pin, phone, email, unit }        # invoice/cn/receipt
 vendor:         { name, tax_pin, phone, email, address }               # lpo
-document:       { number, raw_number, issued_at, due_at, status, notes, currency,
+payee:          { name, tax_pin, address, phone, email }               # payment voucher
+document:       { title, number, raw_number, issued_at, due_at, status, notes, currency,
                    invoice_number, cu_invoice_number, cu_serial_number, verify_url, served_by }
 items[]:        { description, notes, quantity, unit_price, amount, tax, tax_rate, total,
                    is_utility_bill, previous_reading: {value, read_at, image_url},
@@ -211,10 +223,21 @@ bank_accounts[]:{ component, bank_name, branch, account_name, account_number }  
 payment_account:{ bank_name, branch, account_name, account_number }    # receipt
 transactions[]: { transaction_date, transaction_number, method, amount }  # receipt
 approval_chain[]: { name, date }                                       # lpo, see §4.1
+signoff:        { prepared_by, prepared_at }                           # voucher, remittance
+withholding_columns[]: [ "WHT Professional", … ]                       # voucher, see §4.2
+summary:        { is_advance, total_collections, total_expenses,
+                   advance_remittances, total_withheld, total_remitted }  # remittance, see §4.4
+collections[]:  { receipt_number, transaction_date, credit_account, method,
+                   reference, tenant, amount }                          # remittance
+expenses[]:     { bill_number, transaction_date, reference, supplier, service, amount }  # remittance
 ```
 
+`document.title` is a constant per document type, supplied by the mapper and
+rendered by the `document_title` master block.
+
 `document.number` is the **D1** formatted number — `{PREFIX}` + the row id
-zero-padded to 4 digits (`INV0001`, `CN0112`, `RCP0481`, `LPO0219`), computed at
+zero-padded to 4 digits (`INV0001`, `CN0112`, `RCP0481`, `LPO0219`, `PV0193`,
+`REM0212`; the remittance advice also formats bill ids as `BILL0774`), computed at
 render time in the mapper (`FormatsDocumentNumbers::prefixed()`). There is no
 stored sequence column; ids ≥ 10000 are not truncated, just not zero-padded
 beyond their natural width.
@@ -274,6 +297,95 @@ per-block-instance config, not a document-level property:
 `CreateLpoAction` only ever runs once a procurement request's last step
 approves, so by the time an LPO document exists the chain is always complete;
 no status filtering is needed when building `approval_chain`.
+
+---
+
+### 4.2 Voucher items & withholding columns
+
+A payment voucher pays a mix of supplier bills (`FacilityBill`) and landlord
+remittances (`FacilityRemittance`) through one polymorphic item table, so
+`PaymentVoucherPayloadMapper` builds each row from whichever model it points at:
+
+| Column | Bill | Remittance |
+| --- | --- | --- |
+| `items.transaction_date` | `item.transaction_at` ?: `bill.invoice_date` ?: `bill.created_at` | `item.transaction_at` ?: `remittance.created_at` |
+| `items.property` | `bill.facility.name` | `remittance.facility.name` |
+| `items.memo` | `item.notes` ?: `bill.notes` | `item.notes` ?: `remittance.notes` |
+| `items.total` | `bill.total` | `remittance.remittable_amount` |
+| `items.payable` | `bill->payableAmount()` | `remittance.remittable_amount` |
+| `items.paid` | `item.amount` | `item.amount` |
+
+The item relation is loaded with a nested `morphWith` inside `map()` rather than
+through config `with`: config is cached in production and cannot hold a closure.
+
+**Withholdings are data-driven columns.** Which taxes a bill carries varies by
+company and by bill, so they cannot be declared as `Field`s. The mapper
+publishes `withholding_columns` — the distinct withholding tax names across the
+whole voucher, in first-seen order — and each item carries a `withholdings` map
+keyed by the same names. The `voucher_items` Blade turns each into a column,
+inserted directly after `items.total` (or appended last if that column is
+deselected), printing `—` where a tax does not apply so remittance rows stay
+aligned. `config.withholding_columns` switches this:
+
+- `per_tax` (default) — one column per tax
+- `total` — a single combined column, labelled by `withholding_total_label`
+- `none` — no withholding column at all
+
+Withholdings are filtered on **`amount > 0`, not `balance > 0`**: one that has
+since been paid or remitted still belongs on the voucher, which is a record of
+what was withheld from that bill at the time. `items.payable` is
+`FacilityBill::payableAmount()`, which is balance-based and so only nets off
+withholdings that are *still outstanding*. On a bill whose withholding has
+already been remitted the two therefore do not reconcile, by design: the
+withholding column says what was withheld, `payable` says what is owed today.
+
+The footer row is the voucher's own `totals.paid` (`vouchers.amount`), not a
+re-sum of the rows — toggled by `show_total_row`, labelled by `total_label`.
+
+### 4.3 Sign-off rows
+
+`sign_off` is one block used several times per document (the voucher's
+"Approval details" and "Recipient details"), because the only difference
+between them is the heading and the row labels. `config.rows` is a list of
+`{ cells: [{ label, source }] }`; a cell with a `source` prints that payload
+value, a cell without one prints a ruled line to write on.
+
+```json
+{"type": "block", "block": "sign_off", "config": {
+    "heading_text": "Approval details",
+    "rows": [
+        {"cells": [
+            {"label": "Prepared By", "source": "signoff.prepared_by"},
+            {"label": "Sign",        "source": null},
+            {"label": "Date",        "source": "signoff.prepared_at"}
+        ]},
+        {"cells": [
+            {"label": "Checked By", "source": null},
+            {"label": "Sign",       "source": null},
+            {"label": "Date",       "source": null}
+        ]}
+    ]
+}}
+```
+
+`source` may only be one of the block's own `availableFields()` keys
+(`signoff.prepared_by`, `signoff.prepared_at`) or `null` — the `LayoutValidator`
+enforces that along with at most 12 rows, at most 4 cells per row, and a
+non-blank label of at most 60 characters on every cell.
+
+### 4.4 Remittance summary figures
+
+Three of the six summary values are stored columns on `facility_remittances`;
+two are not stored anywhere and are computed by the mapper at render time.
+
+| Field | Source |
+| --- | --- |
+| `summary.is_advance` | `is_advance`, as Yes/No |
+| `summary.total_collections` | **`total_income`** — note the column name |
+| `summary.total_expenses` | `total_expenses` (already includes the management-fee expense, which `CreateRemittanceAction` posts as a bill and attaches — so it is also a row in the Expenses table) |
+| `summary.total_remitted` | `remittable_amount` |
+| `summary.advance_remittances` | **computed** — advance remittances for this facility whose period sits inside this remittance's period, excluding pending ones and this row itself. Mirrors the query `ComputeRemittableAmountService` ran at creation time, so the printed figure matches what was actually deducted. Zero on an advance remittance itself. |
+| `summary.total_withheld` | **computed** — the sum of this remittance's own receipts taken through a payment method with `payment_methods.is_withholding` (withholding VAT, withholding rental income): collected, but paid to KRA rather than into the account. Scoped to the remittance's own receipts so it reconciles against the Collections table printed alongside it. |
 
 ---
 
@@ -478,13 +590,28 @@ and access is enforced by each portal's ownership query (**not** the permission-
 ## 10. Seeding
 
 `DocumentTemplateSeeder` (registered in `DatabaseSeeder`, and now also invoked
-from `Company::booted()`'s `created` hook — every new company gets its four
+from `Company::booted()`'s `created` hook — every new company gets its six
 default templates immediately, not just via a manual seeder run) delegates the
-per-company body to `SeedDefaultDocumentTemplatesAction`, which builds **four
+per-company body to `SeedDefaultDocumentTemplatesAction`, which builds **six
 bespoke per-type layouts** (not one generic shape shared across types — see
 `SeedDefaultDocumentTemplatesAction::invoiceLayout()`/`creditNoteLayout()`/
-`receiptLayout()`/`lpoLayout()`). `facility_ids = NULL`, `is_default = true`.
+`receiptLayout()`/`lpoLayout()`/`paymentVoucherLayout()`/`remittanceLayout()`).
+`facility_ids = NULL`, `is_default = true`.
 Idempotent via `firstOrNew` on `(company_id, document_type, name)`.
+
+**Re-running is non-destructive.** `layout` and `page_setup` are only written
+when the row is new; flags (`is_default`, `is_active`, `schema_version`) are
+written every time. That is what makes it safe to re-run the seeder across
+existing companies to hand them a newly shipped document type — a customized
+"— Standard" layout is left exactly as it is. After shipping a new type:
+
+```
+php artisan db:seed --class=DocumentTemplateSeeder
+```
+
+Existing companies keep their saved layouts, so they do not pick up blocks
+added to the stock layouts (e.g. `document_title`); those are one drag away in
+the designer palette.
 
 Permissions live in `storage/app/seeders/permissions.json`
 (`view/create/update/delete-document-template`; facility bank accounts have
@@ -519,7 +646,14 @@ can lose a user's saved template customization.
 - **New document type:** add an entry to `config/document_templates.php`
   (`model`, `resource`, `mapper`, `with`, `facility_path`, `party`), a
   `PayloadMapper`, and (optionally) seed a default. Shared blocks become
-  available automatically.
+  available automatically — which is the trap: every `SharedAcrossDocuments`
+  block instantly applies to the new type, so check each one actually has data
+  there and give it an explicit `documentTypes()` list if not (this is why
+  `landlord_details` no longer uses the trait). `facility_path` may be `null`
+  for a document that has no single owning facility — the render controller and
+  the portals both skip the applicability check when it resolves to empty.
+  The two suite-wide tests in `PropertyManagementDocumentTemplateTest` iterate
+  the config, so a new type is covered the moment it is registered.
 - **Pagination beyond "one flow section" per document:** out of scope — the
   `isFlow()` hook on blocks is the extension point.
 
@@ -543,6 +677,16 @@ and document-number formatting including ids ≥ 10000.
 signatory counts 1/2/3/5, the short-chain no-padding fallback, and an
 end-to-end case building a real procurement request + approval-step chain and
 confirming `LpoPayloadMapper` produces the expected `approval_chain`.
+
+`tests/Feature/DocumentTemplateVoucherAndRemittanceTest.php` covers the payment
+voucher and remittance advice: per-tax withholding columns (including one that
+has been fully paid, which must still print, and a zero-amount one, which must
+not); the total-paid footer and the `per_tax`/`total`/`none` column modes;
+`total_withheld` counting only withholding-method receipts; `advance_remittances`
+summing in-period non-pending advances and excluding the remittance itself; the
+collection/expense row mapping; `sign_off` rendering and validation; the
+`document_title` payload/override/case behaviour; and that re-running the
+seeder adds the new templates without overwriting a customized layout.
 
 `tests/Feature/PropertyManagementFacilityBankAccountTest.php` covers Phase 0's
 CRUD, the `remittance` purpose value, and the landlord-wizard fan-out

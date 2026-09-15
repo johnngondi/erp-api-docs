@@ -95,14 +95,15 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 
 > Re-fetch the registry when the user switches `document_type`.
 
-### 1.1 The 25 blocks
+### 1.1 The 34 blocks
 
-**Shared / layout — all four types**
+**Shared / layout — all six types**
 
 | Key | Presentation | Fields / config |
 | --- | --- | --- |
 | `logo` | image | `company.logo_url`; `max_height_mm`, `min_height_mm` (bounds the `<img>` itself — distinct from the `style.min_height` every block also accepts, §4.3), `align`, `source_url` (absolute http(s) URL that replaces the company logo for this template; `""` = use `company.logo_url`; other schemes are a `422`) |
 | `company_header` | fields | `company.name`, `.tax_pin`, `.address`, `.phone`, `.email`, `.website`, `.tagline`. No logo toggle — logo is its own block. |
+| `document_title` | text | The document's own name in large type — `document.title`, overridable per template. See §1.4 |
 | `free_text` | text | `heading_text` + static `content` |
 | `divider_line` | divider | `orientation`, `line_color`, `line_width`, `margin_top`/`margin_bottom` (px nudge, not a flow margin) |
 
@@ -110,7 +111,7 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 
 | Key | Types | Fields |
 | --- | --- | --- |
-| `landlord_details` | all 4 | `landlord.name`, `.tax_pin`, `.phone`, `.email`, `property.name`, `.address`, `.lr_number` |
+| `landlord_details` | invoice, receipt, credit note, lpo, remittance | `landlord.name`, `.tax_pin`, `.phone`, `.email`, `property.name`, `.address`, `.lr_number` |
 | `tenant_details` | invoice, receipt, credit note | `tenant.name`, `.lease_id`, `.tax_pin`, `.phone`, `.email`, `.unit` |
 | `vendor_details` | lpo | `vendor.name`, `.tax_pin`, `.phone`, `.email`, `.address` |
 
@@ -141,6 +142,14 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 | `payment_transactions` | receipt | table | `transactions.transaction_date`, `.transaction_number`, `.method`, `.amount` |
 | `invoice_allocations` | credit note, receipt | table | `allocations.invoice_number`, `.invoice_date`, `.invoice_total`, `.allocated`, `.balance` |
 | `signatories` | **lpo only** | fields | See §1.3 |
+| `payee_details` | payment voucher | fields | `payee.name`, `.tax_pin`, `.address` — who the voucher pays |
+| `voucher_details` | payment voucher | fields | `document.number`, `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
+| `voucher_items` | payment voucher | table, **flow** | `items.transaction_date`, `.property`, `.memo`, `.total`, `.payable`, `.paid` + data-driven withholding columns and a total-paid footer — see §1.6 |
+| `sign_off` | payment voucher, remittance | sign_off | Rows of labelled fill-in slots — see §1.5 |
+| `remittance_details` | remittance | fields | `document.number`, `landlord.name`, `property.name`, `document.period`, `.issued_at`, `.status` |
+| `remittance_summary` | remittance | fields | `summary.is_advance`, `.total_collections`, `.total_expenses`, `.advance_remittances`, `.total_withheld`, `.total_remitted` |
+| `remittance_collections` | remittance | table, **flow** | `collections.receipt_number`, `.transaction_date`, `.credit_account`, `.method`, `.reference`, `.tenant`, `.amount` |
+| `remittance_expenses` | remittance | table, **flow** | `expenses.bill_number`, `.transaction_date`, `.reference`, `.supplier`, `.service`, `.amount` |
 
 Only the three `*_items` blocks (`invoice_items`, `credit_note_items`, `lpo_items`)
 have `is_flow: true` and paginate. Every other table block is fixed-height (use
@@ -149,7 +158,7 @@ have `is_flow: true` and paginate. Every other table block is fixed-height (use
 ### 1.2 Resolving `presentation` → renderer component
 
 Dispatch on `presentation`, never on the block `key` — the backend can add a
-new block to any of these six buckets without a frontend change as long as you
+new block to any of these seven buckets without a frontend change as long as you
 resolve this way:
 
 | `presentation` | What it draws | Data it reads |
@@ -158,7 +167,8 @@ resolve this way:
 | `table` | A header row (from `config.fields`) + one row per item in the payload array the block is bound to (`items`, `tax_summary`, `payments`, `ageing.buckets`, `bank_accounts`, `payment_account`-adjacent `transactions`, `allocations` — see §2.1 for which array each block reads) | The matching top-level payload array; `config.min_rows`/`min_row_height` pad blank trailing rows so a short table still looks ruled |
 | `image` | A single `<img>` (today only `logo`) | `payload.company.logo_url`, sized by `config.max_height_mm`/`min_height_mm` |
 | `qr` | A generated QR code + optional caption/CU-number lines (today only `fiscal_qr`) | `payload.document.verify_url` (+ `.cu_invoice_number`/`.cu_serial_number` when their `show_*` toggles are on) |
-| `text` | Free-flowing text — `free_text`'s static `config.content`, or `document_notes`'s `payload.document.notes` | Static config for `free_text`; a payload field for `document_notes` |
+| `text` | Free-flowing text — `free_text`'s static `config.content`, `document_notes`'s `payload.document.notes`, or `document_title`'s big document name | Static config for `free_text`; a payload field for `document_notes` and `document_title` (see §1.4) |
+| `sign_off` | Rows of labelled fill-in slots to sign by hand — one `<tr>` per `config.rows[]`, one cell per `cells[]`, each drawn as `Label: value` or `Label: ……………` | `data_get(payload, cell.source)` for bound cells; unbound cells draw a rule (see §1.5) |
 | `divider` | A horizontal or vertical rule, no data binding | none — `config.orientation`/`line_color`/`line_width`/`margin_top`/`margin_bottom` only |
 
 `signatories` is the one exception: it reports `presentation: "fields"` but has
@@ -185,6 +195,81 @@ that, extra slots are appended (still labeled Approved) pulling from earlier in
 the chain. A short chain renders fewer than `signatory_count` — it never pads
 with blank boxes. There's no field list to configure here; the algorithm is
 fixed server-side.
+
+### 1.4 `document_title` (all types)
+
+The document's own name in large type — a master block alongside `logo` and
+`company_header`. It reads `payload.document.title`, which every mapper supplies
+as a constant per type (TAX INVOICE, RECEIPT, CREDIT NOTE, LOCAL PURCHASE ORDER,
+PAYMENT VOUCHER, REMITTANCE ADVICE).
+
+| Config | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `text` | string | `null` | Overrides `document.title` for this template; empty means use the payload |
+| `uppercase` | boolean | `true` | Uppercase the rendered title |
+| `font_size` | number, 8–48 | 18 | Point size |
+| `align` | enum | `left` | Alignment |
+
+### 1.5 `sign_off` (payment voucher, remittance)
+
+Rows of labelled slots that get signed or filled in by hand. The same block is
+used more than once per document — the voucher's default layout has one for
+"Approval details" and one for "Recipient details" — so drive everything from
+`config`, never from the block key.
+
+```json
+"config": {
+    "heading_text": "Approval details",
+    "rows": [
+        {"cells": [
+            {"label": "Prepared By", "source": "signoff.prepared_by"},
+            {"label": "Sign",        "source": null},
+            {"label": "Date",        "source": "signoff.prepared_at"}
+        ]}
+    ]
+}
+```
+
+| Config | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `rows` | list | `[]` | The rows; see below |
+| `heading_text` | string | `null` | Block heading |
+| `font_size` | number, 6–24 | 9 | Point size |
+| `row_height` | number, 4–40 | 10 | Row height in mm — the writing space |
+| `align` | enum | `left` | Alignment |
+
+The row editor needs: add/remove row, add/remove cell, a text input per cell
+label, and a source picker per cell offering the block's `available_fields[]`
+(`signoff.prepared_by`, `signoff.prepared_at`) plus a "leave blank" option.
+Read the bounds from `config_schema.rows` (`max_rows`, `max_cells`, `sources`)
+rather than hardcoding them — the server rejects anything past them, along with
+a blank label, a label over 60 characters, or a `source` outside `sources`.
+
+**Recommended "add row" default:** three blank cells labelled `Name`, `Sign`,
+`Date`, matching the rows already in the seeded layout, so a user adding a row
+gets something shaped like the ones above it.
+
+A cell whose `source` is `null` — or whose bound value is missing from the
+payload — renders as a ruled line to write on, not as an empty gap.
+
+### 1.6 `voucher_items` withholding columns
+
+`voucher_items` is the one table whose column set is not fully described by
+`config.fields`. Withholdings vary per bill, so the payload carries
+`withholding_columns` (an ordered list of tax names) and each row carries a
+`withholdings` map keyed by those names. Render one extra column per entry,
+inserted directly after the `items.total` column — or appended last when that
+column is not selected — printing an em dash where a row has no value for it.
+
+| Config | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `withholding_columns` | enum `per_tax`/`total`/`none` | `per_tax` | One column per tax, one combined column (reading `items.withheld`), or none |
+| `withholding_total_label` | string | `Withheld` | Header for the combined column |
+| `show_total_row` | boolean | `true` | Show the footer total row |
+| `total_label` | string | `Total Amount Paid` | Footer label; the value is `payload.totals.paid` |
+
+The footer total is the voucher's own total, not a re-sum of the visible rows — so
+do not recompute it client-side.
 
 ---
 
@@ -277,13 +362,25 @@ bank_accounts[]:{ component, bank_name, branch, account_name, account_number }  
 payment_account:{ bank_name, branch, account_name, account_number }    # receipt
 transactions[]: { transaction_date, transaction_number, method, amount }  # receipt
 approval_chain[]: { name, date }                                       # lpo — raw, see §1.3
+signoff:        { prepared_by, prepared_at }                           # voucher, remittance
+withholding_columns[]: [ "WHT Professional", … ]                       # voucher — see §1.6
+summary:        { is_advance, total_collections, total_expenses,
+                   advance_remittances, total_withheld, total_remitted }  # remittance
+collections[]:  { receipt_number, transaction_date, credit_account, method,
+                   reference, tenant, amount }                          # remittance
+expenses[]:     { bill_number, transaction_date, reference, supplier, service, amount }  # remittance
 ```
+
+`items[]` on a payment voucher is its own shape:
+`{ transaction_date, property, memo, total, withheld, payable, paid, withholdings }`,
+where `withholdings` is a map keyed by the names in `withholding_columns` (§1.6).
 
 There is **no `customer` key and no `payment` key** — those were replaced by
 `tenant`/`landlord` and `payment_account`/`payment_details`/`bank_account_details`
 respectively. `document.number` is a formatted, zero-padded id
-(`INV0001`/`CN0112`/`RCP0481`/`LPO0219`) computed at render time — don't expect
-it to match any number you send elsewhere.
+(`INV0001`/`CN0112`/`RCP0481`/`LPO0219`/`PV0193`/`REM0212`) computed at render
+time — don't expect it to match any number you send elsewhere. `document.title`
+is a constant per type, and is what `document_title` prints by default.
 
 ---
 
