@@ -409,6 +409,18 @@ to a query.
 For the frontend this means a service-charge figure on any report is already classified
 server-side; there is nothing to recompute from expense types, and no filter to send.
 
+### Colouring occupancy, collection and budget health
+
+Two colour rules recur across reports. They are different rules and are never swapped:
+
+| Measure | Rule | Colours |
+|---|---|---|
+| Occupancy rate, collection rate | Fixed bands on the rate | above 80% `success` · 50–80% `warning` (both ends) · below 50% `danger`; nothing to measure → no `color` |
+| Income realisation, expense utilisation | Budget judgement: time-prorated, per-property at-risk threshold, coloured by favourability | income `over` `success` / `under` `danger`; expense `over` `danger` / `under` `success`; `ok` → no `color` |
+
+Both are computed server-side. **Render the returned `color`; never derive one from a percentage or a
+status word.** [property-status.md](./property-status.md#the-two-colour-rules) walks through both.
+
 ---
 
 ## The response envelope
