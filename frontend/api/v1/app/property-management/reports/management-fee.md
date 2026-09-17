@@ -124,6 +124,9 @@ Management Fees = fee base × fee % × (1 + VAT rate)
   the standard rate. The figure in `management_fees` already includes the VAT.
 - **The VAT rate is the company's default tax**, never a fixed 16%. A company that is **not VAT
   registered** earns the bare `fee base × fee %`, with no uplift.
+- **The remittance charges the same fee.** Computing a remittance and the management fee bill it
+  raises apply this exact rule, including no VAT for a company that is not VAT registered, so the
+  fee on this report matches what is billed for the same property and period.
 - **The fee base is the period's collections** unless the contract narrows it. A contract can limit
   the fee to certain lease components, and can charge on collections net of their own tax. Where it
   does, `management_fees` is calculated on that narrower base while `collections` still shows
