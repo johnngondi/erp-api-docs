@@ -38,8 +38,9 @@ definition**, so their totals always agree:
   **never** taken from the expense type's category — one expense type carries expenses of several
   categories, so the type is not a proxy. A category counts across every expense type.
 - Cancelled and pending expenses are excluded.
-- **Billed only.** Neither report compares billed with collected, and **no collections figure appears
-  anywhere** in the payload. That comparison belongs to
+- **Billed, not collected.** The surplus or deficit is always billed less spent. Service charge
+  collected appears once, as context on `summary_by_properties`, and never enters any arithmetic.
+  Comparing billed with collected in earnest belongs to
   [billings-and-collections.md](./billings-and-collections.md).
 
 If a company has not configured its service-charge category, nothing classifies as service charge and
@@ -58,22 +59,45 @@ Money is shown as stored, in each property's reporting currency — nothing is c
 
 ## Buckets
 
+Always in this order:
+
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `overall` | `All Properties` | the portfolio's closing `Excess / (Deficit)` row, alone |
-| `property-{id}` | the property's name | the full statement (below) |
+| `overall` | `All Properties` | the portfolio as one statement, every property's lines merged |
+| `summary_by_properties` | `Summary by Property` | one row per property, then a `Total` row |
+| `property-{id}` | the property's name | that property's own statement |
 
-`property-{id}` buckets come after `overall`, sorted by property name, and each `header` adds
-`property` — `{ id, name, currency }`.
+`property-{id}` buckets come last, sorted by property name, and each `header` adds `property` —
+`{ id, name, currency }`.
 
 ## Columns
 
-Two columns only: `line` (string) and `amount` (money). The shape of the statement is in its **rows**,
-not its columns.
+The statement buckets (`overall` and each `property-{id}`) have two columns only: `line` (string) and
+`amount` (money). The shape of a statement is in its **rows**, not its columns.
+
+`summary_by_properties` has its own five:
+
+| Column | `key` | `format` |
+|---|---|---|
+| Property | `property` | string |
+| SC Billed | `sc_billed` | money |
+| SC Collected | `sc_collected` | money |
+| SC Expenditure | `sc_expenses` | money |
+| Excess / (Deficit) | `excess` | money, coloured like the closing row |
+
+**`sc_collected` is context only.** It says how much of the service charge billed has actually come in.
+**The surplus is always billed less spent** — a service charge is owed whether or not the tenant has
+paid it yet — so a property can collect nothing and still show a surplus. Collected appears nowhere
+else: the statements never mention it, and the
+[Service Charge vs Expenses Summary](./sc-vs-expenses-summary.md) has no collections figure at all.
 
 ## The statement
 
-A property bucket's rows, in order:
+Both `overall` and each `property-{id}` bucket are statements, with the same rows in the same order.
+`overall` is the whole portfolio: every property's billed lines merged by lease component and every
+property's expenditure lines merged by expense type.
+
+Rows, in order:
 
 | Row | `type` | Notes |
 |---|---|---|
@@ -98,13 +122,16 @@ zero. That is the drop-when-default convention from the shared contract, not a m
 
 ## Summary
 
-Every bucket, and `data.summary`, carry the same three keys:
+Every bucket, and `data.summary`, carry the same four keys:
 
 | Key | Meaning |
 |---|---|
 | `sc_billed` | Service charge billed in the period |
+| `sc_collected` | Service charge collected in the period — context only |
 | `sc_expenses` | Service charge expenditure in the period |
-| `excess` | `sc_billed − sc_expenses`; negative is a deficit |
+| `excess` | `sc_billed − sc_expenses`; negative is a deficit. Never computed from collections |
+
+`summary_by_properties` adds `property_count`.
 
 ## Example response
 
@@ -126,11 +153,29 @@ Every bucket, and `data.summary`, carry the same three keys:
           { "label": "Line", "key": "line", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
           { "label": "Amount", "key": "amount", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": false }
         ],
-        "items": [
-          { "line": { "value": "Excess / (Deficit)" }, "amount": { "value": 412300.00, "color": "success" },
-            "type": "grosstotal", "background_color": "secondary" }
+        "items": [ /* the same statement rows as below, with every property's lines merged */ ],
+        "summary": { "sc_billed": 3145600.00, "sc_collected": 1980000.00, "sc_expenses": 2733300.00, "excess": 412300.00 }
+      },
+      {
+        "bucket": "summary_by_properties",
+        "header": { "label": "Summary by Property" },
+        "fields": [
+          { "label": "Property", "key": "property", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
+          { "label": "SC Billed", "key": "sc_billed", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": false },
+          { "label": "SC Collected", "key": "sc_collected", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": false },
+          { "label": "SC Expenditure", "key": "sc_expenses", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": false },
+          { "label": "Excess / (Deficit)", "key": "excess", "format": "money", "type": "subtotal", "weight": "font-medium", "background_color": "none", "alignment": "right", "visible": true, "togglable": false }
         ],
-        "summary": { "sc_billed": 3145600.00, "sc_expenses": 2733300.00, "excess": 412300.00 }
+        "items": [
+          { "property": { "value": "KAHAWA HOUSE" }, "sc_billed": { "value": 3145600.00 },
+            "sc_collected": { "value": 1980000.00 }, "sc_expenses": { "value": 2733300.00 },
+            "excess": { "value": 412300.00, "color": "success" }, "type": "normal" },
+          { "property": { "value": "Total" }, "sc_billed": { "value": 3145600.00 },
+            "sc_collected": { "value": 1980000.00 }, "sc_expenses": { "value": 2733300.00 },
+            "excess": { "value": 412300.00, "color": "success" },
+            "type": "subtotal", "background_color": "secondary" }
+        ],
+        "summary": { "sc_billed": 3145600.00, "sc_collected": 1980000.00, "sc_expenses": 2733300.00, "excess": 412300.00, "property_count": 1 }
       },
       {
         "bucket": "property-1",
@@ -148,15 +193,16 @@ Every bucket, and `data.summary`, carry the same three keys:
           { "line": { "value": "Total Expenditure" }, "amount": { "value": 2733300.00 }, "type": "subtotal", "background_color": "secondary" },
           { "line": { "value": "Excess / (Deficit)" }, "amount": { "value": 412300.00, "color": "success" }, "type": "grosstotal", "background_color": "secondary" }
         ],
-        "summary": { "sc_billed": 3145600.00, "sc_expenses": 2733300.00, "excess": 412300.00 }
+        "summary": { "sc_billed": 3145600.00, "sc_collected": 1980000.00, "sc_expenses": 2733300.00, "excess": 412300.00 }
       }
     ],
-    "summary": { "sc_billed": 3145600.00, "sc_expenses": 2733300.00, "excess": 412300.00 }
+    "summary": { "sc_billed": 3145600.00, "sc_collected": 1980000.00, "sc_expenses": 2733300.00, "excess": 412300.00 }
   }
 }
 ```
 
-Reading the example: the two banner rows span both columns and have no `amount` key. `Total Billed`
+Reading the example: the property collected `1980000.00` of the `3145600.00` it billed, yet its surplus
+is still `3145600.00 − 2733300.00`. The two banner rows span both columns and have no `amount` key. `Total Billed`
 less `Total Expenditure` is exactly the closing row, which is `success` because it is positive. Running
 [Service Charge vs Expenses Summary](./sc-vs-expenses-summary.md) over the same period returns the same
 `3145600.00` billed and `2733300.00` spent.

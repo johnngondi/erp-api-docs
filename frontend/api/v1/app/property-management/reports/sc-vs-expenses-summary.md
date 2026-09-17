@@ -39,8 +39,9 @@ their totals always agree:
   **never** taken from the expense type's category — one expense type carries expenses of several
   categories, so the type is not a proxy. A category counts across every expense type.
 - Cancelled and pending expenses are excluded.
-- **Billed only.** Neither report compares billed with collected, and **no collections figure appears
-  anywhere** in the payload.
+- **Billed only.** Variance is always billed less spent, and **no collections figure appears anywhere**
+  in this report. (The Excess Service Charge report carries service charge collected on its
+  per-property summary, as context; it is not part of any calculation there either.)
 
 ## Filters
 
@@ -62,13 +63,14 @@ Money is shown as stored, in each property's reporting currency — nothing is c
 
 ## Buckets
 
+One bucket:
+
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `overall` | `All Properties` | one row per property, then a `Total` `subtotal` row |
-| `property-{id}` | the property's name | that property's row, alone |
+| `overall` | `All Properties` | one row per property, sorted by name, then a `Total` `subtotal` row |
 
-`property-{id}` buckets follow `overall`, sorted by property name, and each `header` adds `property` —
-`{ id, name, currency }`. Every bucket declares the same columns.
+There are deliberately **no per-property buckets**: a property's bucket would be its own row repeated,
+and that row is already in `overall`. Filter by `facility_id` to read one property on its own.
 
 ## Columns — generated from the cycle
 
@@ -121,7 +123,8 @@ Every bucket, and `data.summary`, carry the same three keys:
 | `total_variance` | `total_billed − total_expenses`; negative is a shortfall |
 
 These match the [Excess Service Charge](./excess-service-charge.md) report's `sc_billed`,
-`sc_expenses` and `excess` for the same scope and period.
+`sc_expenses` and `excess` for the same scope and period. That report also carries `sc_collected`;
+this one has **no collections figure at all**.
 
 ## Example response
 
@@ -163,13 +166,6 @@ These match the [Excess Service Charge](./excess-service-charge.md) report's `sc
             "total_variance": { "value": 461100.00 },
             "type": "subtotal", "background_color": "secondary" }
         ],
-        "summary": { "total_billed": 18571300.00, "total_expenses": 18110200.00, "total_variance": 461100.00 }
-      },
-      {
-        "bucket": "property-1",
-        "header": { "label": "KAHAWA HOUSE", "property": { "id": 1, "name": "KAHAWA HOUSE", "currency": { "code": "KES", "name": "Kenyan Shilling" } } },
-        "fields": [ /* the same period columns */ ],
-        "items": [ /* that property's row */ ],
         "summary": { "total_billed": 18571300.00, "total_expenses": 18110200.00, "total_variance": 461100.00 }
       }
     ],
