@@ -362,6 +362,47 @@ GET …/reports/tenants/billings-and-collections?facility_id=1&period_from=2026-
 
 ---
 
+## Shared conventions
+
+Rules that several reports depend on, held in one place so every report resolves them the same
+way. A report page that relies on one of these links here rather than restating it.
+
+### Expense categories by role — rent, service charge, service
+
+Some reports must know which expenses are **service charge** expenditure (Excess Service Charge,
+Service Charge vs Expenses Summary), and which are rent or service. There is no flag on an expense
+for this: it is decided by the expense's **category**, and the categories that play those roles are
+pinned in one configuration block, `config/reports.php` → `expense_categories`:
+
+| Key | Role | Env override | Default |
+|---|---|---|---|
+| `rent` | Rent | `REPORTS_EXPENSE_CATEGORY_RENT_IDS` | `1` |
+| `service_charge` | Service Charge | `REPORTS_EXPENSE_CATEGORY_SERVICE_CHARGE_IDS` | `2` |
+| `service` | Service | `REPORTS_EXPENSE_CATEGORY_SERVICE_IDS` | `3` |
+
+Each key holds a **list** of `expense_categories.id` (comma-separated in env), so a role may span
+several categories. The defaults are the ids the seeder creates. Nothing else in the codebase holds
+these ids: backend consumers read them through `ExpenseCategoryClassifier`
+(`App\Services\PropertyManagement\Finance`) keyed by `App\Enums\ExpenseCategoryKind`, and
+`FacilityExpense::ofCategoryKind()` applies the same constraint to a query.
+
+**The classification rule — read this before touching any service-charge figure:**
+
+- An expense is classified by **its own** `facility_expenses.expense_category_id`. That column is
+  set on every expense and is the only input to the decision.
+- **Never** resolve the category through the expense type
+  (`facility_expense_types.expense_category_id` / `expense_type.expense_category_id`). That mapping
+  is stale and slated for removal; it is also the more discoverable relation, so it is the one a
+  new consumer finds first. An expense whose *type* sits under a service-charge category but whose
+  *own* category does not is **not** service charge.
+- A role aggregates **across every expense type** under its categories — the expense type never
+  narrows it.
+
+For the frontend this means a service-charge figure on any report is already classified
+server-side; there is nothing to recompute from expense types, and no filter to send.
+
+---
+
 ## The response envelope
 
 ```jsonc
