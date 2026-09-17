@@ -75,12 +75,31 @@ Always in this order:
 | Expense Utilisation | `expense_utilisation` | string | `ok`, `over` or `under` — [budget rule](#rule-2--budget-judgement-realisation-and-utilisation) |
 | Contract Status | `contract_status` | string | The management contract's status, or `—` with no contract |
 | Property Status | `property_status` | string | The property's own status |
+| *(dynamic)* | `role_{roleId}` | string | One column per property role — see [role columns](#role-columns) |
 
 > **The key is `type_`, not `type`.** Every row carries its own `type` (`normal` / `subtotal` /
 > `grosstotal`), so the property-type column is keyed `type_`. Read columns from `fields` as always.
 
 `contract_status` treats an `active` contract past its end date as `expired`, the same as the
 [Management Contracts report](./management-contracts.md#status).
+
+### Role columns
+
+After `property_status` comes one column per **property role** — Property Manager, Agency and so on —
+naming who holds it on that property. A row therefore carries both how the property is performing and
+who to ask about it, or congratulate for it.
+
+- `key` is `role_{roleId}` and the field carries an explicit `role_id`, so there is no need to parse
+  the key. `label` is the role's name and **`togglable` is `true`**.
+- Where several people hold the same role on one property, their names are **joined into one cell**,
+  comma-separated and sorted.
+- The column set is the **union of roles across the whole report**, ordered by role name, and every
+  bucket declares the same set. A property with no holder for a role another property has omits that
+  key, which renders as an empty cell.
+- The `subtotal` and `grosstotal` rows carry no role cells.
+
+These are the same columns, built the same way, as on the
+[Management Fee report](./management-fee.md#role-columns).
 
 ## The two colour rules
 
@@ -163,7 +182,7 @@ average of their rates.
       {
         "bucket": "overall",
         "header": { "label": "Portfolio Health" },
-        "fields": [ /* the fourteen columns above */ ],
+        "fields": [ /* the fourteen columns above, then the role columns */ ],
         "items": [
           { "property": { "value": "Portfolio", "col_span": 3 },
             "total_units": { "value": 148 }, "occupied": { "value": 121 }, "vacant": { "value": 27 },
@@ -190,6 +209,7 @@ average of their rates.
             "income_realisation": { "value": "under", "color": "danger" },
             "expense_utilisation": { "value": "under", "color": "success" },
             "contract_status": { "value": "active" }, "property_status": { "value": "active" },
+            "role_3": { "value": "Clementine Ndibo" },
             "type": "normal" },
           { "property": { "value": "Total", "col_span": 3 },
             "total_units": { "value": 148 }, "occupied": { "value": 121 }, "vacant": { "value": 27 },
