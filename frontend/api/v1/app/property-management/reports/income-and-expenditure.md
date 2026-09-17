@@ -63,8 +63,10 @@ All filters are **optional** and flat (not nested under `filter[...]`). The six
 | `currency_id` | `currencies.id` | **Required when `facility_id` is omitted** (see currency below) |
 
 - **`account_id`** scopes both sides of the statement to one account: **income** to lease components
-  mapped to that expense category (`lease_components.expense_category_id`), and **expenses** to expense
-  types under it (`facility_expense_types.expense_category_id`).
+  mapped to that expense category (`lease_components.expense_category_id`), and **expenses** to those
+  whose **own** category is it (`facility_expenses.expense_category_id`). Expenses are *not* matched
+  through their expense type: one type carries expenses of several categories, so the type is not a
+  proxy for the account. See the [shared conventions](./README.md#shared-conventions).
 - **`currency_id`** is **required only when no `facility_id` is given**. Requesting a multi-property
   roll-up without it returns `422` with a `currency_id` error.
 
