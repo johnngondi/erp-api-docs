@@ -7,7 +7,7 @@ Base route:
 `/api/v1/app/{company}/property-management/reports`
 
 The Management Contracts report is the **register of management agreements with landlords**. It lists
-every contract with its fee basis, rate, term and how many days it has left, and flags the contracts
+every contract with its management, letting and re-letting fees, its term and how many days it has left, and flags the contracts
 that have ended or are about to. It is **read-only** and computed on the fly.
 
 > **Read [the shared reports contract](./README.md) first.** This page only documents what is specific
@@ -75,7 +75,7 @@ Rows are sorted by landlord name, then property name, then contract start date. 
 than one contract has a row for each.
 
 The closing `subtotal` row counts the contracts: a single `landlord` cell reading e.g. `3 contracts`
-(or `1 contract`) with `col_span: 8`, and `background_color: secondary`. Its other keys are absent.
+(or `1 contract`) with `col_span: 9`, and `background_color: secondary`. Its other keys are absent.
 
 ## Columns
 
@@ -83,12 +83,26 @@ The closing `subtotal` row counts the contracts: a single `landlord` cell readin
 |---|---|---|---|
 | Landlord | `landlord` | string | The property's landlord |
 | Property | `property` | string | The property the contract covers |
-| Fee Basis | `fee_basis` | string | `percentage of collections`, `custom percentage of collections`, `flat fee` or `none` |
-| Rate | `rate` | string | The percentage, e.g. `2.5%`; **`—`** for a flat fee or no fee |
+| Management Fee | `management_fee` | string | The management fee as agreed — see [fees](#fees) |
+| Letting Fee | `letting_fee` | string | The fee for letting a vacant space — see [fees](#fees) |
+| Re-letting Fee | `re_letting_fee` | string | The fee for re-letting a space — see [fees](#fees) |
 | Start Date | `start_date` | string | e.g. `01 Jan, 2025` |
 | End Date | `end_date` | string | e.g. `31 Dec, 2027`; `null` for an open-ended contract |
 | Days to Expiry | `days_to_expiry` | integer | Whole days from today to the end date — **negative once ended**; `null` when open-ended |
 | Status | `status` | string | The contract status — see [status](#status) |
+
+### Fees
+
+Each of the contract's three fees has its own column, rendered as readable text:
+
+| Fee type | `management_fee` | `letting_fee` / `re_letting_fee` |
+|---|---|---|
+| `percentage` | `2.5%` — of collections | `4.5%` |
+| `fixed` | `50,000.00 flat` — a flat amount per remittance | A number of months' rent: `Half a month's rent`, `1 month's rent`, `2 months' rent` |
+| `none` | `—` | `—` |
+
+A `fixed` letting or re-letting fee is **not an amount**: it is stored as months of rent (0.5, 1 or 2),
+so it reads as rent rather than money. The dash is a rendered value, not an empty cell.
 
 ## Tinting — computed server-side
 
@@ -146,26 +160,26 @@ The bucket's `summary` and the report-level `data.summary` carry the same keys:
         "header": { "label": "Management Contracts" },
         "fields": [
           { "label": "Landlord", "key": "landlord", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
-          /* …property, fee_basis, rate, start_date, end_date… */
+          /* …property, management_fee, letting_fee, re_letting_fee, start_date, end_date… */
           { "label": "Days to Expiry", "key": "days_to_expiry", "format": "integer", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": false },
           { "label": "Status", "key": "status", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false }
         ],
         "items": [
           { "landlord": { "value": "Clementine Ndibo Holdings" }, "property": { "value": "KAHAWA HOUSE" },
-            "fee_basis": { "value": "percentage of collections" }, "rate": { "value": "2.5%" },
+            "management_fee": { "value": "2.5%" }, "letting_fee": { "value": "4.5%" }, "re_letting_fee": { "value": "—" },
             "start_date": { "value": "01 Jan, 2025" }, "end_date": { "value": "31 Dec, 2027" },
             "days_to_expiry": { "value": 501 }, "status": { "value": "active" }, "type": "normal" },
           { "landlord": { "value": "Rift Valley Estates" }, "property": { "value": "COFFEE PLAZA" },
-            "fee_basis": { "value": "flat fee" }, "rate": { "value": "—" },
+            "management_fee": { "value": "50,000.00 flat" }, "letting_fee": { "value": "1 month's rent" }, "re_letting_fee": { "value": "Half a month's rent" },
             "start_date": { "value": "01 Sep, 2024" }, "end_date": { "value": "30 Sep, 2026" },
             "days_to_expiry": { "value": 44 }, "status": { "value": "active" },
             "type": "normal", "background_color": "warning" },
           { "landlord": { "value": "Westlands Trust" }, "property": { "value": "Kahawa House Side Tower" },
-            "fee_basis": { "value": "percentage of collections" }, "rate": { "value": "3%" },
+            "management_fee": { "value": "3%" }, "letting_fee": { "value": "—" }, "re_letting_fee": { "value": "—" },
             "start_date": { "value": "01 Jan, 2023" }, "end_date": { "value": "30 Jun, 2026" },
             "days_to_expiry": { "value": -48 }, "status": { "value": "expired" },
             "type": "normal", "background_color": "danger" },
-          { "landlord": { "value": "3 contracts", "col_span": 8 }, "type": "subtotal", "background_color": "secondary" }
+          { "landlord": { "value": "3 contracts", "col_span": 9 }, "type": "subtotal", "background_color": "secondary" }
         ],
         "summary": { "contract_count": 3, "expiring_soon": 1, "expired": 1 }
       }
