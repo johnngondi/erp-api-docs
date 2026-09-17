@@ -285,6 +285,20 @@ Only **reports** have permissions. A parent group has none — hide it when none
 visible — and a preset-filter child is governed by the permissions of the report it opens (see
 [How reports are organised](#how-reports-are-organised--parties-parent-groups-presets)).
 
+### Seeding the permissions
+
+A fresh install gets every report permission from the permissions catalogue. An install seeded before
+a report landed is missing that report's two permissions, and the report answers `403` for everyone
+until they exist. To create the missing ones:
+
+```
+php artisan db:seed --class=ReportPermissionsSeeder
+```
+
+It takes its list from the report registry, so it covers every report without being edited, and reads
+each definition from the same catalogue a fresh install seeds. It is idempotent, and it **grants
+nothing**: who may view or export which report is assigned to roles in access management afterwards.
+
 ### The export endpoint
 
 Every report has an `…/export` sibling at its own URL:
