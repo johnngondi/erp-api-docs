@@ -54,7 +54,7 @@ segment its reports sit under:
 | Party | URL segment | Holds today |
 |---|---|---|
 | `landlord` | `landlords` | Income & Expenditure, Facility Budget |
-| `supplier` | `suppliers` | parent groups `expenditure-reports` (Property Expenses), `supplier-withholding` |
+| `supplier` | `suppliers` | parent group `expenditure-reports` (Property Expenses, Expenses Summary, Bill Submission, Bill Payment); Supplier Withholding (a report holding three presets); Supplier Contracts; Input VAT Analysis |
 | `tenant` | `tenants` | Billings & Collections, parent groups `collections-reports`, `tenancy-reports` (Tenancy Schedule), `tenant-withholding` |
 | `system` | `system` | system reports (audit trail and the like) |
 | `accounting` | `accounting` | Trial Balance — a company-wide snapshot, not a party report |
@@ -70,9 +70,11 @@ own segment** — a report `foo` inside `expenditure-reports` is
 `GET …/reports/suppliers/expenditure-reports/foo` and exports at `…/foo/export`. A report with no
 parent stays top-level under its party, exactly as before.
 
-Five parent groups exist: `expenditure-reports` and `supplier-withholding` (supplier);
-`collections-reports`, `tenancy-reports` and `tenant-withholding` (tenant). Reports are added
-beneath them ticket by ticket; a group with no visible child is simply not shown.
+Four parent groups exist: `expenditure-reports` (supplier); `collections-reports`,
+`tenancy-reports` and `tenant-withholding` (tenant). Reports are added beneath them ticket by
+ticket; a group with no visible child is simply not shown. `supplier-withholding` began as a group
+and is now the [Supplier Withholding](./supplier-withholding.md) report itself, holding its presets
+(see below) — `tenant-withholding` will make the same move when its report lands.
 
 ### Deprecated paths
 
