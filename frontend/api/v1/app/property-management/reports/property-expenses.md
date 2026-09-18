@@ -6,9 +6,10 @@ Base route:
 
 `/api/v1/app/{company}/property-management/reports`
 
-The Property Expenses report is a per-property **expense register** with two cross-property summaries —
-by expense **category**, and by expense **type** broken down into **sub-types**. It is **read-only**
-and computed on the fly.
+The Property Expenses report is a per-property **expense register** with three cross-property
+summaries — by expense **category**, by expense **type** broken down into **sub-types**, and an
+**all-properties** matrix of properties against expense categories. It is **read-only** and computed
+on the fly.
 
 > **Read [the shared reports contract](./README.md) first.** This page only documents what is specific
 > to this report — its extra filters, its buckets, its per-bucket currency, and its presentation. The
@@ -36,10 +37,12 @@ and computed on the fly.
 
 ## What makes this report different
 
-- **Fixed summary buckets + data-driven property buckets.** Two summaries always come first
-  (`summary_by_category`, `summary_by_type`), then one `property_{id}` bucket per property in scope
-  (only the selected one when a single `facility_id` is given). There is **no `overall`** transaction
-  bucket — the summaries carry the roll-up.
+- **Fixed summary buckets + data-driven property buckets.** Three summaries always come first
+  (`summary_by_category`, `summary_by_type`, `all-properties`), then one `property_{id}` bucket per
+  property in scope (only the selected one when a single `facility_id` is given). There is **no
+  `overall`** transaction bucket — the summaries carry the roll-up.
+- **`all-properties` has runtime columns.** One column per expense category in scope, so read its
+  columns from `fields` — see [the all-properties bucket](#the-all-properties-bucket).
 - **The type summary is two-level.** In `summary_by_type` each expense type is a full-width **banner
   row**, with one row per **sub-type** beneath it, closed by a per-type **subtotal** row. Expenses
   with no sub-type roll up under an **"Other {type name}"** row (e.g. "Other Electricity").
@@ -108,10 +111,12 @@ Beyond the shared header fields, this report adds:
 |---|---|---|---|---|
 | `summary_by_category` | always | `Summary by Category` | expense category (+ a totals row) | `label`, `amount`, `tax`, `total` |
 | `summary_by_type` | always | `Summary by Type` | a banner per type, then a row per sub-type, then a per-type subtotal row (+ a final totals row) | `label`, `amount`, `tax`, `total` |
+| `all-properties` | always | `All Properties` | property in scope (+ a `Total` subtotal row) | `property`, one `category_{id}` per category in scope, `tax`, `total` |
 | `property_{id}` | one per property in scope | the property's name | expense (+ a totals row) | `invoice_number`, `date`, `notes`, `vendor`, `category`, `expense_type`, `amount`, `tax`, `total`, `invoice` |
 
-Order: the two summaries first, then one `property_{id}` bucket per property **sorted by property
-name**. Rows in both summaries are ordered **descending by total**.
+Order: the three summaries first (`summary_by_category`, `summary_by_type`, `all-properties`), then
+one `property_{id}` bucket per property **sorted by property name**. Rows in the category and type
+summaries are ordered **descending by total**; `all-properties` rows are properties **sorted by name**.
 
 Bucket `header` additions beyond the standard `label`:
 
@@ -119,7 +124,32 @@ Bucket `header` additions beyond the standard `label`:
 - `property` — `{ id, name }` on each `property_{id}` bucket (identifies the property — don't parse the
   `bucket` id).
 
-Each bucket's `summary` holds that bucket's own KPI scalars (same keys as the report-level `summary`).
+Each bucket's `summary` holds that bucket's own KPI scalars (same keys as the report-level `summary`;
+`all-properties` adds `property_count`).
+
+### The all-properties bucket
+
+A matrix of every property in scope against every expense category in scope, in the **target
+currency** (like the other two summaries).
+
+| Column | `key` | `format` | Notes |
+|---|---|---|---|
+| Property | `property` | string | |
+| *(per category)* the category's name | `category_{id}` | money | pre-tax amount; `togglable: true`; carries `expense_category_id` |
+| Tax | `tax` | money | |
+| Total | `total` | money, `grosstotal` | **always the row's category cells + `tax`** |
+
+- **Category columns are generated at runtime**: one per expense category that carries an expense in
+  the window (after the `expense_category_id` / `expense_type_id` filters), ordered by name, inserted
+  between `property` and `tax`. Uncategorised expenses get a `category_none` column with
+  `expense_category_id: null`. Read the columns from `fields`; never assume how many there are.
+- **Missing values are omitted, not zero.** A property with nothing in a category **leaves that
+  `category_{id}` key out** of its row — render an absent key as an empty cell. `tax` and `total` are
+  always present.
+- **Every property in scope gets a row**, even one with no expenses (then only `property`, `tax: 0`
+  and `total: 0`).
+- The closing row is a **`Total`** row with `type: subtotal`, `background_color: secondary`, summing
+  every property per category.
 
 ### Column notes
 
@@ -140,13 +170,15 @@ Each bucket's `summary` holds that bucket's own KPI scalars (same keys as the re
 ## `summary`
 
 Report-level and per-bucket, with the same shape: `total_amount`, `total_tax`, `total`,
-`expense_count`. The report-level and the two summary buckets are in the target currency; each
-`property_{id}` bucket's summary is in that facility's reporting currency.
+`expense_count` (`all-properties` adds `property_count`). The report-level and the three summary
+buckets are in the target currency; each `property_{id}` bucket's summary is in that facility's
+reporting currency.
 
 ## Sample response
 
 Trimmed to the `header`, the two summary buckets, one property bucket, and the `summary`
-(single-property request, so all buckets share one currency).
+(single-property request, so all buckets share one currency). The `all-properties` bucket is shown
+separately [below](#sample-all-properties-bucket).
 
 ```json
 {
@@ -238,6 +270,31 @@ Trimmed to the `header`, the two summary buckets, one property bucket, and the `
     ],
     "summary": { "total_amount": 2200, "total_tax": 315, "total": 2515, "expense_count": 4 }
   }
+}
+```
+
+### Sample all-properties bucket
+
+A multi-property request (`landlord_id=7&currency_id=1`): Beta House spent nothing on Repairs, so its
+row has no `category_4` key.
+
+```json
+{
+  "bucket": "all-properties",
+  "header": { "label": "All Properties", "currency": { "code": "KES", "name": "Kenya Shilling" } },
+  "fields": [
+    { "label": "Property", "key": "property", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
+    { "label": "Repairs", "key": "category_4", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": true, "expense_category_id": 4 },
+    { "label": "Utilities", "key": "category_2", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": true, "expense_category_id": 2 },
+    { "label": "Tax", "key": "tax", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": false },
+    { "label": "Total", "key": "total", "format": "money", "type": "grosstotal", "weight": "font-bold", "background_color": "none", "alignment": "right", "visible": true, "togglable": false }
+  ],
+  "items": [
+    { "property": { "value": "ACK Gardens" }, "category_4": { "value": 900 }, "category_2": { "value": 800 }, "tax": { "value": 255 }, "total": { "value": 1955 }, "type": "normal" },
+    { "property": { "value": "Beta House" }, "category_2": { "value": 100 }, "tax": { "value": 16 }, "total": { "value": 116 }, "type": "normal" },
+    { "property": { "value": "Total" }, "category_4": { "value": 900 }, "category_2": { "value": 900 }, "tax": { "value": 271 }, "total": { "value": 2071 }, "type": "subtotal", "background_color": "secondary" }
+  ],
+  "summary": { "total_amount": 1800, "total_tax": 271, "total": 2071, "expense_count": 3, "property_count": 2 }
 }
 ```
 
