@@ -54,7 +54,7 @@ segment its reports sit under:
 | Party | URL segment | Holds today |
 |---|---|---|
 | `landlord` | `landlords` | Income & Expenditure, Facility Budget |
-| `supplier` | `suppliers` | parent group `expenditure-reports` (Property Expenses, Expenses Summary, Bill Submission, Bill Payment); Supplier Withholding (a report holding three presets); Supplier Contracts; Input VAT Analysis |
+| `supplier` | `suppliers` | parent group `expenditure-reports` (Property Expenses, Expenses Summary, Bill Submission, Bill Payment); Supplier Withholding (one report across every withholding tax, narrowed by `withholding_tax_id`); Supplier Contracts; Input VAT Analysis |
 | `tenant` | `tenants` | Billings & Collections, parent groups `collections-reports`, `tenancy-reports` (Tenancy Schedule), `tenant-withholding` |
 | `system` | `system` | system reports (audit trail and the like) |
 | `accounting` | `accounting` | Trial Balance — a company-wide snapshot, not a party report |
@@ -73,8 +73,8 @@ parent stays top-level under its party, exactly as before.
 Four parent groups exist: `expenditure-reports` (supplier); `collections-reports`,
 `tenancy-reports` and `tenant-withholding` (tenant). Reports are added beneath them ticket by
 ticket; a group with no visible child is simply not shown. `supplier-withholding` began as a group
-and is now the [Supplier Withholding](./supplier-withholding.md) report itself, holding its presets
-(see below) — `tenant-withholding` will make the same move when its report lands.
+and is now the [Supplier Withholding](./supplier-withholding.md) report itself. It holds no presets:
+withholding taxes are data, so the report covers them all and `withholding_tax_id` narrows it.
 
 ### Deprecated paths
 
@@ -108,9 +108,10 @@ A preset has **no route and no permission of its own**. It is visible exactly wh
 `view-{report}-report` for the report it opens, and exportable under that report's
 `export-{report}-report`. Never look for a `view-{preset-key}-report` permission — none exists.
 
-The two withholding parents are exactly this shape: `supplier-withholding` holds three preset
-children (one per `withholding_tax_id`) and `tenant-withholding` holds two (one per
-`payment_method_id`), each opening the withholding report of the same name.
+Presets suit fixed, code-defined views. They are **not** used for values that live in the database:
+[Supplier Withholding](./supplier-withholding.md) has no per-tax presets, because a preset would bake a
+tax id into the registry and a tax added later would never appear. It reports every tax and takes an
+optional `withholding_tax_id` instead. The preset example further down is illustrative.
 
 ---
 
