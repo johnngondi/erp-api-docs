@@ -5,10 +5,10 @@ Base prefix for all routes below:
 /api/v1/app/{company}
 ```
 
-Total routes: **381**
+Total routes: **380**
 
 - Users: **26**
-- Property Management: **235**
+- Property Management: **234**
 - Facility Management: **97**
 - Project Management: **23**
 
@@ -134,7 +134,6 @@ Total routes: **381**
 | `DELETE` | `/api/v1/app/{company}/property-management/finance/remittances/{remittance}` | `app.property-management.finance.remittances.destroy` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Finance\Remittances\RemittanceController@destroy` |
 | `GET` | `/api/v1/app/{company}/property-management/finance/remittances/{remittance}` | `app.property-management.finance.remittances.show` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Finance\Remittances\RemittanceController@show` |
 | `PUT|PATCH` | `/api/v1/app/{company}/property-management/finance/remittances/{remittance}` | `app.property-management.finance.remittances.update` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Finance\Remittances\RemittanceController@update` |
-| `PATCH` | `/api/v1/app/{company}/property-management/finance/remittances/{remittance}/approve` | `app.property-management.finance.remittances.approve` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Finance\Remittances\ApproveRemittanceController` |
 | `PATCH` | `/api/v1/app/{company}/property-management/finance/remittances/{remittance}/cancel` | `app.property-management.finance.remittances.cancel` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Finance\Remittances\CancelRemittanceController` |
 | `GET` | `/api/v1/app/{company}/property-management/finance/remittances/create` | `app.property-management.finance.remittances.create` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Finance\Remittances\RemittanceController@create` |
 | `GET` | `/api/v1/app/{company}/property-management/finance/settlements` | `app.property-management.finance.settlements.index` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Finance\Settlement\SettlementController@index` |

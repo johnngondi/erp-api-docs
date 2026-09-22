@@ -175,13 +175,91 @@ Create/Update payload:
 | `tax_id` | No | integer | Must exist in `taxes.id` |
 | `creator_id` | No | integer | Must exist in `users.id` |
 | `approver_id` | No | integer | Must exist in `users.id` |
-| `status` | No | string | `pending`, `active`, `suspended`, `expired`, `inactive` |
 
-Status update payload:
+`status` is **no longer accepted** on create or update. A contract's status belongs to its
+approval chain - see [Approval](#approval) - and the only moves left in a person's hands are
+between `active` and `suspended`, through the status endpoint below.
+
+(Previously `status` was accepted here and defaulted to `pending`, which meant an update that
+left it out quietly sent a live contract back to pending. It is now ignored entirely.)
+
+### Status update
+
+`PATCH /api/v1/app/{company}/property-management/procurement/contracts/{contract}/status`
+
+Authorized against `update-status-facility-contract` (it previously checked
+`update-facility-contract`).
 
 | Field | Required | Type | Allowed Values |
 |---|---|---|---|
-| `status` | Yes | string | `pending`, `active`, `suspended`, `expired`, `inactive` |
+| `status` | Yes | string | `active`, `suspended` |
+
+Allowed transitions - everything else returns **422**:
+
+| From | To | |
+|---|---|---|
+| `active` | `suspended` | allowed |
+| `suspended` | `active` | allowed |
+| anything | `pending` | refused - the chain raises a contract into pending |
+| anything | `active` | refused - approving the chain is what makes a contract active |
+| anything | `inactive` | refused - rejecting the chain is what makes a contract inactive |
+| anything | `expired` | refused - derived from `end_at`, never stored |
+
+`expired` is never written to the database. An `active` contract whose `end_at` has passed
+reads as `expired` in reports, computed from the date.
+
+### Approval
+
+`FacilityContract` is a registered approvable model (`config('approvals.models')`) and is
+driven by the shared approval framework. Act on a contract's chain through
+`POST /access-management/approval-steps/{approvalStep}` - see
+[Approval Steps](../access-management/approvals.md). Configure the chain itself under
+[Approval Templates](../access-management/approval-templates.md).
+
+Only `POST /contracts` raises a chain. Contracts created by the system - the utility and
+service contract sync that runs off a facility's setup, and the EPMAS importers - are in force
+the moment they are written and never enter one.
+
+Every contract response from the staff endpoints carries an `approval_steps` array in the same
+shape as every other approvable resource. The **vendor**-facing contract endpoints do not: a
+supplier does not see the company's internal approvers.
+
+#### Condition facts
+
+Fields a template step's `conditions` may be written against. Operators and the rule shape are
+documented once in
+[Approval Templates → Step conditions](../access-management/approval-templates.md#step-conditions).
+
+| Fact | Meaning |
+|---|---|
+| `amount` | The contracted figure - the usual threshold to escalate on |
+| `type` | `fixed` or `variable` |
+| `billing_cycle` / `billing_period` | How often a fixed contract bills |
+| `facility_id` | The property the contract is for |
+| `vendor_id` | The supplier |
+| `expense_type_id` / `expense_category_id` | What the spend is classified as |
+| `currency_id` | The contract currency |
+| `has_tax` / `tax_id` | Whether the contract is taxed, and at what rate |
+
+#### Status transitions
+
+| Action | The contract |
+|---|---|
+| Created, company has no active template | `active` immediately, no chain |
+| Created, all steps fall away on conditions | `active` immediately, no chain |
+| Created by a holder of a bypass role | `active` immediately, no chain |
+| Created, a chain applies | `pending`, chain raised, first step prompted |
+| `approve`, not the last step | stays `pending`, next step prompted |
+| `approve`, the last step | `active`, `FacilityContractApprovedEvent` fires |
+| `review` | stays `pending`, the previous step is reopened |
+| `reject` | `inactive` |
+| `PATCH {contract}/status` | `active` ↔ `suspended` only |
+
+A `pending` contract is not yet in force: it does not bill, and
+`POST {contract}/generate-bill-for-next-period` refuses it, as does the `contracts:generate-bills`
+scheduler. The facility's expenditure budget follows the same line - a contract only counts
+towards the contracted floor once its chain has made it `active`, and drops back out if it is
+rejected.
 
 ### Generate bill for next period
 

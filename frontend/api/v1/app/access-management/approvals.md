@@ -57,6 +57,13 @@ Behavior by `status`:
 - `review`: marks current step as review, sends flow back to previous step, and resets previous step to pending.
 - `reject`: marks the current step as rejected and **terminates the entire workflow** — every remaining pending step for the approvable is also marked rejected (so no later step can be actioned), and the approvable is marked with the model's `FINAL_STATUS_ON_REJECTION`.
 
+A rejected resource may also run cleanup of its own, beyond the status. The status move is
+written quietly, so this is not something an observer can carry — a resource that needs it says
+so, and it runs inside the same transaction as the rejection. Today one resource does:
+a rejected **remittance** cancels the management fee it raised and unlinks the receipts and
+expenses it had claimed, so the next remittance for that period can pick them up. See
+[Remittances → What a rejection releases](../property-management/finance/remittance.md#what-a-rejection-releases).
+
 The applied statuses come from constants declared on each approvable model (`INITIAL_STATUS_ON_CREATE`, `FINAL_STATUS_ON_APPROVAL`, `FINAL_STATUS_ON_REJECTION`), not from the approval template.
 
 Authorization:

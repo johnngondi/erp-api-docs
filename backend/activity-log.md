@@ -295,3 +295,13 @@ replacement has to reproduce them or the stored history changes shape.
 `ACTIVITY_LOGGER_ENABLED=false` stops all logging, including the parent touching. Useful for bulk
 imports and data migrations, where a per-row audit trail is noise and the volume is real. Prefer
 spatie's `activity()->withoutLogs(fn () => …)` for a single operation.
+
+## PROP-241: company attribution and the audit index
+
+The audit bridge now stamps nullable `company_id` and a historical `subject_label` through `ActivityMetadata`. Ownership is resolved by `AuditCompanyResolver`: Company itself, a subject's company_id, then its configured parent chain, then route or queued company context. The queue provider stamps `audit_company_id` alongside the existing causer and clears that context after processing/failure. The index never returns null-company rows.
+
+Migration `2026_09_18_000000_add_company_to_activity_log_table` adds these columns and `(company_id, created_at)`. Run `audit:backfill-companies` after migration to attribute resolvable old rows without request-context fallback. Deleted/unresolvable subjects stay unattributed. Historical subjects are not joined at read time.
+
+The flat paginated API is `/api/v1/app/{company}/access-management/reports/system/audit-trail`; see the [frontend contract](../frontend/api/v1/app/access-management/reports/audit-trail.md). It is not a Property Management registry entry. Its independent view/export permissions are declared in `config/access-management-reports.php` and registered by `AuthServiceProvider::registerReportAbilities()` through the separate Access Management report registry. The existing timestamp-only parent suppression is retained.
+
+Follow-up: define activity retention and archival policy before operational log volume requires it.

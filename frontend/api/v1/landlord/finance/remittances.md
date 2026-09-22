@@ -23,6 +23,10 @@ Base route:
 
 - `filter[status]`: `pending`, `unpaid`, `paid`, `cancelled`
 
+`pending` means the remittance is still with the managing company's approvers and has not been
+agreed yet; `unpaid` means it is approved and due for payment. Approval steps are not exposed
+on the landlord portal.
+
 ## Sorts
 
 - `sort=id,period_from,period_to,total_income,total_expenses,remittable_amount,created_at,updated_at`

@@ -15,12 +15,13 @@ Base route:
 - `POST /remittances`
 - `GET /remittances/{remittance}`
 - `DELETE /remittances/{remittance}`
-- `PATCH /remittances/{remittance}/approve`
 - `PATCH /remittances/{remittance}/cancel`
 
 Notes:
 
 - `PUT/PATCH /remittances/{remittance}` route exists but is currently not implemented in controller.
+- **`PATCH /remittances/{remittance}/approve` has been removed.** Remittances are approved
+  through the shared approval chain now - see [Approval](#approval) below.
 
 ## List Remittances
 
@@ -42,6 +43,9 @@ Supported query params:
 Enum filter options:
 
 - `filter[status]`: `pending`, `unpaid`, `paid`, `cancelled` (from `RemittanceStatus` enum)
+
+`pending` now means "waiting on an approver". A company with no approval template for
+remittances never produces one - see [Approval](#approval).
 
 Sample list response (`FacilityRemittanceResource`):
 
@@ -168,7 +172,7 @@ Sample response:
           "total_income": "120000.00",
           "total_expenses": "26600.00",
           "remittable_amount": "93400.00",
-          "status": { "value": "pending", "color": "info" },
+          "status": { "value": "pending", "color": "secondary" },
           "landlord": { "id": 30, "name": "Jane Landlord" },
           "facility": { "id": 22, "name": "Riverside Plaza" }
         }
@@ -177,3 +181,89 @@ Sample response:
   }
 }
 ```
+
+Bulk create raises a chain per remittance, exactly as the single create does. The `pending`
+above is what a company with an approval template sees; without one each remittance comes back
+`unpaid`. See [Approval](#approval).
+
+## Approval
+
+`FacilityRemittance` is a registered approvable model (`config('approvals.models')`) and is
+driven by the shared approval framework, not by an endpoint of its own. Act on a remittance's
+chain through `POST /access-management/approval-steps/{approvalStep}` - see
+[Approval Steps](../../access-management/approvals.md). Configure the chain itself under
+[Approval Templates](../../access-management/approval-templates.md).
+
+The chain is started once, by `POST /remittances` (and by the bulk create), after the receipts
+and expenses the remittance covers have been attached - a step's conditions are written against
+those figures, so they have to be there before the chain is shaped.
+
+### Where the chain shows up
+
+Every remittance response carries an `approval_steps` array in the same shape as every other
+approvable resource: `step_order`, `role`, `actors`, `status`, `comment`, `is_current`,
+`can_act`, `allowed_to_edit`, `can_edit`, `attempt`. An empty array means no chain was raised.
+The landlord-portal remittance endpoints do **not** include it - a landlord does not see the
+company's internal approvers.
+
+### Condition facts
+
+Fields a template step's `conditions` may be written against. Operators and the rule shape are
+documented once in
+[Approval Templates → Step conditions](../../access-management/approval-templates.md#step-conditions).
+
+| Fact | Meaning |
+|---|---|
+| `remittable_amount` | What the landlord is owed - the usual threshold to escalate on |
+| `total_income` | Collections in the period |
+| `total_expenses` | Expenses deducted in the period |
+| `is_advance` | `true` for an advance remittance, paid ahead of collection |
+| `facility_id` | The property being remitted for |
+| `landlord_id` | Who is being remitted |
+| `currency_id` | The remittance currency |
+
+### Status transitions
+
+| Action | The remittance |
+|---|---|
+| Created, company has no active template | `unpaid` immediately, no chain |
+| Created, all steps fall away on conditions | `unpaid` immediately, no chain |
+| Created by a holder of a bypass role | `unpaid` immediately, no chain |
+| Created, a chain applies | `pending`, chain raised, first step prompted |
+| `approve`, not the last step | stays `pending`, next step prompted |
+| `approve`, the last step | `unpaid`, `FacilityRemittanceApprovedEvent` fires |
+| `review` | stays `pending`, the previous step is reopened |
+| `reject` | `cancelled`, and everything it held is released (below) |
+| Payment voucher raised against it | `paid` |
+| Payment voucher cancelled | back to `unpaid` |
+
+`unpaid` is what "approved" means for a remittance: it is due for payment, and a payment
+voucher is what settles it.
+
+### What a rejection releases
+
+A rejection does not only set the status. The remittance lets go of everything it had claimed,
+so the next remittance for that period can pick it up:
+
+- the management-fee expense it raised is cancelled (and its bill with it);
+- every receipt it covered is unlinked from it;
+- every expense it deducted is unlinked from it.
+
+Cancelling a remittance by hand does exactly the same - both run the one release step, so the
+two cannot drift apart.
+
+### Cancelling while a chain is open
+
+`PATCH /remittances/{remittance}/cancel` is refused with **403** while the remittance is still
+waiting on an approver. A remittance under approval is stopped by rejecting it, which records
+who refused it and why; cancelling would go around the people holding it. Once the chain has
+finished - or where there was never one - cancelling an `unpaid` remittance works as before.
+
+The endpoint is authorized against `cancel-facility-remittance` (it previously checked
+`update-facility-remittance`).
+
+### Re-submission
+
+Rejecting terminates the chain and cancels the remittance. A cancelled remittance is not
+edited and re-submitted - raise a new one for the period, which opens its own chain. The
+receipts and expenses the rejected one held are free again, so the new one sees them.

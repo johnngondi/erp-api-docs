@@ -69,3 +69,7 @@ Template form controls:
 - Initial/final status selectors from selected model statuses
 - Optional post-approval event class input
 - Ordered step builder (`step_order`, `role_id`)
+
+## Reports
+
+- [System Reports](reports/README.md): [Audit Trail](reports/audit-trail.md), a company-scoped paginated activity list.
