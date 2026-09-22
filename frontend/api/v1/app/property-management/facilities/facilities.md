@@ -365,6 +365,12 @@ Create/update payload example:
   "physical_address": "Kilimani",
   "coordinates": null,
   "auto_generate_utility_meters": true,
+  "esd_type": "incotex", // incotex | tevin | novitas | etims | null
+  "esd_config": {
+    "url": "http://192.168.1.50:8086",
+    "sender_id": null,
+    "auth_key": "c2VjcmV0"
+  },
   "utilities": [
     {
       "utility_id": 6,
@@ -442,6 +448,24 @@ Notes:
   [utility-billing.md](../lease-management/utility-billing.md).
 - `legal_fee_type` allowed values are `per space unit` and `fixed`.
 
+ETR device (`esd_type`, `esd_config`):
+
+Each property can sign its invoices and credit notes on its own ETR (KRA fiscal) device. Both fields are optional.
+
+| Field | Type | Notes |
+|---|---|---|
+| `esd_type` | string\|null | `incotex`, `tevin`, `novitas` or `etims`. `null` uses the system default device (Incotex). `etims` is not live yet, and signing on it fails with a clear error. |
+| `esd_config` | object\|null | Connection details for the device. Any key left empty falls back to the system default for that device type. |
+| `esd_config.url` | string (URL)\|null | Device or middleware address, e.g. `http://192.168.1.50:8086` |
+| `esd_config.sender_id` | string\|null | Sender ID issued for the device (Tevin, Novitas) |
+| `esd_config.auth_key` | string\|null | Device credential: the Basic key for Incotex, the Bearer token for Novitas. **Write-only.** |
+
+Rules:
+- The seller PIN is never configured here. Signing always sends the **landlord's** KRA PIN, so make sure the landlord has one.
+- `auth_key` is never returned. The response only says whether one is stored (`esd_config.has_auth_key`).
+- On update, leave `auth_key` out to keep the stored key. Send `"auth_key": null` to clear it. Send `"esd_config": null` to clear the whole config.
+- With sectioned payloads (`basic` / `location` / `structure`), send `esd_type` and `esd_config` inside `basic` or at the top level.
+
 Backend-required baseline fields in DTO:
 - `facility_type_id`
 - `space_unit_id`
@@ -491,6 +515,15 @@ Facility response example:
   "status": {
     "value": "active",
     "color": "success"
+  },
+  "esd_type": {
+    "value": "incotex",
+    "color": "primary"
+  },
+  "esd_config": {
+    "url": "http://192.168.1.50:8086",
+    "sender_id": null,
+    "has_auth_key": true
   },
   "facility_type": {
     "id": 3,

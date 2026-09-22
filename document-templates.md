@@ -103,7 +103,7 @@ bank accounts collect rent/charges — see
 ## 3. The Block Registry
 
 Server-authoritative. Resolved as a singleton in `AppServiceProvider` with an
-explicit list of 34 block instances.
+explicit list of 35 block instances.
 
 ### Field (`Fields/Field.php`)
 
@@ -133,7 +133,7 @@ Each block declares:
   paginating sections)
 - `resolveLabel($fieldKey, $config)` — 3-tier label resolution (see §5)
 
-### Blocks shipped (34)
+### Blocks shipped (35)
 
 **Shared / layout — all six types**
 
@@ -171,7 +171,8 @@ Each block declares:
 | --- | --- | --- | --- |
 | `fiscal_qr` | invoice, credit note | qr | QR of `document.verify_url`, then `document.cu_invoice_number`/`.cu_serial_number` stacked beneath (toggle via `show_cu_invoice_number`/`show_cu_serial_number`) |
 | `document_notes` | invoice, credit note, lpo | text | Binds `document.notes` |
-| `invoice_items` | invoice | table, **flow** | `items.notes`, `.quantity`, `.amount`, `.tax`, `.total`; `show_utility_readings` renders previous/current meter-reading images beneath a row where `items[].is_utility_bill` is true |
+| `invoice_items` | invoice | table, **flow** | `items.notes`, `.quantity`, `.amount`, `.tax`, `.total`. Meter photos are no longer drawn in the table; see `meter_reading_images` |
+| `meter_reading_images` | invoice | image, **flow** | Reads `items[]` directly (no field list). One group per `is_utility_bill` item with at least one `image_url`, titled with the item description and `· Meter {number} ({name})`. Beneath the title, "Previous reading" (left) and "Current reading" (right) photos sit side by side, each with its reading value and date, followed by "Consumption". A side with no photo shows a "No photo captured" box. `image_url` is only set when the upload's `source_url` file exists on the storage disk. When no utility item has a stored photo, the block renders nothing. Because `BlockType::hidesWhenEmpty()` is true, the renderer also skips the block box: border, background, padding and `min_height`. Config: `heading_text` (default "Meter readings"; `""` hides it), `font_size`, `image_height_mm` (20–150, default 70), `show_reading_values`, `show_consumption`, `show_meter_details` (all default true). Placement is up to the designer, e.g. right after `invoice_items` or at the end of the document |
 | `credit_note_items` | credit note | table, **flow** | `items.notes`, `.quantity`, `.amount`, `.tax`, `.total` |
 | `lpo_items` | lpo | table, **flow** | `items.title`, `.notes`, `.quantity`, `.amount`, `.tax`, `.total` |
 | `totals` | invoice, credit note, lpo | fields | `totals.amount`, `.tax`, `.total`, `.paid`, `.balance` (no receipt — receipts have no totals block) |
@@ -213,7 +214,8 @@ document:       { title, number, raw_number, issued_at, due_at, status, notes, c
                    invoice_number, cu_invoice_number, cu_serial_number, verify_url, served_by }
 items[]:        { description, notes, quantity, unit_price, amount, tax, tax_rate, total,
                    is_utility_bill, previous_reading: {value, read_at, image_url},
-                   current_reading: {value, read_at, image_url} }
+                   current_reading: {value, read_at, image_url},
+                   meter: {name, number}, consumption }
 totals:         { amount, tax, total, paid, balance }
 tax_summary[]:  { name, rate, taxable, tax }
 payments[]:     { type, number, date, method, reference, amount }      # invoice
@@ -612,6 +614,12 @@ php artisan db:seed --class=DocumentTemplateSeeder
 Existing companies keep their saved layouts, so they do not pick up blocks
 added to the stock layouts (e.g. `document_title`); those are one drag away in
 the designer palette.
+
+The exception is `meter_reading_images`. The stock invoice layout places it in its own section right after `invoice_items`. It replaced the old `invoice_items.show_utility_readings` in-table photos, so migration `2026_09_22_000004_move_invoice_meter_images_to_own_block` upgrades every saved invoice layout through `App\Services\DocumentTemplates\Upgrades\MoveMeterImagesToOwnBlock`:
+- It strips `show_utility_readings`, which the validator now rejects as unknown.
+- It inserts the block in a new row directly below the `invoice_items` cell. The anchor is the cell itself, or its single-cell wrapper section. A neighbour that spans across the insertion point is stretched over the new row.
+- A layout that already has the block is left alone.
+- A layout that had set `show_utility_readings: false` only loses the key.
 
 Permissions live in `storage/app/seeders/permissions.json`
 (`view/create/update/delete-document-template`; facility bank accounts have

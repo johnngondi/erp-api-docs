@@ -72,4 +72,4 @@ Template form controls:
 
 ## Reports
 
-- [System Reports](reports/README.md): [Audit Trail](reports/audit-trail.md), a company-scoped paginated activity list.
+- [System Reports](reports/README.md): [Audit Trail](reports/audit-trail.md), a company-scoped paginated activity list, and [Workflow Performance](reports/workflow-performance.md), a standard report of approval turnaround and chain outcomes.

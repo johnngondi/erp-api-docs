@@ -26,6 +26,16 @@ All endpoints in this document require `auth:sanctum`.
 - `PATCH /settings/accounting/payment-methods/{paymentMethod}/activate`
 - `PATCH /settings/accounting/payment-methods/{paymentMethod}/deactivate`
 
+### Taxes: `hs_code`
+
+Each tax row now also returns `hs_code` (string|null), and the list accepts `filter[hs_code]`. When an invoice or credit note line carries no VAT, the ETR device needs an HS code for it. The line's tax `hs_code` is sent, or the system default `0095.11.00` when that is empty. Taxed lines never send one.
+
+```json
+{ "id": 1, "name": "Non Taxable", "value": "0.00", "hs_code": "0095.11.00", "is_default": false }
+```
+
+Only the list endpoint is implemented today, so there is no way to edit `hs_code` through the API yet.
+
 ## Procurement
 
 - `GET|POST /settings/skus`

@@ -130,7 +130,8 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 | --- | --- | --- | --- |
 | `fiscal_qr` | invoice, credit note | qr | Fixed to `document.verify_url`; config `size_mm`, `align`, `caption`, `show_cu_invoice_number`, `show_cu_serial_number` (stacks `document.cu_invoice_number`/`.cu_serial_number` beneath the code) |
 | `document_notes` | invoice, credit note, lpo | text | Binds `document.notes` |
-| `invoice_items` | invoice | table, **flow** | `items.notes`, `.quantity`, `.amount`, `.tax`, `.total`; `show_utility_readings` (default true) renders meter-reading images beneath a row where `is_utility_bill` is true and at least one reading carries an `image_url` — a utility line with no captured images adds no extra row |
+| `invoice_items` | invoice | table, **flow** | `items.notes`, `.quantity`, `.amount`, `.tax`, `.total`. Meter photos are no longer drawn in the table. `show_utility_readings` was removed, and sending it is now a 422. Use `meter_reading_images` instead |
+| `meter_reading_images` | invoice | image, **flow** | Large previous/current meter photos. There is one group per `items[]` entry where `is_utility_bill` is true and at least one reading has an `image_url`. The group is titled with the item description, plus `· Meter {meter.number} ({meter.name})`. Below the title, "Previous reading" (left) and "Current reading" (right) sit side by side, each with `Reading: {value} · {read_at}`, then `Consumption: {consumption}`. A side with no photo shows a "No photo captured" box. An `image_url` is only set when the photo file actually exists in storage. A reading whose upload row survives but whose file is gone counts as "no photo". When no utility item has a stored photo the block renders nothing. That includes its heading and any border, background, padding or min-height set on it, so on an ordinary invoice it leaves no trace. It has no `fields` list. Config: `heading_text` (default "Meter readings"; `""` hides it), `font_size`, `image_height_mm` (20–150, default 70), `show_reading_values`, `show_consumption`, `show_meter_details` (all default true). Place it wherever the images should appear, e.g. right after `invoice_items` or at the end of the document. Existing invoice templates were migrated to include it directly below their items table |
 | `credit_note_items` | credit note | table, **flow** | `items.notes`, `.quantity`, `.amount`, `.tax`, `.total` |
 | `lpo_items` | lpo | table, **flow** | `items.title`, `.notes`, `.quantity`, `.amount`, `.tax`, `.total` |
 | `totals` | invoice, credit note, lpo | fields | `totals.amount`, `.tax`, `.total`, `.paid`, `.balance` — **no receipt**. Renders through the shared field-list, so every fields-styling key applies; registry defaults keep the classic look (`value_align: "right"`, `field_styles: { "totals.total": { bold: true } }`), both editable per template |
@@ -151,8 +152,9 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 | `remittance_collections` | remittance | table, **flow** | `collections.receipt_number`, `.transaction_date`, `.credit_account`, `.method`, `.reference`, `.tenant`, `.amount` |
 | `remittance_expenses` | remittance | table, **flow** | `expenses.bill_number`, `.transaction_date`, `.reference`, `.supplier`, `.service`, `.amount` |
 
-Only the three `*_items` blocks (`invoice_items`, `credit_note_items`, `lpo_items`)
-have `is_flow: true` and paginate. Every other table block is fixed-height (use
+Only the `is_flow: true` blocks paginate: the `*_items` tables (`invoice_items`,
+`credit_note_items`, `lpo_items`, `voucher_items`), `remittance_collections`,
+`remittance_expenses` and `meter_reading_images`. Every other table block is fixed-height (use
 `min_rows` if you want it to look populated regardless — §4.3).
 
 ### 1.2 Resolving `presentation` → renderer component
@@ -165,7 +167,7 @@ resolve this way:
 | --- | --- | --- |
 | `fields` | A label/value list (vertical, or `label_position: "top"`), one row per entry in `config.fields`, in that order | `data_get(payload, field.key)` for each of the block's `available_fields[]` |
 | `table` | A header row (from `config.fields`) + one row per item in the payload array the block is bound to (`items`, `tax_summary`, `payments`, `ageing.buckets`, `bank_accounts`, `payment_account`-adjacent `transactions`, `allocations` — see §2.1 for which array each block reads) | The matching top-level payload array; `config.min_rows`/`min_row_height` pad blank trailing rows so a short table still looks ruled |
-| `image` | A single `<img>` (today only `logo`) | `payload.company.logo_url`, sized by `config.max_height_mm`/`min_height_mm` |
+| `image` | `logo`: a single `<img>`. `meter_reading_images`: a captioned pair of photos per utility line (see §1.1) | `logo`: `payload.company.logo_url`, sized by `config.max_height_mm`/`min_height_mm`. `meter_reading_images`: `payload.items[]` readings, sized by `config.image_height_mm` |
 | `qr` | A generated QR code + optional caption/CU-number lines (today only `fiscal_qr`) | `payload.document.verify_url` (+ `.cu_invoice_number`/`.cu_serial_number` when their `show_*` toggles are on) |
 | `text` | Free-flowing text — `free_text`'s static `config.content`, `document_notes`'s `payload.document.notes`, or `document_title`'s big document name | Static config for `free_text`; a payload field for `document_notes` and `document_title` (see §1.4) |
 | `sign_off` | Rows of labelled fill-in slots to sign by hand — one `<tr>` per `config.rows[]`, one cell per `cells[]`, each drawn as `Label: value` or `Label: ……………` | `data_get(payload, cell.source)` for bound cells; unbound cells draw a rule (see §1.5) |
@@ -349,7 +351,9 @@ document:       { number, raw_number, issued_at, due_at, status, notes, currency
 items[]:        { description, notes, quantity, unit_price, amount, tax, tax_rate, total,
                    is_utility_bill,
                    previous_reading: { value, read_at, image_url },
-                   current_reading:  { value, read_at, image_url } }
+                   current_reading:  { value, read_at, image_url },
+                   meter: { name, number },    # null when the item has no reading
+                   consumption }               # current − previous value, or null
 totals:         { amount, tax, total, paid, balance }
 tax_summary[]:  { name, rate, taxable, tax }
 payments[]:     { type, number, date, method, reference, amount }      # invoice
@@ -520,8 +524,10 @@ Block-specific extras you'll see in `config_schema`:
   (header text), `table_borders` (`horizontal` default | `vertical` | `all` |
   `none` — which cell rules draw), `table_border_color` (recolors the drawn
   rules; empty = default greys), `corner_radius` (px, 0–24 clamped — rounds the
-  table's corners; 0 = square), plus `show_utility_readings` on `invoice_items`
-  only and `bucket_layout` on `invoice_ageing` only (§1.1).
+  table's corners; 0 = square), plus `bucket_layout` on `invoice_ageing` only
+  (§1.1).
+- `meter_reading_images`: `heading_text`, `font_size`, `image_height_mm`,
+  `show_reading_values`, `show_consumption`, `show_meter_details` (§1.1).
 
 Always read `default` from the schema to initialize a freshly-dropped block.
 
