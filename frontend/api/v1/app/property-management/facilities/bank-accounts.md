@@ -146,3 +146,9 @@ The invoice `payment_details` block reads a lease's facility's `collection`/
 (an account with `lease_components: [3, 7]` prints two rows — one for Rent, one
 for Water; an account with `lease_components: null` prints a single "All
 charges" row). See `docs/document-templates.md` §4 for the full payload shape.
+
+The invoice `mobile_money` block reuses the same accounts: each one whose bank
+has a `paybill_number` prints that paybill with the account's number. The
+exception is a facility whose management contract has
+`collection_account_holder = agent` while the company `paybill_number` setting
+is set. That facility prints the company paybill against the invoice number instead.

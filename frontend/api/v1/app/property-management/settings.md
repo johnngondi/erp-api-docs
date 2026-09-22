@@ -175,10 +175,75 @@ Authorization:
 
 
 ### Lease Components
-- `GET|POST /settings/lease-management/lease-components`
-- `GET|PUT|PATCH|DELETE /settings/lease-management/lease-components/{leaseComponent}`
-- `PATCH /settings/lease-management/lease-components/{leaseComponent}/activate`
-- `PATCH /settings/lease-management/lease-components/{leaseComponent}/deactivate`
+
+Endpoints (these are **common** routes - no `/app/{company}` segment):
+
+- `GET|POST /api/v1/settings/lease-management/lease-components`
+- `GET|PUT|PATCH|DELETE /api/v1/settings/lease-management/lease-components/{leaseComponent}`
+- `PATCH /api/v1/settings/lease-management/lease-components/{leaseComponent}/activate`
+- `PATCH /api/v1/settings/lease-management/lease-components/{leaseComponent}/deactivate`
+
+List query support:
+
+- Filters:
+  - `filter[tax_id]`, `filter[hs_code]`, `filter[name]`, `filter[status]`
+  - `filter[is_autobilled]`, `filter[is_a_charge]`, `filter[is_land_fee_charge]`, `filter[is_utility_charge]`
+  - `filter[is_legal_fees_deposit]`, `filter[is_deposit]`
+- Sort:
+  - `sort=tax_id,hs_code,name,status`
+- Pagination:
+  - `per_page` (defaults to `config('app.query.default_per_page')`)
+
+Create/Update payload (`LeaseComponentData`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `name` | Yes | string | Component display name |
+| `tax_id` | Yes | integer | Must exist in `taxes.id` |
+| `hs_code` | Yes | string | Tax authority item code |
+| `status` | No | string | `active`, `inactive` (defaults to `active`) |
+| `is_autobilled` | No | boolean | Defaults to `true` |
+| `is_legal_fees_deposit` | No | boolean | Marks the component legal fees are billed against. Omit it and the stored value is left alone. |
+| `is_deposit` | No | boolean | Marks the component as a deposit. Omit it and the stored value is left alone. |
+
+Response item shape (`LeaseComponentResource`):
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | Record id |
+| `name` | string | Component display name |
+| `tax` | object | `TaxResource`, when the relation is loaded |
+| `hs_code` | string | Tax authority item code |
+| `is_autobilled` | boolean | Included in the recurring billing run |
+| `is_rent` | boolean | Type flag |
+| `is_service_charge` | boolean | Type flag |
+| `is_parking_fee` | boolean | Type flag |
+| `is_signage_fee` | boolean | Type flag |
+| `is_legal_fees_deposit` | boolean | Type flag - see below |
+| `is_deposit` | boolean | Type flag - see below |
+| `is_a_charge` | boolean | Billed as a charge rather than a rate |
+| `is_land_fee_charge` | boolean | Land rate / land rent |
+| `is_utility_charge` | boolean | Metered utility |
+| `status` | object | `{ value, color }` |
+
+#### `is_legal_fees_deposit` and `is_deposit`
+
+Both default to `false`, are settable through the create and update payloads above, and are
+returned by the resource.
+
+- **`is_legal_fees_deposit`** marks the one component legal fees are billed against. The
+  **Legal Fee Collection** report (`reports/tenants/collections-reports/legal-fee-collection`)
+  selects its billings and collections **through this flag**, never through the component's name
+  or id - so the component can be renamed here and the report is unaffected. A `Legal Fees`
+  component ships with the flag set; only one component should carry it at a time, so clear it on
+  the old component before setting it on another.
+- **`is_deposit`** marks a component as a deposit. The **Tenant Deposits** report resolves a
+  `lease_deposits` row's type through `lease_item_component_id` -> `lease_components`, and reads
+  this flag to decide which components are deposit types. Every existing component whose name
+  contains "deposit" is flagged by migration, so a settings screen only needs to set it on
+  components added later.
+
+The settings screen should expose both as checkboxes alongside the existing type flags.
 
 ### Lease Component Payment Priorities
 
@@ -282,6 +347,7 @@ PM seeded general settings starter catalog:
 | `default_tax` | `finance`, `tax` | `select` | remote URI array (taxes endpoint) | none | Default tax for PM financial transactions |
 | `default_management_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for management fees |
 | `default_letting_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for letting/reletting fees |
+| `paybill_number` | `finance` | `text` | `null` | none | Company M-Pesa paybill. Printed on invoices (`mobile_money` block) when the property's management contract has `collection_account_holder = agent`, with the invoice number (e.g. `INV0481`) as the account number. Empty (default) = invoices fall back to each pay-to account's bank paybill |
 
 ### Bank Accounts
 

@@ -138,7 +138,8 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 | `tax_summary` | invoice, credit note, lpo | table | `tax_summary.name`, `.rate`, `.taxable`, `.tax` |
 | `payments` | invoice | table | `payments.type`, `.number`, `.date`, `.method`, `.reference`, `.amount` |
 | `invoice_ageing` | invoice | table | `ageing.label`, `.amount`; `bucket_layout` (`columns` default \| `rows`) — `columns` transposes the table into the classic ageing analysis: one column per bucket, amount beneath its label |
-| `payment_details` | invoice | table | `bank_accounts.component`, `.bank_name`, `.branch`, `.account_name`, `.account_number` — where to pay; `display` (`fields` default \| `table`) — `fields` renders each account as an inline label/value group (the tenant_details look), `table` keeps the column grid |
+| `mobile_money` | invoice | table | `mobile_money.paybill_number`, `.account_number`, `.bank_name`, `.component` — how to pay by M-Pesa paybill (see §2.1 for which paybill is chosen); same `display` option as `payment_details`; **hidden entirely** (no box) when the invoice has no paybill rows |
+| `payment_details` | invoice | table | `bank_accounts.component`, `.bank_name`, `.branch`, `.account_name`, `.account_number`, `.paybill_number` — where to pay; `display` (`fields` default \| `table`) — `fields` renders each account as an inline label/value group (the tenant_details look), `table` keeps the column grid |
 | `bank_account_details` | receipt | fields | `payment_account.bank_name`, `.branch`, `.account_name`, `.account_number` — where the payment landed |
 | `payment_transactions` | receipt | table | `transactions.transaction_date`, `.transaction_number`, `.method`, `.amount` |
 | `invoice_allocations` | credit note, receipt | table | `allocations.invoice_number`, `.invoice_date`, `.invoice_total`, `.allocated`, `.balance` |
@@ -301,6 +302,7 @@ GET …/settings/documents/templates/facility_invoice/payload-schema
       "payments": "array",
       "ageing.label": "string",
       "bank_accounts": "array",
+      "mobile_money": "array",
       // … full dot-path map, see §2.1 for the shape per type
     },
     "sample": {
@@ -362,7 +364,16 @@ ageing:         { as_at, buckets: [ { label, amount } ] }              # invoice
 bank_accounts[]:{ component, bank_name, branch, account_name, account_number }  # invoice —
                 # filtered to THIS invoice: only accounts collecting a component that is on the
                 # items (catch-all accounts always qualify, labeled "All charges"); each distinct
-                # account appears once, `component` listing the invoiced components it collects
+                # account appears once, `component` listing the invoiced components it collects;
+                # also carries paybill_number (the bank's paybill, or null)
+mobile_money[]: { component, bank_name, paybill_number, account_number }  # invoice —
+                # agent holds the collection account (facility managementContract
+                # .collection_account_holder = agent) AND the company `paybill_number`
+                # setting is set → one row: company paybill, account_number = invoice
+                # number (INV0481), component "All charges", bank_name null.
+                # Otherwise → one row per bank_accounts[] row whose bank has a
+                # paybill_number, account_number = that bank account's number.
+                # Empty array when no paybill is known (the block is then hidden)
 payment_account:{ bank_name, branch, account_name, account_number }    # receipt
 transactions[]: { transaction_date, transaction_number, method, amount }  # receipt
 approval_chain[]: { name, date }                                       # lpo — raw, see §1.3
@@ -519,7 +530,7 @@ Block-specific extras you'll see in `config_schema`:
 - `signatories`: `signatory_count`, `show_date`, `align` (§1.3)
 - **Every table-presentation block** (`invoice_items`, `credit_note_items`,
   `lpo_items`, `tax_summary`, `payments`, `invoice_ageing`, `payment_details`,
-  `payment_transactions`, `invoice_allocations`): `min_rows`, `min_row_height`,
+  `mobile_money`, `payment_transactions`, `invoice_allocations`): `min_rows`, `min_row_height`,
   `show_row_numbers`, `zebra`, `background_color` (header fill), `label_color`
   (header text), `table_borders` (`horizontal` default | `vertical` | `all` |
   `none` — which cell rules draw), `table_border_color` (recolors the drawn

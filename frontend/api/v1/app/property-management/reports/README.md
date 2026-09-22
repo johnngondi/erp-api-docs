@@ -55,7 +55,7 @@ segment its reports sit under:
 |---|---|---|
 | `landlord` | `landlords` | Income & Expenditure, Facility Budget |
 | `supplier` | `suppliers` | parent group `expenditure-reports` (Property Expenses, Expenses Summary, Bill Submission, Bill Payment); Supplier Withholding (one report across every withholding tax, narrowed by `withholding_tax_id`); Supplier Contracts; Input VAT Analysis |
-| `tenant` | `tenants` | Billings & Collections, parent groups `collections-reports`, `tenancy-reports` (Tenancy Schedule), `tenant-withholding` |
+| `tenant` | `tenants` | Billings & Collections; parent group `collections-reports` (Property Collections, Collections Summary, Legal Fee Collection); parent groups `tenancy-reports` (Tenancy Schedule) and `tenant-withholding` |
 | `accounting` | `accounting` | Trial Balance — a company-wide snapshot, not a party report |
 
 > Party names are singular (`landlord`, not `landlords`) but the URL segments stay plural, so no
@@ -324,18 +324,27 @@ GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facil
 > a filtered download is identifiable without opening it. The response uses `attachment`
 > `Content-Disposition` and the corresponding Excel or PDF `Content-Type`.
 > Each report bucket is a separate worksheet in Excel and a separate page in PDF.
+>
+> Money cells are exported as bare amounts (`1,250.50`), never prefixed with a currency code. The
+> currency is named once per bucket instead: a bucket with money columns is titled with its currency
+> appended — `Summary (KES)` — using the bucket's own `header.currency` when it has one, else the
+> report's (`header.property.currency`, then `header.currency`). The Excel sheet's first row carries
+> the same title. The PDF shrinks a wide bucket's table text (down to 5px from the normal 10px) so
+> every column fits the page width; padding and the total-row size steps shrink with it.
 
 #### The PDF first page
 
 > A PDF opens with the company's letterhead — logo (inlined from the stored file), name, tagline and
 > contact details, all taken from the company the export was made under — and, under it, a panel
-> naming what the report is: **Landlord** / **Property** on the left, **Report** / **Period** on the
-> right. The landlord and property lines come from `header.landlord.name` / `header.property.name`,
+> naming what the report is: **Landlord** / **Property** on the left, **Report** / **Period** /
+> **Currency** on the right. The landlord and property lines come from `header.landlord.name` / `header.property.name`,
 > so they are printed only when the export was filtered down to one, and any company detail the
 > company has not filled in is left out too. **Period** is the resolved window formatted
 > `01 Aug, 2026 – 31 Aug, 2026`, suffixed with the cycle when the report declares one
 > (`header.filters.report_type` / `report_cycle`) or when the window is exactly one calendar week,
-> month, quarter or year; Trial Balance shows `As at 19 Aug, 2026` instead. The Excel workbook has no
+> month, quarter or year; Trial Balance shows `As at 19 Aug, 2026` instead. **Currency** is the
+> report's currency as `Kenyan Shilling (KES)` (the bare code when it has no name), omitted when the
+> header carries none. The Excel workbook has no
 > letterhead — each sheet still starts at its bucket label — so the filename is what identifies it.
 
 ### Large reports

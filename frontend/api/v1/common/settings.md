@@ -36,6 +36,16 @@ Each tax row now also returns `hs_code` (string|null), and the list accepts `fil
 
 Only the list endpoint is implemented today, so there is no way to edit `hs_code` through the API yet.
 
+### Banks: `paybill_number`
+
+Each bank row now also returns `paybill_number` (string|null): the bank's M-Pesa paybill. The invoice `mobile_money` document block uses it when the landlord holds the collection account, or when the company has no `paybill_number` setting. The account number printed with it is the pay-to bank account's `account_number`.
+
+```json
+{ "id": 3, "name": "KCB", "code": "01", "swift_code": "KCBLKENX", "paybill_number": "522522" }
+```
+
+Only the list and show endpoints are implemented, so `paybill_number` is set through the database, seeders or the EPMAS import, not through the API.
+
 ## Procurement
 
 - `GET|POST /settings/skus`

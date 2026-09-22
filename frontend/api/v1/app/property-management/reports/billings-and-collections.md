@@ -67,7 +67,7 @@ There is no pagination, sort, or include — a report is returned whole for the 
 
 ## The buckets
 
-They always come back in this order. Four of them are fixed; `summary_by_property` is the one
+They always come back in this order. Five of them are fixed; `summary_by_property` is the one
 bucket that varies with the filters — it leads the list **only when `facility_id` is omitted**, and
 is dropped when a single property is selected (it would just restate the `overview` Total row).
 Read the order from the `bucket` keys rather than assuming an index.
@@ -76,6 +76,7 @@ Read the order from the `bucket` keys rather than assuming an index.
 |---|---|---|---|
 | `summary_by_property` | Summary by Property | property — **only when `facility_id` is omitted** | `facility_id`, `name`, `balance_bf`, per-component `component_{id}_billings` (before `total_billings`), `total_billings`, `total_expected`, per-component `component_{id}_collections` (before `total_collections`), `total_collections`, `balance_cf` |
 | `overview` | Summary | lease | `lease_id`, `name`, `balance_bf`, `total_billings`, `total_collections`, `balance_cf` |
+| `overall_b_c_by_tenant` | Billings and Collections by Tenant | lease | `lease_id`, `name`, `balance_bf`, per-component `component_{id}_billings` (before `billings_tax`), `billings_tax`, `total_billings`, `total_expected`, per-component `component_{id}_collections` (before `collections_tax`), `collections_tax`, `total_collections`, `balance_cf` |
 | `summary_by_account` | Summary by Account | lease | overview columns **plus** per-account `account_{id}_billings` (before `total_billings`) and `account_{id}_collections` (before `total_collections`) |
 | `billings` | Billings | lease | `lease_id`, `name`, `balance_bf`, per-component `component_{id}` (before `total_amount`), `total_amount`, `total_tax`, `gross_total`, `balance_cf` |
 | `collections` | Collections | lease | same shape as `billings`, for money received |
@@ -93,6 +94,13 @@ opens the column picker, not for the default view. Because both sides share one 
 carry a side suffix (`component_{id}_billings` / `component_{id}_collections`) rather than the bare
 `component_{id}` the `billings` / `collections` buckets use.
 
+**`overall_b_c_by_tenant`** puts each lease's billings and collections side by side. Its
+per-component cells hold the amount **net of tax**, and each side's tax gets its own column
+(`billings_tax` / `collections_tax`, labelled VAT), so on each side the component cells plus the
+VAT cell add up to the side's total (`total_billings` = Billed, `total_collections` = Paid).
+`total_expected` (Total Due) is `balance_bf + total_billings`. Its component columns are visible by
+default and, like `summary_by_property`, carry the side suffix.
+
 **Accounts vs components:** an *account* is an expense category; a *component* is a lease component
 (each component belongs to one account). `summary_by_account` rolls up to accounts; `billings` /
 `collections` break down to individual components. The per-account and per-component columns are the
@@ -104,11 +112,12 @@ carry a side suffix (`component_{id}_billings` / `component_{id}_collections`) r
 - `balance_bf` (brought forward) — activity strictly **before** `period_from`.
   - `summary` / `summary_by_account` / `summary_by_property`: prior billings **−** prior collections.
   - `billings` bucket: prior **billings** only. `collections` bucket: prior **collections** only.
-- `total_expected` (`summary_by_property` only) — `balance_bf + total_billings`: everything the
-  property was owed in the period, arrears included.
+- `total_expected` (`summary_by_property` and `overall_b_c_by_tenant`) — `balance_bf + total_billings`:
+  everything owed in the period, arrears included.
 - `balance_cf` (carried forward):
   - `summary` / `summary_by_account`: `balance_bf + total_billings − total_collections`.
-  - `summary_by_property`: `total_expected − total_collections` (the same arithmetic).
+  - `summary_by_property` / `overall_b_c_by_tenant`: `total_expected − total_collections` (the
+    same arithmetic).
   - `billings` / `collections`: `balance_bf + gross_total`.
 - In the billings/collections buckets, the per-component cells sum to `gross_total`, and
   `total_amount + total_tax = gross_total`.
@@ -121,6 +130,15 @@ Following the shared vocabulary, this report sets:
 - `total_billings` / `total_collections` / `total_amount` / `total_tax` columns → `type: subtotal`,
   `weight: font-medium`.
 - `gross_total` / `balance_cf` columns → `type: grosstotal`, `weight: font-bold`.
+- Column tints (`background_color`), so billings and collections read as two blocks:
+  - Billing columns (per-account `account_{id}_billings`, per-component `component_{id}_billings`,
+    `billings_tax`, and the `billings` bucket's `component_{id}` / `total_amount` / `total_tax`) →
+    `info`.
+  - Collection columns (per-account `account_{id}_collections`, per-component
+    `component_{id}_collections`, `collections_tax`, and the `collections` bucket's `component_{id}` / `total_amount` /
+    `total_tax`) → `success`.
+  - Totals (`total_billings`, `total_collections`, `gross_total`) → `danger`.
+  - `balance_bf`, `total_expected` and `balance_cf` → `none`.
 - Each bucket's **Total** row → `type: subtotal`, `background_color: secondary`.
 - A negative `balance_bf` / `balance_cf` **cell** → `color: danger` (arrears); otherwise `none`.
 
@@ -162,8 +180,8 @@ passed `facility_id=1`, so `summary_by_property` is absent and `overview` leads 
           { "label": "Lease", "key": "lease_id", "format": "integer", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
           { "label": "Tenant", "key": "name", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
           { "label": "Balance B/F", "key": "balance_bf", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": true },
-          { "label": "Billings", "key": "total_billings", "format": "money", "type": "subtotal", "weight": "font-medium", "background_color": "none", "alignment": "right", "visible": true, "togglable": false },
-          { "label": "Collections", "key": "total_collections", "format": "money", "type": "subtotal", "weight": "font-medium", "background_color": "none", "alignment": "right", "visible": true, "togglable": false },
+          { "label": "Billings", "key": "total_billings", "format": "money", "type": "subtotal", "weight": "font-medium", "background_color": "danger", "alignment": "right", "visible": true, "togglable": false },
+          { "label": "Collections", "key": "total_collections", "format": "money", "type": "subtotal", "weight": "font-medium", "background_color": "danger", "alignment": "right", "visible": true, "togglable": false },
           { "label": "Balance C/F", "key": "balance_cf", "format": "money", "type": "grosstotal", "weight": "font-bold", "background_color": "none", "alignment": "right", "visible": true, "togglable": false }
         ],
         "items": [
@@ -215,18 +233,18 @@ Example of the dynamic-column buckets (from the same call) — note the injected
 ```jsonc
 // A per-account column in the `summary_by_account` bucket's fields — carries account_id
 { "label": "Rent Billings", "key": "account_1_billings", "format": "money", "type": "normal",
-  "weight": "font-normal", "background_color": "none", "alignment": "right", "togglable": true,
+  "weight": "font-normal", "background_color": "info", "alignment": "right", "togglable": true,
   "visible": true, "account_id": 1 }
 
 // A per-component column in the `billings` bucket's fields — carries component_id
 { "label": "Rent", "key": "component_1", "format": "money", "type": "normal",
-  "weight": "font-normal", "background_color": "none", "alignment": "right", "togglable": true,
+  "weight": "font-normal", "background_color": "info", "alignment": "right", "togglable": true,
   "visible": true, "component_id": 1 }
 
 // The same idea in `summary_by_property`, but hidden by default — don't render it until the
 // user turns it on in the column picker
 { "label": "Rent Billings", "key": "component_1_billings", "format": "money", "type": "normal",
-  "weight": "font-normal", "background_color": "none", "alignment": "right", "togglable": true,
+  "weight": "font-normal", "background_color": "info", "alignment": "right", "togglable": true,
   "visible": false, "component_id": 1 }
 ```
 
@@ -239,6 +257,13 @@ Column order (keys) for the dynamic buckets, for reference:
   "total_billings", "total_expected",
   "component_{id}_collections", // ← per-component, injected before total_collections, visible: false
   "total_collections", "balance_cf" ]
+
+// the `overall_b_c_by_tenant` bucket's fields
+[ "lease_id", "name", "balance_bf",
+  "component_{id}_billings",    // ← per-component (net of tax), injected before billings_tax
+  "billings_tax", "total_billings", "total_expected",
+  "component_{id}_collections", // ← per-component (net of tax), injected before collections_tax
+  "collections_tax", "total_collections", "balance_cf" ]
 
 // the `summary_by_account` bucket's fields
 [ "lease_id", "name", "balance_bf",

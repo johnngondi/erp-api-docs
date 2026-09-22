@@ -179,7 +179,8 @@ Each block declares:
 | `tax_summary` | invoice, credit note, lpo | table | `tax_summary.name`, `.rate`, `.taxable`, `.tax` |
 | `payments` | invoice | table | `payments.type`, `.number`, `.date`, `.method`, `.reference`, `.amount` — receipt + credit-note allocations against this invoice |
 | `invoice_ageing` | invoice | table | `ageing.label`, `.amount` — Current/1-30/31-60/61-90/90+ buckets |
-| `payment_details` | invoice | table | The facility's **collection** `facility_bank_accounts`, one row per lease component: `bank_accounts.component`, `.bank_name`, `.branch`, `.account_name`, `.account_number` |
+| `payment_details` | invoice | table | The facility's **collection** `facility_bank_accounts`, one row per lease component: `bank_accounts.component`, `.bank_name`, `.branch`, `.account_name`, `.account_number`, `.paybill_number` |
+| `mobile_money` | invoice | table | M-Pesa paybill rows: `mobile_money.paybill_number`, `.account_number`, `.bank_name`, `.component`. Agent-held collection account + company `paybill_number` setting → company paybill against the invoice number; otherwise each pay-to account's `banks.paybill_number` against its account number. `hidesWhenEmpty` |
 | `bank_account_details` | receipt | fields | Where the receipt's money landed: `payment_account.bank_name`, `.branch`, `.account_name`, `.account_number` |
 | `payment_transactions` | receipt | table | `transactions.transaction_date`, `.transaction_number`, `.method`, `.amount` |
 | `invoice_allocations` | credit note, receipt | table | Invoices this document cleared: `allocations.invoice_number`, `.invoice_date`, `.invoice_total`, `.allocated`, `.balance` |
@@ -221,7 +222,15 @@ tax_summary[]:  { name, rate, taxable, tax }
 payments[]:     { type, number, date, method, reference, amount }      # invoice
 allocations[]:  { invoice_number, invoice_date, invoice_total, allocated, balance }  # cn/receipt
 ageing:         { as_at, buckets: [ { label, amount } ] }              # invoice
-bank_accounts[]:{ component, bank_name, branch, account_name, account_number }  # invoice
+bank_accounts[]:{ component, bank_name, branch, account_name, account_number, paybill_number }  # invoice
+mobile_money[]: { component, bank_name, paybill_number, account_number }  # invoice —
+                # agent holds the collection account (facility managementContract
+                # .collection_account_holder = agent) AND the company `paybill_number`
+                # setting is set → one row: company paybill, account_number = invoice
+                # number (INV0481), component "All charges", bank_name null.
+                # Otherwise → one row per bank_accounts[] row whose bank has a
+                # paybill_number, account_number = that bank account's number.
+                # Empty array when no paybill is known (the block is then hidden)
 payment_account:{ bank_name, branch, account_name, account_number }    # receipt
 transactions[]: { transaction_date, transaction_number, method, amount }  # receipt
 approval_chain[]: { name, date }                                       # lpo, see §4.1
