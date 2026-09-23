@@ -363,7 +363,8 @@ re-sum of the rows — toggled by `show_total_row`, labelled by `total_label`.
 "Approval details" and "Recipient details"), because the only difference
 between them is the heading and the row labels. `config.rows` is a list of
 `{ cells: [{ label, source }] }`; a cell with a `source` prints that payload
-value, a cell without one prints a ruled line to write on.
+value, a cell without one prints a ruled line to write on that runs to the
+edge of its cell.
 
 ```json
 {"type": "block", "block": "sign_off", "config": {

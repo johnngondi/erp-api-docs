@@ -173,7 +173,7 @@ resolve this way:
 | `image` | `logo`: a single `<img>`. `meter_reading_images`: a captioned pair of photos per utility line (see §1.1) | `logo`: `payload.company.logo_url`, sized by `config.max_height_mm`/`min_height_mm`. `meter_reading_images`: `payload.items[]` readings, sized by `config.image_height_mm` |
 | `qr` | A generated QR code + optional caption/CU-number lines (today only `fiscal_qr`) | `payload.document.verify_url` (+ `.cu_invoice_number`/`.cu_serial_number` when their `show_*` toggles are on) |
 | `text` | Free-flowing text — `free_text`'s static `config.content`, `document_notes`'s `payload.document.notes`, or `document_title`'s big document name | Static config for `free_text`; a payload field for `document_notes` and `document_title` (see §1.4) |
-| `sign_off` | Rows of labelled fill-in slots to sign by hand — one `<tr>` per `config.rows[]`, one cell per `cells[]`, each drawn as `Label: value` or `Label: ……………` | `data_get(payload, cell.source)` for bound cells; unbound cells draw a rule (see §1.5) |
+| `sign_off` | Rows of labelled fill-in slots to sign by hand — one `<tr>` per `config.rows[]`, one cell per `cells[]`, each drawn as `Label: value` or `Label: ______` with the rule filling the rest of the cell | `data_get(payload, cell.source)` for bound cells; unbound cells draw a rule (see §1.5) |
 | `divider` | A horizontal or vertical rule, no data binding | none — `config.orientation`/`line_color`/`line_width`/`margin_top`/`margin_bottom` only |
 
 `signatories` is the one exception: it reports `presentation: "fields"` but has
@@ -255,7 +255,10 @@ a blank label, a label over 60 characters, or a `source` outside `sources`.
 gets something shaped like the ones above it.
 
 A cell whose `source` is `null` — or whose bound value is missing from the
-payload — renders as a ruled line to write on, not as an empty gap.
+payload — renders as a ruled line to write on, not as an empty gap. The label
+shrinks to its own text and the rule takes every remaining pixel of the cell, so
+the lines in a row all end flush with their cell edges rather than being short
+stubs of a fixed width.
 
 ### 1.6 `voucher_items` withholding columns
 
