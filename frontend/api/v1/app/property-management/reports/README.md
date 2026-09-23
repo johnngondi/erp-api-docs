@@ -55,7 +55,7 @@ segment its reports sit under:
 |---|---|---|
 | `landlord` | `landlords` | Income & Expenditure, Facility Budget |
 | `supplier` | `suppliers` | parent group `expenditure-reports` (Property Expenses, Expenses Summary, Bill Submission, Bill Payment); Supplier Withholding (one report across every withholding tax, narrowed by `withholding_tax_id`); Supplier Contracts; Input VAT Analysis |
-| `tenant` | `tenants` | Billings & Collections; parent group `collections-reports` (Property Collections, Collections Summary, Legal Fee Collection); parent groups `tenancy-reports` (Tenancy Schedule) and `tenant-withholding` |
+| `tenant` | `tenants` | Billings & Collections, Tenant Deposits; parent group `collections-reports` (Property Collections, Collections Summary, Legal Fee Collection); parent group `tenancy-reports` (Tenancy Schedule, Summary Occupancy); parent group `tenant-withholding` |
 | `accounting` | `accounting` | Trial Balance — a company-wide snapshot, not a party report |
 
 > Party names are singular (`landlord`, not `landlords`) but the URL segments stay plural, so no
