@@ -151,7 +151,7 @@ Each block declares:
 | --- | --- | --- |
 | `landlord_details` | invoice, receipt, credit note, lpo, remittance | `landlord.name`, `.tax_pin`, `.phone`, `.email`, `property.name`, `.address`, `.lr_number`. Deliberately **not** `SharedAcrossDocuments`: a payment voucher has no landlord of its own, so the block would render only empty rows there. |
 | `payee_details` | payment voucher | `payee.name`, `.tax_pin`, `.address` — who the voucher pays (a user, per the voucher's `payable_as`) |
-| `tenant_details` | invoice, receipt, credit note | `tenant.name`, `.lease_id`, `.tax_pin`, `.phone`, `.email`, `.unit` |
+| `tenant_details` | invoice, receipt, credit note | `tenant.name`, `.lease_id`, `.tax_pin`, `.phone`, `.email`, `.unit`. `unit` is the distinct `facility_spaces.name` of the lease's items (see §5.1), **not** the property name |
 | `vendor_details` | lpo | `vendor.name`, `.tax_pin`, `.phone`, `.email`, `.address` |
 
 **Per-type detail blocks**
@@ -184,6 +184,7 @@ Each block declares:
 | `bank_account_details` | receipt | fields | Where the receipt's money landed: `payment_account.bank_name`, `.branch`, `.account_name`, `.account_number` |
 | `payment_transactions` | receipt | table | `transactions.transaction_date`, `.transaction_number`, `.method`, `.amount` |
 | `invoice_allocations` | credit note, receipt | table | Invoices this document cleared: `allocations.invoice_number`, `.invoice_date`, `.invoice_total`, `.allocated`, `.balance` |
+| `component_allocations` | receipt | table | What the receipt settled per charge: `component_allocations.component`, `.amount`, with the grand total in `totals.allocated`. VAT is the mapper's last row, not a column. See §4.5 |
 | `signatories` | **lpo only** | fields | See §4.1 — replaces the generic signature block on LPOs specifically |
 | `sign_off` | payment voucher, remittance | sign_off | Rows of labelled fill-in slots to sign by hand. See §4.3 |
 | `voucher_items` | payment voucher | table, **flow** | What the voucher pays, with data-driven withholding columns and a total-paid footer. See §4.2 |
@@ -398,6 +399,36 @@ two are not stored anywhere and are computed by the mapper at render time.
 | `summary.advance_remittances` | **computed** — advance remittances for this facility whose period sits inside this remittance's period, excluding pending ones and this row itself. Mirrors the query `ComputeRemittableAmountService` ran at creation time, so the printed figure matches what was actually deducted. Zero on an advance remittance itself. |
 | `summary.total_withheld` | **computed** — the sum of this remittance's own receipts taken through a payment method with `payment_methods.is_withholding` (withholding VAT, withholding rental income): collected, but paid to KRA rather than into the account. Scoped to the remittance's own receipts so it reconciles against the Collections table printed alongside it. |
 
+### 4.5 Receipt component allocations
+
+`invoice_allocations` says which invoices a receipt cleared; `component_allocations`
+says what the money was *for*. `ReceiptPayloadMapper::componentAllocationRows()`
+walks `receiptAllocations → componentAllocations → leaseItemComponent →
+leaseComponent`, and:
+
+- skips allocations whose status is `ReceiptAllocationStatus::Cancelled` — that
+  money is no longer applied to an invoice, so it names neither a unit nor a
+  component;
+- groups by lease-component name, summing the row `amount` (net). A component
+  with no resolvable name falls back to "Unallocated";
+- appends **VAT** as a final component row, the summed `tax`, only when it is
+  above zero — VAT is data, not a column, so numbering, zebra striping and
+  borders treat it like any other row;
+- publishes the grand total as `totals.allocated`, summed from the stored `total`
+  column (not `amount + tax`) so the printed figure reconciles with the rows.
+
+The block draws Component on the left and Amount on the right, with the total as
+a `<tfoot>` row. `show_total_row` (default true) and `total_label` (default
+"Total") control that footer; `show_row_numbers` defaults to **false** here,
+against the shared table default, because a two-column table reads better
+without a `#` gutter.
+
+The footer itself is `partials/table.blade.php`'s optional `$footerRows` —
+`[['label' =>, 'value' =>, 'grand' => bool]]`, rows with a null value dropped,
+`grand` rendering bold. Every other table block omits it and is unchanged.
+
+---
+
 ---
 
 ## 5. Labels — three-tier resolution
@@ -410,7 +441,42 @@ partial):
 3. *(extension point)* localization via translation keys.
 
 Blocks also honour `show_labels`, `label_position` (`left`/`top`), `heading_text`,
-`font_size`, `align` from their `configSchema`.
+`font_size`, `align`, `show_empty_fields` from their `configSchema`.
+
+### Empty fields — "Not Available"
+
+`partials/field-list.blade.php` used to drop any row whose value was null or
+`''`, so a field the designer had deliberately placed simply vanished when the
+data was missing. It now keeps the row and prints a faded
+`<span class="dt-empty">Not Available</span>` — but only when the template picked
+its fields, i.e. `config.fields` is an explicit list. A block left on "all
+defaults" (no `config.fields`) still drops empties, so the seeded templates did
+not sprout `Lease: Not Available` rows the day this shipped.
+
+`config.show_empty_fields` (boolean, `appearanceSchema`) overrides that rule in
+either direction; leaving it unset is the auto behaviour above. A value counts
+as empty when it is `null`, `''` or `[]`.
+
+Out of scope on purpose: `mobile_money` keeps its own inline loop and its own
+`@continue` on empty values — it repeats per paybill and `hidesWhenEmpty()`, so
+placeholders there would stop the block from ever hiding. Table blocks keep
+blank cells.
+
+### 5.1 Unit names
+
+`tenant.unit` is resolved by `Payload\Concerns\ResolvesUnitNames`: the distinct,
+comma-joined `facility_spaces.name` behind a lease's `leaseItems`
+(`facility_space_id` is nullable, so every hop is null-safe and blanks are
+dropped). It returns `null` — not a dash — when nothing resolves, so the empty
+value reaches the field list and renders as the placeholder above.
+
+- **Invoice / credit note** — the document's own `lease`.
+- **Receipt** — the leases behind its allocated invoices, minus the cancelled
+  allocations, distinct across all of them.
+
+The eager loads this needs live in `config/document_templates.php` under each
+type's `with` (`lease.leaseItems.facilitySpace`, and on the receipt
+`receiptAllocations.invoice.lease.leaseItems.facilitySpace`).
 
 ---
 

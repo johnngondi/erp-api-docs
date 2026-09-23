@@ -63,11 +63,12 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
           { "key": "tenant.tax_pin", "default_label": "KRA PIN", "data_path": "tenant.tax_pin", "type": "string", "format": null },
           { "key": "tenant.phone", "default_label": "Phone", "data_path": "tenant.phone", "type": "string", "format": null },
           { "key": "tenant.email", "default_label": "Email", "data_path": "tenant.email", "type": "string", "format": null },
-          { "key": "tenant.unit", "default_label": "Unit / property", "data_path": "tenant.unit", "type": "string", "format": null },
+          { "key": "tenant.unit", "default_label": "Unit", "data_path": "tenant.unit", "type": "string", "format": null },
         ],
         "config_schema": {
           "heading_text": { "type": "string", "label": "Heading text", "default": null },
           "show_labels": { "type": "boolean", "label": "Show field labels", "default": true },
+          "show_empty_fields": { "type": "boolean", "label": "Show empty fields as \"Not Available\"", "default": null },
           "label_position": { "type": "enum", "label": "Label position", "options": ["left", "top"], "default": "left" },
           "font_size": { "type": "number", "label": "Font size", "default": 9, "min": 6, "max": 24 },
           "align": { "type": "enum", "label": "Alignment", "options": ["left", "center", "right"], "default": "left" },
@@ -95,7 +96,7 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 
 > Re-fetch the registry when the user switches `document_type`.
 
-### 1.1 The 34 blocks
+### 1.1 The 35 blocks
 
 **Shared / layout — all six types**
 
@@ -143,6 +144,7 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 | `bank_account_details` | receipt | fields | `payment_account.bank_name`, `.branch`, `.account_name`, `.account_number` — where the payment landed |
 | `payment_transactions` | receipt | table | `transactions.transaction_date`, `.transaction_number`, `.method`, `.amount` |
 | `invoice_allocations` | credit note, receipt | table | `allocations.invoice_number`, `.invoice_date`, `.invoice_total`, `.allocated`, `.balance` |
+| `component_allocations` | receipt | table | `component_allocations.component`, `.amount` — what the receipt settled per charge, VAT included as a final row. Config adds `show_total_row` (default true), `total_label` (default "Total"); `show_row_numbers` defaults to **false**. Draw the total as a footer row from `totals.allocated`, bold, spanning every column but the last |
 | `signatories` | **lpo only** | fields | See §1.3 |
 | `payee_details` | payment voucher | fields | `payee.name`, `.tax_pin`, `.address` — who the voucher pays |
 | `voucher_details` | payment voucher | fields | `document.number`, `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
@@ -166,7 +168,7 @@ resolve this way:
 
 | `presentation` | What it draws | Data it reads |
 | --- | --- | --- |
-| `fields` | A label/value list (vertical, or `label_position: "top"`), one row per entry in `config.fields`, in that order | `data_get(payload, field.key)` for each of the block's `available_fields[]` |
+| `fields` | A label/value list (vertical, or `label_position: "top"`), one row per entry in `config.fields`, in that order. An empty value keeps its row and draws a faded "Not Available" — see §4.4 | `data_get(payload, field.key)` for each of the block's `available_fields[]` |
 | `table` | A header row (from `config.fields`) + one row per item in the payload array the block is bound to (`items`, `tax_summary`, `payments`, `ageing.buckets`, `bank_accounts`, `payment_account`-adjacent `transactions`, `allocations` — see §2.1 for which array each block reads) | The matching top-level payload array; `config.min_rows`/`min_row_height` pad blank trailing rows so a short table still looks ruled |
 | `image` | `logo`: a single `<img>`. `meter_reading_images`: a captioned pair of photos per utility line (see §1.1) | `logo`: `payload.company.logo_url`, sized by `config.max_height_mm`/`min_height_mm`. `meter_reading_images`: `payload.items[]` readings, sized by `config.image_height_mm` |
 | `qr` | A generated QR code + optional caption/CU-number lines (today only `fiscal_qr`) | `payload.document.verify_url` (+ `.cu_invoice_number`/`.cu_serial_number` when their `show_*` toggles are on) |
@@ -360,6 +362,9 @@ totals:         { amount, tax, total, paid, balance }
 tax_summary[]:  { name, rate, taxable, tax }
 payments[]:     { type, number, date, method, reference, amount }      # invoice
 allocations[]:  { invoice_number, invoice_date, invoice_total, allocated, balance }  # cn/receipt
+component_allocations[]: { component, amount }                        # receipt — one row per lease
+                # component (net), then a final "VAT" row when tax > 0. Cancelled receipt
+                # allocations are excluded. Grand total is totals.allocated
 ageing:         { as_at, buckets: [ { label, amount } ] }              # invoice
 bank_accounts[]:{ component, bank_name, branch, account_name, account_number }  # invoice —
                 # filtered to THIS invoice: only accounts collecting a component that is on the
@@ -518,8 +523,13 @@ The special keys you'll touch most:
   PDF). Omit it to mean "all defaults"; an explicit `[]` means "show none". For
   table-presentation blocks these are the **columns**.
 - **`field_labels`** — per-field label overrides (see §5).
+- **`show_empty_fields`** — boolean, and the only key whose `default` is `null`.
+  `null` means *auto*: a `fields`-presentation block draws empty values as a
+  faded "Not Available" row when `config.fields` is an explicit list, and drops
+  them when it is absent ("all defaults"). Set it to `true`/`false` to force
+  either behaviour. See §4.4 for the canvas mirror.
 - Common appearance keys present on most blocks: `heading_text`, `show_labels`,
-  `label_position`, `font_size`, `align`.
+  `label_position`, `font_size`, `align`, `show_empty_fields`.
 
 Block-specific extras you'll see in `config_schema`:
 
@@ -528,9 +538,10 @@ Block-specific extras you'll see in `config_schema`:
 - `divider_line`: `orientation` (`horizontal|vertical`), `line_color`, `line_width`, `margin_top`, `margin_bottom`
 - `free_text`: `content`
 - `signatories`: `signatory_count`, `show_date`, `align` (§1.3)
+- `component_allocations`: `show_total_row` (default true), `total_label` (default "Total"), and `show_row_numbers` defaulting to **false** here
 - **Every table-presentation block** (`invoice_items`, `credit_note_items`,
   `lpo_items`, `tax_summary`, `payments`, `invoice_ageing`, `payment_details`,
-  `mobile_money`, `payment_transactions`, `invoice_allocations`): `min_rows`, `min_row_height`,
+  `mobile_money`, `payment_transactions`, `invoice_allocations`, `component_allocations`): `min_rows`, `min_row_height`,
   `show_row_numbers`, `zebra`, `background_color` (header fill), `label_color`
   (header text), `table_borders` (`horizontal` default | `vertical` | `all` |
   `none` — which cell rules draw), `table_border_color` (recolors the drawn
@@ -597,6 +608,32 @@ Two independent mechanisms, both mm-based:
 Use both on a facility's first invoice — a 2-line invoice with `min_rows: 8` on
 `invoice_items` and `min_height: 90` on its section prints with the same
 visual weight as a full one.
+
+### 4.4 Empty fields — "Not Available"
+
+A `fields`-presentation block no longer silently skips a field whose value is
+empty (`null`, `""` or `[]`). It keeps the row, draws the label as usual, and
+puts a faded, italic "Not Available" where the value would be — so a reader can
+tell the field is missing from the *data*, not from the *document*.
+
+When this applies, in the renderer and on your canvas:
+
+| `config.show_empty_fields` | `config.fields` | Empty rows |
+| --- | --- | --- |
+| absent / `null` (auto) | an explicit list | **shown** as "Not Available" |
+| absent / `null` (auto) | absent ("all defaults") | dropped, as before |
+| `true` | either | **shown** |
+| `false` | either | dropped |
+
+The reasoning: an explicit `config.fields` means someone put that field on the
+document on purpose, so its absence is worth stating. A block still sitting on
+"all defaults" was never curated, so it keeps the quieter old behaviour.
+
+Two blocks are deliberately outside this: `mobile_money` repeats per paybill and
+hides itself when it has no rows, and table blocks leave empty cells blank.
+
+PDF styling to mirror: `color: #9aa5b1; font-style: italic; font-weight: 400`
+(the value cell is otherwise 600).
 
 ---
 
