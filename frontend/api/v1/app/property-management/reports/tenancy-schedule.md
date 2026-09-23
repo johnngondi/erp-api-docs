@@ -79,14 +79,13 @@ Each bucket's `header` carries `label` (the property name), `property { id, name
 ## Columns (`fields`)
 
 The leaf/space columns, in order: `name` (Space), `category`, `type`, `size`, `status`, `tenant`,
-`lease_start`, `lease_end`, `billing_cycle`, then one **money column per autobilled component present
-in the property** (`component_{id}`, e.g. `Rent/M`, `Service Charge/M`, `Parking/M`, `Signage/M` —
+`lease_id` (Lease), `lease_start`, `lease_end`, `billing_cycle`, then one **money column per
+autobilled component present in the property** (`component_{id}`, e.g. `Rent/M`, `Service Charge/M`, `Parking/M`, `Signage/M` —
 each carries `component_id`, `togglable:true`), then `total` (Total/M, `type: grosstotal`).
 
-All columns use `format: string`. The money columns are strings because their **values are
-currency-prefixed, preformatted** (e.g. `"KES 120,000.00"`) rather than raw numbers — so the renderer
-displays them as-is and right-aligns. A space that does not carry one of the property's component
-columns shows a dash `"-"`.
+The text columns use `format: string`; `component_{id}` and `total` use `format: money` and carry
+**bare numbers** (`120000.0`, 2dp) — the currency is named once on the bucket, not repeated in every
+cell. A space that does not carry one of the property's component columns has `value: null`.
 
 ### Derivations
 
@@ -101,17 +100,29 @@ columns shows a dash `"-"`.
   `Available`); other spaces follow the rent/SC split (`Unavailable` / `Only Service Charge Available`
   / `Only Rent Available` / `Available`), with `Under Consideration` for a free space that has an open
   application. The cell carries the status `color`.
-- **tenant**, **lease_start** / **lease_end** (`Y-m-d`), **billing_cycle**, and **amounts** — from the
-  space's **primary holding lease for the period** (rent holder → SC holder → parking → signage → the
-  latest overlapping lease). Monthly amount per component is `SUM(lease_item_components.cost_per_month)`
+- **tenant**, **lease_id**, **lease_start** / **lease_end** (`Y-m-d`), **billing_cycle**, and
+  **amounts** — from the space's **primary holding lease for the period** (rent holder → SC holder →
+  parking → signage → the latest overlapping lease). `lease_id` names that primary lease, so a space
+  held by two leases — rent on one, service charge on another — shows only the primary one, exactly
+  as the Tenant column already does. Group nodes (block / wing / floor) carry no field cells at all,
+  so the column is blank on them. Monthly amount per component is `SUM(lease_item_components.cost_per_month)`
   over autobilled components. Parking and signage occupancy is resolved through the lease's
   `is_parking_fee` / `is_signage_fee` components (there is no dedicated occupancy column for them).
 
 ### Currency
 
-Amounts are shown in each **lease's own currency**, prefixed as a string (`"KES 120,000.00"`, 2dp).
-The bucket header's `currency` is the property's reporting currency and is informational only; a
-mixed-currency property is still rendered per its leases' currencies on each row.
+Amounts are `lease_item_components.cost_per_month` **as stored, in each lease's own currency** —
+nothing is converted. The currency is stated once, on the bucket, as `header.currency`
+`{ code, name }`; exports append it to the bucket title (`Riverside Plaza (KES)`) and the cover names
+it in full.
+
+Because nothing is converted, the bucket can only name a currency while its leases agree on one:
+
+| The property's occupied spaces | `header.currency` |
+|---|---|
+| all on leases in one currency | that currency |
+| **on leases in two or more currencies** | **`null`** — the export prints the bucket title bare rather than stamping one code over rows in another |
+| none (no occupancy in the period) | the property's reporting currency |
 
 ## Historical occupancy
 
@@ -147,13 +158,14 @@ component flag — so a parking bay or signage panel correctly shows its histori
   "size":        { "value": "40 SqFt" },
   "status":      { "value": "Unavailable", "color": "danger" },
   "tenant":      { "value": "Java House Ltd" },
+  "lease_id":    { "value": 41 },
   "lease_start": { "value": "2026-01-01" },
   "lease_end":   { "value": "2028-12-31" },
   "billing_cycle": { "value": "monthly" },
-  "component_1": { "value": "KES 120,000.00" },
-  "component_2": { "value": "KES 30,000.00" },
-  "component_8": { "value": "-" },
-  "total":       { "value": "KES 150,000.00" }
+  "component_1": { "value": 120000.0 },
+  "component_2": { "value": 30000.0 },
+  "component_8": { "value": null },
+  "total":       { "value": 150000.0 }
 }
 ```
 

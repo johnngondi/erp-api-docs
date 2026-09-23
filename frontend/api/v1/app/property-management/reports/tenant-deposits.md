@@ -126,7 +126,7 @@ A lease with no deposits does not appear at all — this is a register of deposi
 |---|---|---|---|
 | `tenant` | `Tenant` | `string` | `—` where the lease has no tenant |
 | `property` | `Property` | `string` | |
-| `lease_id` | `Lease` | `integer` | The lease's id |
+| `lease_id` | `Lease` | `id` | The lease's id |
 | `start_date` | `Start` | `string` | `01 Jan, 2026` |
 | `end_date` | `End` | `string` | `31 Dec, 2028`, or `—` |
 | `status` | `Status` | `string` | The lease's status |

@@ -76,6 +76,7 @@ reading `0 leases` with zero totals.
 | `key` | `label` | `format` | Notes |
 |---|---|---|---|
 | `tenant` | `Tenant` | `string` | The lease's tenant; `—` where the lease has none |
+| `lease_id` | `Lease` | `id` | Absent on the subtotal, which the label spans |
 | `property` | `Property` | `string` | |
 | `unit` | `Unit` | `string` | **Every** space on the lease, comma-separated; `—` where the lease has no space |
 | `legal_fee_billed` | `Legal Fee Billed` | `money` | Billed in the window |
@@ -99,16 +100,16 @@ portfolio. Per the shared contract, a missing field key renders as an empty cell
 
 ### The subtotal row
 
-Its label spans the three text columns:
+Its label spans the four text columns:
 
 ```jsonc
 { "type": "subtotal", "background_color": "secondary",
-  "tenant": { "value": "2 leases", "col_span": 3 },
+  "tenant": { "value": "2 leases", "col_span": 4 },
   "legal_fee_billed": { "value": 150000.00 }, "recovered": { "value": 70000.00 },
   "outstanding": { "value": 80000.00 } }
 ```
 
-`col_span: 3` means the row **omits the next two field keys** (`property`, `unit`) — walk `fields`
+`col_span: 4` means the row **omits the next three field keys** (`lease_id`, `property`, `unit`) — walk `fields`
 with a skip counter, as the shared contract describes. The label is `1 lease` / `N leases`. The
 subtotal's `outstanding` carries **no colour**; the tint marks individual debts, not the total.
 
@@ -152,7 +153,7 @@ Both bucket-level and report-level `summary`:
             "outstanding": { "value": 0 },
             "days_outstanding": { "value": 0 } },
           { "type": "subtotal", "background_color": "secondary",
-            "tenant": { "value": "2 leases", "col_span": 3 },
+            "tenant": { "value": "2 leases", "col_span": 4 },
             "legal_fee_billed": { "value": 150000.00 }, "recovered": { "value": 70000.00 },
             "outstanding": { "value": 80000.00 } }
         ],

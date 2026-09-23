@@ -55,7 +55,7 @@ segment its reports sit under:
 |---|---|---|
 | `landlord` | `landlords` | Income & Expenditure, Facility Budget |
 | `supplier` | `suppliers` | parent group `expenditure-reports` (Property Expenses, Expenses Summary, Bill Submission, Bill Payment); Supplier Withholding (one report across every withholding tax, narrowed by `withholding_tax_id`); Supplier Contracts; Input VAT Analysis |
-| `tenant` | `tenants` | Billings & Collections, Tenant Deposits; parent group `collections-reports` (Property Collections, Collections Summary, Legal Fee Collection); parent group `tenancy-reports` (Tenancy Schedule, Summary Occupancy); parent group `tenant-withholding` |
+| `tenant` | `tenants` | Billings & Collections, Tenant Deposits, Ageing Report, Debtors Listing, Unbilled Leases, Output VAT Analysis; Tenant Withholding (one report across both withholding methods, with a preset child per method); parent group `collections-reports` (Property Collections, Collections Summary, Legal Fee Collection); parent group `tenancy-reports` (Tenancy Schedule, Summary Occupancy) |
 | `accounting` | `accounting` | Trial Balance — a company-wide snapshot, not a party report |
 
 > Party names are singular (`landlord`, not `landlords`) but the URL segments stay plural, so no
@@ -520,7 +520,7 @@ Render your table columns from this array, **in order**. Each field:
 |---|---|---|
 | `label` | string | Column header text. |
 | `key` | string | Matches the property holding the cell in each `items` row. Stable machine id (derived from the entity id, not its name). |
-| `format` | `string` \| `integer` \| `money` | Drives value formatting. See [Formats](#formats). |
+| `format` | `string` \| `id` \| `integer` \| `money` | Drives value formatting. See [Formats](#formats). |
 | `type` | `normal` \| `subtotal` \| `grosstotal` | Visual role of the column. See [Field & row type](#field--row-type). Default `normal`. |
 | `weight` | Tailwind font weight | e.g. `font-normal`, `font-medium`, `font-bold`. Default `font-normal`. |
 | `background_color` | color enum | Tints the **whole column**. See [Colors](#colors). Default `none`. |
@@ -589,8 +589,17 @@ Three placements share **one color palette**, so a dev learns the meanings once:
 | `format` | Meaning |
 |---|---|
 | `string` | Plain text. Left-align. |
-| `integer` | Whole number. |
+| `id` | An identifier — a database id or a document number. **Print it exactly as given.** Left-align. |
+| `integer` | A whole number you can count or sum. Group the thousands. |
 | `money` | Decimal amount in **currency units** (not cents), formatted with the `header` currency. Right-align. |
+
+**`id` and `integer` are both whole numbers and must not be rendered alike.** `integer` counts
+things — 1,234 units — and reads better grouped. `id` names one thing, and grouping it produces
+`1,234` for lease 1234, which is not a number the user can look up or type back. Anything that ends
+in `_id`, plus document numbers such as `invoice_no`, is an `id`.
+
+A renderer that does not know `id` should fall through to printing the raw value, which is already
+the correct output — so this is safe to adopt late.
 
 ### Field & row type
 

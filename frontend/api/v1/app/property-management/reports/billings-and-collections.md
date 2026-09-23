@@ -177,7 +177,7 @@ passed `facility_id=1`, so `summary_by_property` is absent and `overview` leads 
         "bucket": "overview",
         "header": { "label": "Summary" },
         "fields": [
-          { "label": "Lease", "key": "lease_id", "format": "integer", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
+          { "label": "Lease", "key": "lease_id", "format": "id", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
           { "label": "Tenant", "key": "name", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false },
           { "label": "Balance B/F", "key": "balance_bf", "format": "money", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "right", "visible": true, "togglable": true },
           { "label": "Billings", "key": "total_billings", "format": "money", "type": "subtotal", "weight": "font-medium", "background_color": "danger", "alignment": "right", "visible": true, "togglable": false },
