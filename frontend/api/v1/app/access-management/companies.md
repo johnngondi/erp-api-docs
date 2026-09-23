@@ -55,10 +55,15 @@ Create payload table:
 | `has_vat` | boolean&#124;null | No | `false` | VAT enabled flag |
 | `service_managed` | string&#124;null | No | `null` | `rent` or `sc` or `both` |
 | `address` | string&#124;null | No | `null` | Address text |
+| `postal_address` | string&#124;null | No | `null` | Postal address / P.O. Box code (e.g. `2211-00202`); printed in the document footer |
 | `company_phone` | string&#124;null | No | `null` | Public contact phone |
 | `company_email` | string&#124;null | No | `null` | Public contact email |
 | `company_website` | string&#124;null | No | `null` | Website URL or domain |
 | `company_tagline` | string&#124;null | No | `null` | Short tagline / slogan |
+| `twitter_handle` | string&#124;null | No | `null` | Twitter handle without the `@`; printed in the document footer |
+| `facebook_url` | string&#124;null | No | `null` | Facebook page URL; printed in the document footer |
+| `services` | array[string]&#124;null | No | `null` | Services advertised in the document-footer strip (e.g. `["Valuation","Management"]`); the strip balances itself across however many there are |
+| `brand_color` | string&#124;null | No | `null` | Hex colour (`#rgb` or `#rrggbb`) the footer services strip is painted in; falls back to `#ed1c24` |
 | `profile_photo_path` | string&#124;null | No | `null` | Company logo storage path (e.g. from the uploads endpoint) |
 | `type_of_properties` | array&#124;null | No | `null` | Optional array |
 | `collection_contract` | boolean | No | `false` | Collection contract enabled flag |
@@ -105,10 +110,15 @@ Company object keys:
 | `has_vat` | boolean | |
 | `service_managed` | string&#124;null | |
 | `address` | string&#124;null | |
+| `postal_address` | string&#124;null | Always present |
 | `company_phone` | string&#124;null | Always present |
 | `company_email` | string&#124;null | Always present |
 | `company_website` | string&#124;null | Always present |
 | `company_tagline` | string&#124;null | Always present |
+| `twitter_handle` | string&#124;null | Always present |
+| `facebook_url` | string&#124;null | Always present |
+| `services` | array[string] | Always present; `[]` when the company lists none |
+| `brand_color` | string&#124;null | Always present |
 | `profile_photo_path` | string&#124;null | Always present; `null` when no logo is set |
 | `profile_photo_url` | string | Always present. Resolved by the `HasProfilePhoto` concern: storage URL for `profile_photo_path`, or a generated avatar built from the company name when no logo is set |
 | `is_selected` | boolean | |
@@ -125,7 +135,7 @@ Company object keys:
 
 Key presence:
 
-- The five profile keys (`company_phone`, `company_email`, `company_website`, `company_tagline`, `profile_photo_path`) are always returned, `null` when unset.
+- The profile keys (`postal_address`, `company_phone`, `company_email`, `company_website`, `company_tagline`, `twitter_handle`, `facebook_url`, `services`, `brand_color`, `profile_photo_path`) are always returned, `null` when unset — except `services`, which is `[]`.
 - `profile_photo_url` is always returned and never `null` (avatar fallback).
 - Other scalar keys use `whenHas`, so they are omitted from the payload when the underlying value is `null`.
 

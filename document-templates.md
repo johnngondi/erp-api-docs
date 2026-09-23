@@ -206,7 +206,10 @@ The frontend Data tab and all blocks bind against a **canonical payload shape**,
 not raw resource keys:
 
 ```
-company:        { name, tax_pin, address, phone, email, website, tagline, logo_url }
+company:        { name, tax_pin, address, postal_address, phone, email, website, tagline,
+                  twitter, facebook, logo_url, services[], brand_color, timezone }
+                # services/brand_color/timezone are footer-only (see §8.1) and are not
+                # in the bindable field catalog; the rest are
 landlord:       { name, tax_pin, phone, email }
 property:       { name, address, lr_number, city, country }
 tenant:         { name, lease_id, tax_pin, phone, email, unit }        # invoice/cn/receipt
@@ -588,7 +591,8 @@ cadence rather than collapsing.
 2. Recursively walk `layout` → CSS-grid `<div>`s for sections, each block's
    Blade partial for leaves.
 3. Wrap in `resources/views/documents/template.blade.php` (an `@page` size +
-   print stylesheet; flow blocks repeat their header across pages).
+   print stylesheet; flow blocks repeat their header across pages). The shell
+   also stamps the shared footer onto every page — see §8.1.
 4. `pdf()` pipes the HTML to **Browsershot** (headless Chrome) using
    `page_setup` margins/paper/orientation.
 
@@ -606,6 +610,64 @@ company.`).
 > **Infra:** Browsershot needs Node + Puppeteer/Chrome on the host. Configure via
 > `DOCUMENT_TEMPLATES_NODE_BINARY`, `DOCUMENT_TEMPLATES_NPM_BINARY`,
 > `DOCUMENT_TEMPLATES_CHROME_PATH`, `DOCUMENT_TEMPLATES_PDF_TIMEOUT`.
+
+### 8.1 The printout footer
+
+Every template printout carries the same footer. It is **not** a block — the
+designer cannot add, move or remove it; the shell draws it on every page.
+
+`resources/views/documents/partials/footer.blade.php`, three strips top to bottom:
+
+| Strip | Contents | Source |
+| --- | --- | --- |
+| Services | The company's services, one equal-width cell each, separated by hairlines, on a coloured bar | `company.services[]` on `company.brand_color` (falls back to `#ed1c24`) |
+| Contacts | Name, postal address, phone, email and website behind inline SVG icons, then `Twitter: …` and `Facebook: …` spelled out | `company.name`, `.postal_address`, `.phone`, `.email`, `.website`, `.twitter`, `.facebook` |
+| Stamp | `Printed at: Wed, Sep 23, 2026 01:20 PM` on the left, `Powered by <developer>` on the right | `now()` in `company.timezone`; `config('app.developer_name')` (`APP_DEVELOPER_NAME`) |
+
+Everything is per-company and everything is optional: a strip with nothing in it
+is not drawn, and the services bar balances itself across however many services
+there are (five services → five 20% cells; two → two halves).
+
+In **preview** (`?preview=1`) the footer follows the same rule as every other
+company field — anything the real company leaves unset falls back to the mapper's
+placeholder company, so a company with no services still shows a sample strip.
+
+**Pinned to the foot of every page.** The shell stamps the footer twice, and the
+two copies do two different jobs:
+
+1. A hidden copy (`visibility: hidden`) inside the shell table's `<tfoot>`.
+   Chrome repeats a `table-footer-group` on every printed page, so this reserves
+   the footer's exact height at the foot of each one and keeps the body from
+   flowing underneath it. It is hidden rather than sized by hand so the
+   reservation can never drift from what the footer actually measures — add a
+   service, wrap the contacts onto a second line, and the reserve follows.
+2. A `position: fixed; bottom: 0` copy outside the table, which is what paints.
+   Chrome repeats a fixed-position element on every printed page, so the footer
+   lands flush with the bottom of the page each time — including the last one,
+   where the body usually stops well short of it.
+
+The partial's `<style>` is wrapped in `@once`, so including it twice emits one
+stylesheet. A caller that does not need the footer pinned can include it once on
+its own; it then simply renders in flow.
+
+**Reuse.** The partial carries its own `dtf-` class prefix and its own `<style>`,
+so any other print view can pick it up with a single include and no stylesheet
+wiring:
+
+```blade
+@include('documents.partials.footer', ['company' => $companyArray])
+```
+
+It takes `$company` (the canonical `company` payload block, every key optional)
+and an optional `$printedAt` override.
+
+**Seeding the details.** `CompanyFooterDetailsSeeder` is a disposable one-off that
+fills the demo company's footer fields (services, postal address, socials, accent
+colour), only where they are still blank:
+
+```bash
+php artisan db:seed --class=CompanyFooterDetailsSeeder
+```
 
 ---
 
