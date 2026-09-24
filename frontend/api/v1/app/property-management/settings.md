@@ -362,8 +362,9 @@ Endpoints (prefixed with `/api/v1/app/{company}/property-management/settings`):
 List query support:
 
 - Filters:
-  - `filter[search]`, `filter[type]`, `filter[account_name]`, `filter[account_number]`, `filter[status]`
-  - `filter[user_group_id]`, `filter[user_id]`, `filter[bank_branch_id]`
+  - `filter[search]` (matches account name and account number; comma-separated values are accepted)
+  - `filter[type]`, `filter[status]`, `filter[user_group_id]`, `filter[user_id]`, `filter[bank_branch_id]` — exact match
+  - `filter[created_at]` — matches the creation date (`YYYY-MM-DD`), ignoring the time
 - Sort:
   - `sort=id,account_name,status`
 - Include:

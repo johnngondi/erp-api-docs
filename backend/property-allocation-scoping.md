@@ -81,9 +81,10 @@ The last segment is read as a column when it ends in `_id`, otherwise as a relat
 column form.** Every chained model in this domain reaches a table that already carries
 `facility_id`, so there is no reason to pay for the second hop.
 
-The paths this domain needs: `lease.facility_id` (invoices, credit notes, tenant statements, exit notices
-and the lease children), `procurementRequest.facility_id` (LPOs, site visit reports),
-`facilityContract.facility_id` (vendor statements), `expense.facility_id` (project expenses).
+The paths in use: `lease.facility_id` (invoices, credit notes, tenant statements, exit notices and
+the six lease children), `procurementRequest.facility_id` (LPOs, site visit reports),
+`facilityContract.facility_id` (vendor statements), `bill.facility_id` (bill withholdings),
+`expense.facility_id` (project expenses), and `id` for `Facility` itself.
 
 ### When no path can describe it
 
@@ -127,6 +128,40 @@ Nested routes come free. Children under `facilities/{facility}` and `leases/{lea
 `->scoped()` binding, so scoping the parent covers blocks, wings, floors, bank accounts, lease
 items, billings, collections, deposits, escalations and opening balances.
 
+## Ownership fallbacks: gate the staff branch, not the whole policy
+
+Several policies let someone read a record because it is *theirs*, not because they hold a staff
+permission — a tenant reading their own lease, LOO or ticket, an applicant their own lease
+application, a vendor their own bill, a project's own manager. **None of those people hold a
+`facility_user` row**, so gating the whole policy on allocation locks every one of them out of
+their own data.
+
+The allocation check goes on the permission branch only:
+
+```php
+// Staff are allocation bound; the tenant path below is not.
+if ($user->hasPermissionTo('view-lease') && $this->allocatedTo($user, $lease)) {
+    return true;
+}
+
+return $lease instanceof Lease && (int) $lease->user_id === (int) $user->id;
+```
+
+The policies carrying such a fallback today: `LeasePolicy`, `LooPolicy`, `LeaseApplicationPolicy`,
+`FacilityBillPolicy`, `FacilityTicketPolicy` and `ProjectPolicy`. `FacilityTicketPolicy::view`
+gained one in this work — `update()` and `delete()` already had it, and `view()` had never needed
+it because it was permission-only.
+
+The same rule applies outside policies. `BuildsVendorStatements` is shared by the app and the
+vendor portal, so it takes an optional user and only the app surfaces pass it.
+
+## Pass the record, not the class
+
+`authorize('view', FacilityInvoice::class)` type-checks and reads naturally, but it hands the
+policy a `null` record, so **no per-record check runs at all**. Nine `show` methods were written
+that way, which is also why several of these policies take a nullable model. Always
+`authorize('view', $invoice)`.
+
 ## Two things to know before you rely on this
 
 **Writes are not covered.** `update` and `destroy` keep their permission-only checks. A user holding
@@ -148,6 +183,13 @@ same query and fold every figure from `$facilities->pluck('id')`, so
 `App\Services\PropertyManagement\Reports\Support\ReportFacilities` narrows that universe once and
 every figure, total and bucket follows. A report run with no authenticated user throws rather than
 silently returning the whole portfolio.
+
+The Property Management dashboard (`App\Services\PropertyManagement\Dashboard\PropertyManagementDashboardService`)
+is built the same way: it resolves its property universe through `ReportFacilities::scoped()`, then
+applies its own Landlord, Property and Team filters, and every card, series and list folds from
+that one set of ids. Its "Team" filter is a company department, and a property is on the team
+when a member of that department is allocated to it — the same `facility_user` row that decides
+visibility, so the filter can never widen what the actor may see.
 
 ## Tests
 

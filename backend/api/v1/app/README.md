@@ -15,6 +15,7 @@ This docs set is a technical reference generated from routes, DTOs, and resource
 - `docs/backend/api/v1/app/request-contracts.md`: request DTO field contracts (required/optional + enum inputs + validation hints).
 - `docs/backend/api/v1/app/enums.md`: enum values and color mappings from code.
 - `docs/backend/api/v1/app/receipt-reallocation.md`: moving a confirmed receipt's money between a tenant's invoices.
+- `docs/backend/api/v1/app/tenants.md`: tenant CRUD — group-membership elevation on create, deactivation on delete.
 
 ## Auth and Headers
 Required headers for almost all app routes:
