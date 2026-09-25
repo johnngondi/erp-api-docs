@@ -27,6 +27,12 @@ Reconciling a bank statement is a four-step flow:
    bank issues, suspense) — and they must agree. The finished
    statement downloads as PDF or Excel (§4.1).
 
+5. **Save** — the working above lives in a cache that lasts an hour, after which the
+   statement is gone and the uploaded file has already been deleted. Saving the
+   reconciliation writes it down, and every later step falls back to that copy using
+   the same `statement_token` (§4.2). Saving is explicit: nothing is stored until the
+   user asks for it.
+
 The classification vocabulary is fetched once from the
 [classifications endpoint](#classification-taxonomy) so the classify pickers stay
 in sync with the engine and show each class's description.
@@ -739,7 +745,8 @@ Both formats are generated from the same §4 envelope, laid out so the statement
 comes first and each supporting working follows it:
 
 - **PDF** — portrait A4. **Page 1** is the reconciliation statement (the `rows[]`
-  table) under the company letterhead, with the account, period and report title.
+  table) under the company logo and report title, with the account and period. Each
+  page ends with the company's printout footer.
   **Each subsequent page** is one `detail_schedule` group, headed
   `{group} ({op})` (e.g. `Unpresented Payments (Cheques / EFTs Issued) (LESS)`) and
   closed by a `Total` row equal to that group's `subtotal`.
@@ -765,6 +772,141 @@ single worksheet tab, not five of each.
   Same JSON error shape as §4; re-run the extract step and retry.
 - `403` — the user lacks `view-bank-account` (the same permission §4 requires, so
   anyone who can see the report can export it — no separate export permission).
+
+---
+
+## 4.2 Saving a reconciliation
+
+A reconciliation used to exist only in the cache: the extracted statement was stashed under
+`statement_token` for **one hour**, every step read it back by that token, and the report was
+recomputed on each call and never written down. Because the extraction job deletes the uploaded
+file on success as well as failure, once the hour lapsed recovering it meant a second AI extraction
+**and** the user finding the original PDF again.
+
+Saved reconciliations live under `reco-reports`, addressed by the **same `statement_token`** the
+extract step returned — not by an id. That is what lets a saved report answer the calls the client
+already makes: once the cache lapses, `§4`, both exports in `§4.1`, `§2` matching and `§5`
+classifying all fall back to the saved copy with nothing to change on the frontend.
+
+### A saved report is a snapshot, not a view
+
+**It cannot be re-derived.** The figures come from the cashbook as it stood when it was saved —
+opening balance, the period's receipts and payments, which items were matched — and
+`bank_account_transactions` keeps moving. Running the same statement next week answers differently.
+So the stored report is served as stored, never recomputed.
+
+While the extraction is still cached the **live** report wins, because the user is mid-way through
+matching and the figures are shifting under them. Afterwards the snapshot does. Every report
+response says which it was:
+
+| `data.source` | Meaning |
+|---|---|
+| `live` | Rebuilt from the cached statement |
+| `stored` | Served from the saved snapshot — the cache has gone |
+| `recomputed` | The cache has gone and the *other* layout was the one saved; the statement kept on that row was used to build this one |
+
+`data.saved_at` carries the ISO timestamp, and is absent when nothing has been saved for that token.
+
+### Save a report
+
+`POST .../{account}/reco-reports`
+
+```json
+{ "statement_token": "9f1c2b6e-…", "report_type": "full_account" }
+```
+
+The report is **regenerated server-side** rather than accepted from the client — exactly as the read
+endpoints do it — so what is stored is what the server computes.
+
+**Saving is explicit.** Nothing is saved automatically, so until the UI offers a save action nothing
+is ever stored and the fallback above never applies.
+
+`full_account` and `credits_only` are stored **separately**: saving one does not overwrite the
+other. Saving the *same* layout again replaces its snapshot — the cashbook moved in between, so the
+two are genuinely different, and the later one wins.
+
+Response carries the saved row plus the report itself:
+
+```jsonc
+{
+  "data": {
+    "message": "Bank reconciliation report saved successfully",
+    "reco_report": { /* the row shape below */ },
+    "result":      { /* the §4 report envelope */ }
+  }
+}
+```
+
+### List saved reconciliations
+
+`GET .../{account}/reco-reports`
+
+Paginated, newest first. The stored report and statement are deliberately **left out** — a listing
+shows periods and variances, and either blob is large enough to make a page of them expensive.
+
+```jsonc
+{
+  "id": 1,
+  "statement_token": "9f1c2b6e-…",
+  "report_type": "full_account",
+  "title": "BANK RECONCILIATION AS AT 31 AUGUST 2026",
+  "period": { "start": "2026-08-01", "end": "2026-08-31" },
+  "bank_balance": 500000.0,
+  "reconciling_difference": { "amount": -400350.0, "status": "variance" },
+  "created_by": { "id": 1, "name": "Super Admin" },
+  "created_at": "2026-08-31T09:00:00+00:00",
+  "updated_at": "2026-08-31T09:00:00+00:00"
+}
+```
+
+`status` is `balanced`, `variance` or `incomplete`, exactly as in §4.
+
+Filters: `filter[report_type]`, `filter[difference_status]`, `filter[statement_token]`,
+`filter[period_start]`, `filter[period_end]`, `filter[created_at]`.
+Sorts: `id`, `created_at`, `period_end`, `reconciling_difference`.
+
+### Fetch one
+
+`GET .../{account}/reco-reports/{statement_token}?report_type=full_account`
+
+Same response shape as §4, plus `source` and `saved_at`. This is `§4` with the token in the path
+rather than the body; `POST .../reconciliations/report` still works unchanged and gained the same
+fallback, so nothing the frontend does today has to move.
+
+### Discard one
+
+`DELETE .../{account}/reco-reports/{statement_token}`
+
+Optional `?report_type=full_account|credits_only`. **Without it both layouts go**, because a
+statement saved twice is one reconciliation seen two ways rather than two reconciliations.
+
+```jsonc
+{ "data": { "message": "2 saved reconciliations discarded successfully", "deleted": 2 } }
+```
+
+Soft-deleted, so a snapshot discarded by mistake is still recoverable in the database. A token with
+nothing saved answers `422` on `statement_token`, and a token belonging to another account is
+refused the same way.
+
+Requires **`delete-bank-account`**, not `view-bank-account`. A saved reconciliation is an audit
+artefact — who reconciled what, when, and what the variance was — so read access alone cannot
+discard one.
+
+### The statement is stored too
+
+The row keeps the extracted statement as well as the report. That is what lets **matching and
+classifying** survive the cache — those need the statement, not the report — and what lets the other
+layout be built for someone who saved only one.
+
+### Errors
+
+- `422` — the token is in neither the cache nor a saved report, or belongs to another account. Same
+  message as §4: *"The statement has expired or does not belong to this account. Please re-upload
+  it."*
+- `403` — the permission for that action is missing. Reading a saved reconciliation needs
+  `view-bank-account`, saving needs **`update-bank-account`**, and discarding needs
+  **`delete-bank-account`**. The rest of this flow gates on `view` alone; these three follow how the
+  app gates mutations everywhere else.
 
 ---
 

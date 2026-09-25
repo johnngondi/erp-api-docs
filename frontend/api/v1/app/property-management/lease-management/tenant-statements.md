@@ -218,22 +218,28 @@ Both formats render the same single statement table:
 
 | Column | Source |
 |---|---|
-| Date | the line's `transaction_at`, formatted `01 Jun, 2026` |
+| Date | the line's `transaction_at`, formatted `01-Jun-26` (`d-M-y`) |
 | Particulars | the line's `notes` |
-| Status | `confirmed` / `cancelled` |
 | Debit | the line's `debit` |
 | Credit | the line's `credit` |
 | Balance | the line's running `balance` |
 
 It is opened by a **Balance B/F** row (`brought_forward`) and closed by a **Total** row (the period
 `totals`) and a **Balance C/F** row (`carried_forward`). B/F and Total are bold; C/F is bold and
-tinted. Amounts carry the property's reporting currency code.
+tinted. Amounts carry the property's reporting currency code. The line `status` is not exported —
+cancelled lines still count into the balances, as on screen. The PDF cover prints the period in the same format (`01-Jun-26 – 30-Jun-26`).
 
 - **PDF** — portrait A4, flowing onto further pages for a long period. It opens with the company
-  letterhead (logo, name, tagline, contact details) and a panel naming the statement: **Landlord**,
-  **Property** and **Tenant** on the left — all resolved from the lease, with the lease appended to
-  the tenant (`Jane Tenant - Lease #101`) — and **Report** / **Period** on the right.
-- **Excel** — a single worksheet, same rows and columns, no letterhead. The filename is what
+  logo and the title **Tenant Statement**, then the identity band, all resolved from the lease:
+  - left — **Tenant** (`Jane Tenant - LS#101`), **Email** (the tenant's), **Unit/Space** (the
+    lease's leasable spaces — parking and signage left out — then their combined size in the
+    property's space unit:
+    `Shop 4, Shop 5 / 1,200 SqFt`) and **Statement Period** (`01-Jun-26 – 30-Jun-26`, no cycle);
+  - right — **Landlord**, **Property** and **Currency**.
+
+  A line with no value is left out. The table has no title of its own — the header already names
+  it. The company's printout footer closes the last page.
+- **Excel** — a single worksheet, same rows and columns, no header or footer. The filename is what
   identifies it.
 
 ### Errors

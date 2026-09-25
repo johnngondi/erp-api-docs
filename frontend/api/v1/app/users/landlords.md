@@ -319,6 +319,31 @@ Request payload fields:
 | `re_letting_fee_rate`   | No       | number/string  | Number or: `half_month_rent`, `one_month_rent`, `two_month_rent` |
 | `wages`                 | No       | object         | Any wage structure object |
 | `contract_upload_id`    | No       | integer        | Upload reference |
+| `uploads`               | No       | array of integer | Supporting documents — addendums, extensions. Each must exist in `uploads.id`. See below |
+
+### Supporting documents
+
+`uploads` is a list of `uploads.id` values — **addendums, contract extensions and anything else the
+contract picks up over its life**. It sits beside the single signed document above, which is
+unchanged: that column still holds the agreement itself, and is never part of this list.
+
+| Behaviour | Result |
+|---|---|
+| `uploads: [1, 2]` | Those two are attached |
+| `uploads: [1]` on a contract holding 1 and 2 | **2 is released** — the list is the complete set, not an addition |
+| `uploads` **omitted entirely** | Attachments are left untouched — safe for a partial update |
+| `uploads: []` | All are released |
+
+Released means **unowned, not deleted**: the file still exists and can be attached elsewhere.
+
+An upload may belong to one record at a time, so attaching one that another contract holds moves it.
+An upload created by a different user is rejected with `422` on the `uploads` key, as is an id that
+does not exist.
+
+Documents keep the name they were uploaded with — there is no document type to set.
+
+The response exposes them as `uploads`, an array of the standard upload resource.
+
 
 
 ## Delete Landlord

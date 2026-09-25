@@ -332,20 +332,36 @@ GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facil
 > the same title. The PDF shrinks a wide bucket's table text (down to 5px from the normal 10px) so
 > every column fits the page width; padding and the total-row size steps shrink with it.
 
-#### The PDF first page
+#### The PDF first page and footer
 
-> A PDF opens with the company's letterhead — logo (inlined from the stored file), name, tagline and
-> contact details, all taken from the company the export was made under — and, under it, a panel
-> naming what the report is: **Landlord** / **Property** on the left, **Report** / **Period** /
-> **Currency** on the right. The landlord and property lines come from `header.landlord.name` / `header.property.name`,
-> so they are printed only when the export was filtered down to one, and any company detail the
-> company has not filled in is left out too. **Period** is the resolved window formatted
+> A PDF opens with a header: the logo of the company the export was made under on the left (inlined
+> from the stored file; the company name is printed in its place when there is no logo), and the
+> document's name — the report's registry label, e.g. `Tenant Statement` — on the right. Under it, an
+> identity band says what the report covers: **Landlord** / **Property** on the left, **Period** /
+> **Currency** on the right, printed in the company's `text_color_on_brand_bg` on its `brand_color`
+> (falling back to `config('app.company_palette')` — env `COMPANY_TEXT_COLOR_ON_BRAND_BG` `#ffffff` /
+> `COMPANY_BRAND_COLOR` `#005044`). The footer's services strip uses the company's `accent_color`.
+>
+> A statement can lay the band out itself: its envelope header carries `cover.left` / `cover.right`,
+> each a list of `{label, value}` lines or `{label, fact}` lines, where `fact` is `period` (the
+> window alone, no cycle) or `currency`. It can also set `bucket_titles: false` to drop the title above
+> its table, and `date_format` to print its dates its own way (the statements use `d-M-y`).
+>
+> Without a declared layout, the band is laid out as follows. The landlord and property lines come from `header.landlord.name` / `header.property.name`,
+> so they are printed only when the export was filtered down to one. **Period** is the resolved window formatted
 > `01 Aug, 2026 – 31 Aug, 2026`, suffixed with the cycle when the report declares one
 > (`header.filters.report_type` / `report_cycle`) or when the window is exactly one calendar week,
 > month, quarter or year; Trial Balance shows `As at 19 Aug, 2026` instead. **Currency** is the
 > report's currency as `Kenyan Shilling (KES)` (the bare code when it has no name), omitted when the
-> header carries none. The Excel workbook has no
-> letterhead — each sheet still starts at its bucket label — so the filename is what identifies it.
+> header carries none.
+>
+> Every bucket ends with the same printout footer documents carry — the company's services strip,
+> its contact line (name, postal address, phone, email, website; blanks left out) and the
+> `Printed at` / `Powered by` stamp. It is printed once per bucket, at the bottom of that bucket's
+> last page; when the bucket leaves too little room for it, it moves to the bottom of the next page.
+>
+> The Excel workbook has neither — each sheet still starts at its bucket label — so the filename is
+> what identifies it.
 
 ### Large reports
 

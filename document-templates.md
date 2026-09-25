@@ -163,7 +163,7 @@ Each block declares:
 | `receipt_details` | receipt | `document.number` (`RCP0001`), `.issued_at`, `.served_by`, `.status`, `.currency` |
 | `lpo_details` | lpo | `document.number` (`LPO0001`), `.issued_at`, `.due_at` (delivery), `.status`, `.currency` |
 | `voucher_details` | payment voucher | `document.number` (`PV0001`), `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
-| `remittance_details` | remittance | `document.number` (`REM0001`), `landlord.name`, `property.name`, `document.period`, `.issued_at`, `.status` |
+| `remittance_details` | remittance | `document.number` (`REM0001`), `landlord.name`, `property.name`, `document.period`, `.memo` (e.g. `August 2026`), `.issued_at`, `.status` |
 
 **Content blocks**
 
@@ -207,8 +207,9 @@ not raw resource keys:
 
 ```
 company:        { name, tax_pin, address, postal_address, phone, email, website, tagline,
-                  twitter, facebook, logo_url, services[], brand_color, timezone }
-                # services/brand_color/timezone are footer-only (see §8.1) and are not
+                  twitter, facebook, logo_url, services[], brand_color, text_color_on_brand_bg,
+                  accent_color, text_color_on_accent_bg, timezone }
+                # services, the palette and timezone are print-only (see §8.1) and are not
                 # in the bindable field catalog; the rest are
 landlord:       { name, tax_pin, phone, email }
 property:       { name, address, lr_number, city, country }
@@ -621,7 +622,7 @@ designer cannot add, move or remove it; the shell draws it on every page.
 
 | Strip | Contents | Source |
 | --- | --- | --- |
-| Services | The company's services, one equal-width cell each, separated by hairlines, on a coloured bar | `company.services[]` on `company.brand_color` (falls back to `#ed1c24`) |
+| Services | The company's services, one equal-width cell each, separated by hairlines, on a coloured bar | `company.services[]` on `company.accent_color` in `company.text_color_on_accent_bg` (fall back to `config('app.company_palette')` — env `COMPANY_ACCENT_COLOR` `#ed1c24` / `COMPANY_TEXT_COLOR_ON_ACCENT_BG` `#ffffff`) |
 | Contacts | Name, postal address, phone, email and website behind inline SVG icons, then `Twitter: …` and `Facebook: …` spelled out | `company.name`, `.postal_address`, `.phone`, `.email`, `.website`, `.twitter`, `.facebook` |
 | Stamp | `Printed at: Wed, Sep 23, 2026 01:20 PM` on the left, `Powered by <developer>` on the right | `now()` in `company.timezone`; `config('app.developer_name')` (`APP_DEVELOPER_NAME`) |
 

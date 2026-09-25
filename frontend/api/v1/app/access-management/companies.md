@@ -63,7 +63,10 @@ Create payload table:
 | `twitter_handle` | string&#124;null | No | `null` | Twitter handle without the `@`; printed in the document footer |
 | `facebook_url` | string&#124;null | No | `null` | Facebook page URL; printed in the document footer |
 | `services` | array[string]&#124;null | No | `null` | Services advertised in the document-footer strip (e.g. `["Valuation","Management"]`); the strip balances itself across however many there are |
-| `brand_color` | string&#124;null | No | `null` | Hex colour (`#rgb` or `#rrggbb`) the footer services strip is painted in; falls back to `#ed1c24` |
+| `brand_color` | string&#124;null | No | `null` | Hex colour (`#rgb` or `#rrggbb`) of the identity band (landlord / property / period panel) under a report PDF's header; falls back to `COMPANY_BRAND_COLOR` (`#005044`) |
+| `text_color_on_brand_bg` | string&#124;null | No | `null` | Hex text colour printed on `brand_color`; falls back to `COMPANY_TEXT_COLOR_ON_BRAND_BG` (`#ffffff`) |
+| `accent_color` | string&#124;null | No | `null` | Hex colour of the printout footer's services strip (documents and report PDF exports); falls back to `COMPANY_ACCENT_COLOR` (`#ed1c24`) |
+| `text_color_on_accent_bg` | string&#124;null | No | `null` | Hex text colour printed on `accent_color`; falls back to `COMPANY_TEXT_COLOR_ON_ACCENT_BG` (`#ffffff`) |
 | `profile_photo_path` | string&#124;null | No | `null` | Company logo storage path (e.g. from the uploads endpoint) |
 | `type_of_properties` | array&#124;null | No | `null` | Optional array |
 | `collection_contract` | boolean | No | `false` | Collection contract enabled flag |
@@ -119,6 +122,9 @@ Company object keys:
 | `facebook_url` | string&#124;null | Always present |
 | `services` | array[string] | Always present; `[]` when the company lists none |
 | `brand_color` | string&#124;null | Always present |
+| `text_color_on_brand_bg` | string&#124;null | Always present |
+| `accent_color` | string&#124;null | Always present |
+| `text_color_on_accent_bg` | string&#124;null | Always present |
 | `profile_photo_path` | string&#124;null | Always present; `null` when no logo is set |
 | `profile_photo_url` | string | Always present. Resolved by the `HasProfilePhoto` concern: storage URL for `profile_photo_path`, or a generated avatar built from the company name when no logo is set |
 | `is_selected` | boolean | |
@@ -135,7 +141,7 @@ Company object keys:
 
 Key presence:
 
-- The profile keys (`postal_address`, `company_phone`, `company_email`, `company_website`, `company_tagline`, `twitter_handle`, `facebook_url`, `services`, `brand_color`, `profile_photo_path`) are always returned, `null` when unset — except `services`, which is `[]`.
+- The profile keys (`postal_address`, `company_phone`, `company_email`, `company_website`, `company_tagline`, `twitter_handle`, `facebook_url`, `services`, `brand_color`, `text_color_on_brand_bg`, `accent_color`, `text_color_on_accent_bg`, `profile_photo_path`) are always returned, `null` when unset — except `services`, which is `[]`.
 - `profile_photo_url` is always returned and never `null` (avatar fallback).
 - Other scalar keys use `whenHas`, so they are omitted from the payload when the underlying value is `null`.
 

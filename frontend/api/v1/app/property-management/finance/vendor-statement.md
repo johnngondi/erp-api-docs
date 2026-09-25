@@ -179,7 +179,7 @@ Both formats render the same single statement table:
 
 | Column | Source |
 |---|---|
-| Date | the line's `transaction_at`, formatted `05 Jun, 2026` |
+| Date | the line's `transaction_at`, formatted `05-Jun-26` (`d-M-y`); the PDF cover prints the period the same way |
 | Particulars | the line's `notes` |
 | Debit | the line's `debit` |
 | Credit | the line's `credit` |
@@ -190,10 +190,11 @@ It is opened by a **Balance B/F** row (`brought_forward`) and closed by a **Tota
 tinted. Amounts carry the base currency code — vendor statements are single-currency.
 
 - **PDF** — portrait A4, flowing onto further pages for a long period. It opens with the company
-  letterhead (logo, name, tagline, contact details) and a panel naming the statement: **Vendor** on
-  the left — with the contract appended (`Acme Plumbing - Quarterly Maintenance`) when filtered by
-  `facility_contract_id` — and **Report** / **Period** on the right.
-- **Excel** — a single worksheet, same rows and columns, no letterhead. The filename is what
+  logo and the title **Vendor Statement**, then a panel naming the statement: **Vendor** on the
+  left — with the contract appended (`Acme Plumbing - Quarterly Maintenance`) when filtered by
+  `facility_contract_id` — and **Period** on the right. The company's printout footer closes the
+  last page. The table has no title of its own — the header already names it.
+- **Excel** — a single worksheet, same rows and columns, no header or footer. The filename is what
   identifies it.
 
 ### Errors

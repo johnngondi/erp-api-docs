@@ -111,7 +111,10 @@ Create / update payload:
 | `twitter_handle` | string&#124;null | No | `null` | Twitter handle without the `@`; printed in the document footer |
 | `facebook_url` | string&#124;null | No | `null` | Facebook page URL; printed in the document footer |
 | `services` | array[string]&#124;null | No | `null` | Services advertised in the document-footer strip (e.g. `["Valuation","Management"]`); the strip balances itself across however many there are |
-| `brand_color` | string&#124;null | No | `null` | Hex colour (`#rgb` or `#rrggbb`) the footer services strip is painted in; falls back to `#ed1c24` |
+| `brand_color` | string&#124;null | No | `null` | Hex colour (`#rgb` or `#rrggbb`) of the identity band (landlord / property / period panel) under a report PDF's header; falls back to `COMPANY_BRAND_COLOR` (`#005044`) |
+| `text_color_on_brand_bg` | string&#124;null | No | `null` | Hex text colour printed on `brand_color`; falls back to `COMPANY_TEXT_COLOR_ON_BRAND_BG` (`#ffffff`) |
+| `accent_color` | string&#124;null | No | `null` | Hex colour of the printout footer's services strip (documents and report PDF exports); falls back to `COMPANY_ACCENT_COLOR` (`#ed1c24`) |
+| `text_color_on_accent_bg` | string&#124;null | No | `null` | Hex text colour printed on `accent_color`; falls back to `COMPANY_TEXT_COLOR_ON_ACCENT_BG` (`#ffffff`) |
 | `profile_photo_path` | string&#124;null | No | `null` | Company logo storage path from `POST /settings/file-management/uploads` |
 | `type_of_properties` | array&#124;null | No | `null` | Optional array |
 | `collection_contract` | boolean | No | `false` | Collection contract enabled flag |

@@ -189,7 +189,7 @@ the endpoint returns them:
 
 | Column | Source |
 |---|---|
-| Date | the line's `transaction_at`, formatted `05 Jun, 2026` |
+| Date | the line's `transaction_at`, formatted `05-Jun-26` (`d-M-y`); the PDF cover prints the period the same way |
 | Ref | the line's `refference_number` |
 | Particulars | the line's `notes` |
 | Property | the line's `facility.name` |
@@ -210,10 +210,11 @@ a cashbook is single-currency because the account is.
 
 - **PDF** — **landscape** A4, flowing onto further pages for a long period. Landscape rather than
   the portrait the tenant and vendor statements use: this table is eight columns wide and would
-  squeeze `Particulars` unreadably in portrait. It opens with the company letterhead (logo, name,
-  tagline, contact details) and a panel naming the statement: **Bank Account** on the left, as
-  `{account name} - {account number}`, and **Report** / **Period** on the right.
-- **Excel** — a single worksheet, same rows and columns, no letterhead. The filename is what
+  squeeze `Particulars` unreadably in portrait. It opens with the company logo and the
+  title **Cashbook Statement**, then a panel naming the statement: **Bank Account** on the left,
+  as `{account name} - {account number}`, and **Period** on the right. The company's printout footer
+  closes the last page. The table has no title of its own — the header already names it.
+- **Excel** — a single worksheet, same rows and columns, no header or footer. The filename is what
   identifies it.
 
 ### Errors

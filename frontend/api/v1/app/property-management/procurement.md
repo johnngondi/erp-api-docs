@@ -360,12 +360,25 @@ Endpoints:
 List query support:
 
 - Filters:
-  - `filter[id]`, `filter[title]`, `filter[status]`, `filter[start_at]`, `filter[end_at]`, `filter[created_at]`
-  - `filter[facility_id]`, `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[expense_sub_type_id]`, `filter[asset_id]`
+  - `filter[search]` — free text over the contract's id, title, supplier name and property name
+  - **Exact** (`=`): `filter[id]`, `filter[status]`, `filter[facility_id]`, `filter[vendor_id]`,
+    `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[expense_sub_type_id]`, `filter[asset_id]`
+  - **Partial** (`LIKE`): `filter[title]`, `filter[start_at]`, `filter[end_at]`, `filter[created_at]`
+  - Aliases: `filter[property_id]` → `facility_id`, `filter[supplier_id]` → `vendor_id`
 - Sort:
   - `sort=id,title,status,start_at,end_at,created_at`
 - Include:
   - `include=bills`
+
+> **Exact versus partial matters here.** Ids and `status` are exact: they were previously declared as
+> bare strings, which Spatie turns into partial filters, so `filter[facility_id]=6` matched every
+> property whose id contained a 6, and `filter[status]=active` also returned `inactive` contracts.
+>
+> `title` and the dates stay partial on purpose — a title is a text match, and a partial date lets
+> `filter[created_at]=2026-09` mean "that month".
+>
+> The UI's *property* and *supplier* are the schema's *facility* and *vendor*. Both spellings are
+> accepted, so either can be used; an unknown filter name is a `400`, not an empty list.
 
 Create/Update payload:
 
@@ -385,6 +398,7 @@ Create/Update payload:
 | `expense_sub_type_id` | No | integer | Must exist in `expense_sub_types.id` |
 | `asset_id` | No | integer | Must exist in `assets.id` |
 | `agreement_upload_id` | No | integer | Must exist in `uploads.id` |
+| `uploads` | No | array of integer | Supporting documents — addendums, extensions. Each must exist in `uploads.id`. See below |
 | `has_tax` | No | boolean | Default `false` |
 | `tax_id` | No | integer | Must exist in `taxes.id` |
 | `creator_id` | No | integer | Must exist in `users.id` |
@@ -506,6 +520,30 @@ Success response:
 
 - `message`: `Bill for next period generated successfully.`
 - `bill`: the created `FacilityBill`.
+
+
+### Supporting documents
+
+`uploads` is a list of `uploads.id` values — **addendums, contract extensions and anything else the
+contract picks up over its life**. It sits beside the single signed document above, which is
+unchanged: that column still holds the agreement itself, and is never part of this list.
+
+| Behaviour | Result |
+|---|---|
+| `uploads: [1, 2]` | Those two are attached |
+| `uploads: [1]` on a contract holding 1 and 2 | **2 is released** — the list is the complete set, not an addition |
+| `uploads` **omitted entirely** | Attachments are left untouched — safe for a partial update |
+| `uploads: []` | All are released |
+
+Released means **unowned, not deleted**: the file still exists and can be attached elsewhere.
+
+An upload may belong to one record at a time, so attaching one that another contract holds moves it.
+An upload created by a different user is rejected with `422` on the `uploads` key, as is an id that
+does not exist.
+
+Documents keep the name they were uploaded with — there is no document type to set.
+
+The response exposes them as `uploads`, an array of the standard upload resource.
 
 ## Inventories and Purchase Items
 

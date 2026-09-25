@@ -150,7 +150,7 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 | `voucher_details` | payment voucher | fields | `document.number`, `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
 | `voucher_items` | payment voucher | table, **flow** | `items.transaction_date`, `.property`, `.memo`, `.total`, `.payable`, `.paid` + data-driven withholding columns and a total-paid footer — see §1.6 |
 | `sign_off` | payment voucher, remittance | sign_off | Rows of labelled fill-in slots — see §1.5 |
-| `remittance_details` | remittance | fields | `document.number`, `landlord.name`, `property.name`, `document.period`, `.issued_at`, `.status` |
+| `remittance_details` | remittance | fields | `document.number`, `landlord.name`, `property.name`, `document.period`, `.memo`, `.issued_at`, `.status` |
 | `remittance_summary` | remittance | fields | `summary.is_advance`, `.total_collections`, `.total_expenses`, `.advance_remittances`, `.total_withheld`, `.total_remitted` |
 | `remittance_collections` | remittance | table, **flow** | `collections.receipt_number`, `.transaction_date`, `.credit_account`, `.method`, `.reference`, `.tenant`, `.amount` |
 | `remittance_expenses` | remittance | table, **flow** | `expenses.bill_number`, `.transaction_date`, `.reference`, `.supplier`, `.service`, `.amount` |
