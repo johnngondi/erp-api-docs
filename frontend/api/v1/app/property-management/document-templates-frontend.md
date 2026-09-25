@@ -124,6 +124,7 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 | `credit_note_details` | credit note | `document.number`, `.issued_at`, `.status`, `.currency`, `.invoice_number` |
 | `receipt_details` | receipt | `document.number`, `.issued_at`, `.served_by`, `.status`, `.currency` |
 | `lpo_details` | lpo | `document.number`, `.issued_at`, `.due_at` (delivery), `.status`, `.currency` |
+| `lpo_title` | lpo | `lpo.title` (the order's title: a direct LPO's as entered, a workflow LPO's copied from its request), `document.notes` |
 
 **Content blocks**
 
@@ -384,6 +385,7 @@ mobile_money[]: { component, bank_name, paybill_number, account_number }  # invo
                 # Empty array when no paybill is known (the block is then hidden)
 payment_account:{ bank_name, branch, account_name, account_number }    # receipt
 transactions[]: { transaction_date, transaction_number, method, amount }  # receipt
+lpo:            { title }                                              # lpo
 approval_chain[]: { name, date }                                       # lpo — raw, see §1.3
 signoff:        { prepared_by, prepared_at }                           # voucher, remittance
 withholding_columns[]: [ "WHT Professional", … ]                       # voucher — see §1.6

@@ -296,7 +296,7 @@ Response item shape (`ProcurementLpoResource`):
 - `id`
 - `is_direct` — `true` when staff raised the LPO directly, without a procurement request
 - `type` — `work`, `purchase`
-- `title` — direct LPOs only; a workflow LPO's title is its `procurementRequest.title`
+- `title` — every LPO has one: a direct LPO's as entered, a workflow LPO's copied from its procurement request
 - `notes`
 - `amount`
 - `discount_amount`

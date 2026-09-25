@@ -48,7 +48,7 @@ Example:
 | `description` | Yes | string | - |
 | `type` | Yes | string | `purchase`, `work` |
 | `expense_type_id` | Yes | integer | Must exist in `expense_types.id` |
-| `expense_category_id` | No | integer | Must exist in `expense_categories.id`; when omitted, backend derives from `expense_type_id` |
+| `expense_category_id` | No | integer | Must exist in `expense_categories.id`. The request's own category - any category may be chosen, whatever the expense type's default. When omitted, the expense type's default category is used |
 | `expense_sub_type_id` | Yes | integer | Must belong to selected expense type |
 | `facility_id` | Yes | integer | Must exist in `facilities.id` |
 | `ticket_id` | No | integer | Must exist in `tickets.id` |
@@ -104,7 +104,7 @@ An LPO comes into being in one of two ways:
 | Comparable quotes | The request's other bids | `comparables` |
 | Approval | Already approved through the request's steps; issued as `lpo` | Goes through the LPO approval template, if one is active (see below) |
 
-Both kinds carry their own `facility`, `type`, `expenseType` and `expenseSubType`, so lists, filters,
+Both kinds carry their own `title`, `facility`, `type`, `expenseType` and `expenseSubType`, so lists, filters,
 property scoping, bills and the printed LPO treat them the same way.
 
 ### List query support
@@ -150,7 +150,7 @@ Request body (`CreateDirectLpoData`):
 | `currency_id` | Yes | integer | Must exist in `currencies.id` |
 | `expense_type_id` | Yes | integer | Must exist in `facility_expense_types.id` |
 | `expense_sub_type_id` | Yes | integer | Must exist in `facility_expense_sub_types.id` and belong to `expense_type_id` |
-| `expense_category_id` | No | integer | Must exist in `expense_categories.id` and match the expense type's category. When omitted, derived from `expense_type_id` |
+| `expense_category_id` | No | integer | Must exist in `expense_categories.id`. The LPO's own category - any category may be chosen (e.g. a Repairs & Maintenance order charged to rent rather than service charge). When omitted, the expense type's default category is used |
 | `delivery_at` | Yes | string/date | When the work or goods are due |
 | `notes` | No | string | - |
 | `assigned_technician_id` | No | integer | Must exist in `users.id` |
@@ -327,7 +327,7 @@ Loads `currency`, `documentUpload`, `facility`, `expenseType`, `expenseSubType`,
 | `id` | - |
 | `is_direct` | `true` for an LPO raised through `POST /lpos` |
 | `type` | `work`, `purchase` |
-| `title` | Direct LPOs only; `null` for workflow LPOs, whose title is the request's |
+| `title` | Every LPO: a direct LPO's as entered; a workflow LPO's is copied from its procurement request |
 | `notes`, `amount`, `discount_amount`, `amount_after_discount`, `tax`, `total`, `expense_category_id` | - |
 | `delivery_at`, `delivered_at`, `created` | `raw`, `formatted`, `diff` |
 | `status` | `{ value, color }` — `pending`, `lpo`, `delivered`, `cancelled` |

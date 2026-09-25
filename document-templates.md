@@ -162,6 +162,7 @@ Each block declares:
 | `credit_note_details` | credit note | `document.number` (`CN0001`), `.issued_at`, `.status`, `.currency`, `.invoice_number` |
 | `receipt_details` | receipt | `document.number` (`RCP0001`), `.issued_at`, `.served_by`, `.status`, `.currency` |
 | `lpo_details` | lpo | `document.number` (`LPO0001`), `.issued_at`, `.due_at` (delivery), `.status`, `.currency` |
+| `lpo_title` | lpo | `lpo.title` (the order's title: a direct LPO's as entered, a workflow LPO's copied from its request), `document.notes` |
 | `voucher_details` | payment voucher | `document.number` (`PV0001`), `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
 | `remittance_details` | remittance | `document.number` (`REM0001`), `landlord.name`, `property.name`, `document.period`, `.memo` (e.g. `August 2026`), `.issued_at`, `.status` |
 
@@ -238,6 +239,7 @@ mobile_money[]: { component, bank_name, paybill_number, account_number }  # invo
                 # Empty array when no paybill is known (the block is then hidden)
 payment_account:{ bank_name, branch, account_name, account_number }    # receipt
 transactions[]: { transaction_date, transaction_number, method, amount }  # receipt
+lpo:            { title }                                              # lpo
 approval_chain[]: { name, date }                                       # lpo, see §4.1
 signoff:        { prepared_by, prepared_at }                           # voucher, remittance
 withholding_columns[]: [ "WHT Professional", … ]                       # voucher, see §4.2

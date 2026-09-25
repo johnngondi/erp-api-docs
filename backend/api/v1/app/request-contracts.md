@@ -131,7 +131,7 @@ Used by `POST /api/v1/app/{company}/property-management/procurement/lpos` to rai
 | `winning_bid_upload_id` | Yes | `int` | - | `Exists` |
 | `items` | Yes | `array<CreateDirectLpoItemData>` | - | `Min:1` |
 | `title` | No | `string|null` | - | `Max:255` |
-| `expense_category_id` | No | `int|null` | - | `Exists`, must match the expense type's category; derived when omitted |
+| `expense_category_id` | No | `int|null` | - | `Exists`; independent of the expense type - its category is only the default used when omitted |
 | `notes` | No | `string|null` | - | - |
 | `assigned_technician_id` | No | `int|null` | - | `Exists` |
 | `comparables` | No | `array<int>|null` | - | each `Exists`, `Different:winning_bid_upload_id` |
