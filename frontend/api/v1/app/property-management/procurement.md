@@ -90,6 +90,21 @@ Endpoints:
 
 `PUT/PATCH /lpos/{lpo}` and `DELETE /lpos/{lpo}` are registered by the resource route but not implemented.
 
+### Permissions
+
+| Permission | Allows |
+|---|---|
+| `view-facility-procurement-lpo` | List and read LPOs (staff: on allocated properties; suppliers: their own) |
+| `create-facility-procurement-lpo` | Raise a direct LPO (`POST /lpos`) |
+| `update-facility-procurement-lpo` | Edit an LPO. The LPO's creator, and an approver granted edit rights on the current step, may also edit |
+| `delete-facility-procurement-lpo` | Delete an LPO. The LPO's creator may also delete |
+| `cancel-facility-procurement-lpo` | Cancel an LPO |
+| `review-document-facility-procurement-lpo` | Accept a supplier's jobcard / delivery note (`PUT /lpos/{lpo}/review`) |
+| `submit-doc-facility-procurement-lpo` | Supplier portal: submit the jobcard / delivery note |
+
+No endpoint is wired to update, delete or cancel yet; the permissions and policy abilities exist so roles
+can be set up ahead of them.
+
 ### Workflow LPOs and direct LPOs
 
 An LPO comes into being in one of two ways:
@@ -136,7 +151,7 @@ Example:
 
 Authorization:
 
-- Requires the `review-document-facility-procurement-lpo` permission (policy `create`).
+- Requires the `create-facility-procurement-lpo` permission (policy `create`).
 - The user must be allocated to `facility_id`, otherwise `403`.
 
 Request body (`CreateDirectLpoData`):
