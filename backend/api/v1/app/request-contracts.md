@@ -113,6 +113,44 @@ Class: `App\Data\ContractData`
 | `approver_id` | No | `Spatie\LaravelData\Optional|int|null` | - | `Exists` |
 | `status` | No | `Spatie\LaravelData\Optional|string|null` | `pending`, `active`, `suspended`, `expired`, `inactive` | `In` |
 
+## CreateDirectLpoData
+
+Class: `App\Data\Procurement\CreateDirectLpoData`
+
+Used by `POST /api/v1/app/{company}/property-management/procurement/lpos` to raise a direct LPO (no procurement request).
+
+| Field | Required | Type | Allowed Values (Enum) | Rules |
+|---|---|---|---|---|
+| `facility_id` | Yes | `int` | - | `Exists` |
+| `type` | Yes | `string` | `work`, `purchase` | `In` |
+| `vendor_id` | Yes | `int` | - | `Exists` |
+| `currency_id` | Yes | `int` | - | `Exists` |
+| `expense_type_id` | Yes | `int` | - | `Exists` |
+| `expense_sub_type_id` | Yes | `int` | - | `Exists`, must belong to `expense_type_id` |
+| `delivery_at` | Yes | `string` | - | `Date` |
+| `winning_bid_upload_id` | Yes | `int` | - | `Exists` |
+| `items` | Yes | `array<CreateDirectLpoItemData>` | - | `Min:1` |
+| `title` | No | `string|null` | - | `Max:255` |
+| `expense_category_id` | No | `int|null` | - | `Exists`, must match the expense type's category; derived when omitted |
+| `notes` | No | `string|null` | - | - |
+| `assigned_technician_id` | No | `int|null` | - | `Exists` |
+| `comparables` | No | `array<int>|null` | - | each `Exists`, `Different:winning_bid_upload_id` |
+
+## CreateDirectLpoItemData
+
+Class: `App\Data\Procurement\CreateDirectLpoItemData`
+
+| Field | Required | Type | Allowed Values (Enum) | Rules |
+|---|---|---|---|---|
+| `type` | Yes | `string` | `product`, `service` | `In` |
+| `purchase_item_id` | Yes | `int|string` | - | An existing purchase item id, or the name of a new one |
+| `quantity` | Yes | `float` | - | `gt:0` |
+| `stock_keeping_unit_id` | Yes | `int` | - | `Exists` |
+| `cost` | Yes | `float` | - | `min:0` |
+| `tax_id` | Yes | `int` | - | `Exists` |
+| `notes` | No | `string|null` | - | - |
+| `discount_amount` | No | `float` | - | `min:0`, default `0` |
+
 ## CreditNoteData
 
 Class: `App\Data\CreditNoteData`

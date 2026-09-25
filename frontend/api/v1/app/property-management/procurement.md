@@ -81,26 +81,241 @@ Example:
 
 ## LPOs
 
-Endpoints currently implemented:
+Endpoints:
 
 - `GET /lpos`
+- `POST /lpos` — raise a **direct** LPO (see below)
 - `GET /lpos/{lpo}`
 - `PUT /lpos/{lpo}/review`
 
-Notes:
+`PUT/PATCH /lpos/{lpo}` and `DELETE /lpos/{lpo}` are registered by the resource route but not implemented.
 
-- Other LPO routes exist in route definitions but are not currently implemented in the controller.
+### Workflow LPOs and direct LPOs
 
-List query support:
+An LPO comes into being in one of two ways:
+
+| | Workflow LPO | Direct LPO |
+|---|---|---|
+| Raised by | The procurement request workflow, once a bid (work) or option (purchase) is selected | A staff user, by hand, through `POST /lpos` |
+| `is_direct` | `false` | `true` |
+| `procurement_request_id` / `procurementRequest` | Set | `null` |
+| Items | Copied from the winning bid / selected option | Entered on the form |
+| Winning bid document | On the request's bid | `winningBidUpload` |
+| Comparable quotes | The request's other bids | `comparables` |
+| Approval | Already approved through the request's steps; issued as `lpo` | Goes through the LPO approval template, if one is active (see below) |
+
+Both kinds carry their own `facility`, `type`, `expenseType` and `expenseSubType`, so lists, filters,
+property scoping, bills and the printed LPO treat them the same way.
+
+### List query support
+
+`GET /api/v1/app/{company}/property-management/procurement/lpos`
 
 - Filters:
-  - `filter[id]`, `filter[procurement_request_id]`, `filter[assigned_technician_id]`
-  - `filter[expense_category_id]`, `filter[created_at]`, `filter[delivery_at]`, `filter[delivered_at]`, `filter[rating]`
+  - `filter[search]` — free text over id, title, notes, supplier, request title and property name
+  - **Exact**: `filter[facility_id]`, `filter[is_direct]` (`1`/`0`), `filter[type]` (`work`, `purchase`)
+  - `filter[vendor_id]`, `filter[expense_category_id]`, `filter[status]`, `filter[delivered_at]`, `filter[rating]`,
+    `filter[amount]`, `filter[total]`, `filter[created_at]`
 - Sort:
-  - `sort=id,created_at,amount,delivery_at`
+  - `sort=id,created_at,delivered_at,amount,total,rating,status`
 - Include:
   - `include=items`
 - Fields: not supported
+- Pagination: `per_page`, `page`
+
+Only LPOs on properties the user is allocated to are listed. `filter[facility_id]` reads the LPO's own
+property, so direct LPOs are included.
+
+Example:
+
+`GET /api/v1/app/12/property-management/procurement/lpos?filter[is_direct]=1&filter[type]=work&sort=-created_at`
+
+### Create a direct LPO
+
+`POST /api/v1/app/{company}/property-management/procurement/lpos`
+
+Authorization:
+
+- Requires the `review-document-facility-procurement-lpo` permission (policy `create`).
+- The user must be allocated to `facility_id`, otherwise `403`.
+
+Request body (`CreateDirectLpoData`):
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `facility_id` | Yes | integer | Must exist in `facilities.id`. The property the order is for |
+| `type` | Yes | string | `work`, `purchase` |
+| `title` | No | string | Max 255. Shown on the supplier's jobcard task and the printed LPO |
+| `vendor_id` | Yes | integer | Must exist in `users.id`. The supplier |
+| `currency_id` | Yes | integer | Must exist in `currencies.id` |
+| `expense_type_id` | Yes | integer | Must exist in `facility_expense_types.id` |
+| `expense_sub_type_id` | Yes | integer | Must exist in `facility_expense_sub_types.id` and belong to `expense_type_id` |
+| `expense_category_id` | No | integer | Must exist in `expense_categories.id` and match the expense type's category. When omitted, derived from `expense_type_id` |
+| `delivery_at` | Yes | string/date | When the work or goods are due |
+| `notes` | No | string | - |
+| `assigned_technician_id` | No | integer | Must exist in `users.id` |
+| `winning_bid_upload_id` | Yes | integer | Must exist in `uploads.id`. The supplier's winning quotation |
+| `comparables` | No | array of integer | Each must exist in `uploads.id` and differ from `winning_bid_upload_id`. The other quotations the winning bid was compared against |
+| `items` | Yes | array | At least one item |
+
+`items[]` object — the same shape a supplier sends when submitting a bid:
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `type` | Yes | string | `product`, `service` |
+| `purchase_item_id` | Yes | integer **or** string | An existing `facility_purchase_items.id`, **or** the name of a new item (see below) |
+| `notes` | No | string | - |
+| `quantity` | Yes | number | Greater than `0` |
+| `stock_keeping_unit_id` | Yes | integer | Must exist in `stock_keeping_units.id` |
+| `cost` | Yes | number | Unit cost, minimum `0` |
+| `tax_id` | Yes | integer | Must exist in `taxes.id` |
+| `discount_amount` | No | number | Discount on the line, minimum `0`. Default `0` |
+
+**Selecting or adding an item.** Send an integer `purchase_item_id` to pick an existing purchase item. Send a
+string to add one: if a purchase item with exactly that name already exists it is reused, otherwise a new
+purchase item is created (in the first inventory category, with the line's type, unit, tax and cost as its
+base price, and the supplier linked to it). The line's `title` is the purchase item's name.
+
+**Line arithmetic** (the same as bids):
+
+- `amount = quantity × cost`
+- `amount_after_discount = amount − discount_amount`
+- `tax = rate × amount_after_discount` when the tax is discount-deductible, otherwise `rate × amount`
+- `total = amount_after_discount + tax`
+
+If the supplier is **not VAT-registered**, every line is stored with the zero-rate tax and `tax = 0`,
+exactly as a workflow LPO is. The LPO's `amount`, `discount_amount`, `amount_after_discount`, `tax` and
+`total` are the sums of its lines.
+
+**Uploads.**
+
+- `winning_bid_upload_id` is stored on the LPO and returned as `winningBidUpload`.
+- `comparables` are attached to the LPO and returned as `comparables`. An upload belongs to one record at a
+  time, so attaching one another record holds moves it. An upload created by a different user, or an id that
+  does not exist, is rejected with `422` on the `comparables` key.
+
+**Approval.** The LPO is created as `lpo`. If the company has an active approval template for LPOs, and it
+forms a chain for this user, the LPO drops to `pending` and waits for that chain:
+
+- While `pending` the supplier cannot see it, and no jobcard task is raised for them.
+- On final approval it moves to `lpo` and the supplier gets the "Upload jobcard" task.
+- On rejection it moves to `cancelled`.
+
+With no template, a bypass role, or no applicable steps, it stays `lpo` and the supplier's jobcard task is
+raised at once.
+
+Example request:
+
+```json
+{
+  "facility_id": 4,
+  "type": "work",
+  "title": "Replace borehole pump",
+  "vendor_id": 118,
+  "currency_id": 1,
+  "expense_type_id": 7,
+  "expense_sub_type_id": 21,
+  "delivery_at": "2026-10-10",
+  "notes": "Access through the service gate.",
+  "assigned_technician_id": 52,
+  "winning_bid_upload_id": 9031,
+  "comparables": [9032, 9033],
+  "items": [
+    {
+      "type": "product",
+      "purchase_item_id": 311,
+      "notes": "1.5HP submersible",
+      "quantity": 1,
+      "stock_keeping_unit_id": 1,
+      "cost": 85000,
+      "tax_id": 2,
+      "discount_amount": 5000
+    },
+    {
+      "type": "service",
+      "purchase_item_id": "Pump installation labour",
+      "quantity": 1,
+      "stock_keeping_unit_id": 3,
+      "cost": 15000,
+      "tax_id": 2
+    }
+  ]
+}
+```
+
+Success response (`DataResource`):
+
+- `message`: `LPO created successfully.`
+- `lpo`: the created LPO, with `facility`, `vendor`, `currency`, `expenseType`, `expenseSubType`,
+  `expenseCategory`, `assignedTechnician`, `winningBidUpload`, `comparables` and `items` loaded.
+
+```json
+{
+  "message": "LPO created successfully.",
+  "lpo": {
+    "id": 412,
+    "is_direct": true,
+    "type": "work",
+    "title": "Replace borehole pump",
+    "notes": "Access through the service gate.",
+    "amount": "100000.00000",
+    "discount_amount": "5000.00000",
+    "amount_after_discount": "95000.00000",
+    "tax": "15200.00000",
+    "total": "110200.00000",
+    "status": { "value": "pending", "color": "warning" },
+    "delivery_at": { "raw": "2026-10-10T00:00:00.000000Z", "formatted": "10 Oct, 2026", "diff": "2 weeks from now" },
+    "facility": { "id": 4, "name": "Kilimani Heights" },
+    "vendor": { "id": 118, "name": "Aqua Pumps Ltd" },
+    "winningBidUpload": { "id": 9031, "title": "Aqua Pumps quote.pdf" },
+    "comparables": [
+      { "id": 9032, "title": "Rift Water quote.pdf" },
+      { "id": 9033, "title": "Borehole Masters quote.pdf" }
+    ],
+    "procurementRequest": null,
+    "items": [
+      { "id": 1201, "title": "Submersible pump", "type": "product", "quantity": "1.000", "cost": "85000.00000", "discount_amount": "5000.00000", "tax": "12800.00000", "total": "92800.00000" },
+      { "id": 1202, "title": "Pump installation labour", "type": "service", "quantity": "1.000", "cost": "15000.00000", "discount_amount": "0.00000", "tax": "2400.00000", "total": "17400.00000" }
+    ]
+  }
+}
+```
+
+Errors:
+
+- `403` — missing permission, or not allocated to `facility_id`.
+- `422` — validation, keyed by field (`items.0.cost`, `comparables.1`, `expense_sub_type_id`, ...).
+
+### Show an LPO
+
+`GET /api/v1/app/{company}/property-management/procurement/lpos/{lpo}`
+
+Loads `currency`, `documentUpload`, `facility`, `expenseType`, `expenseSubType`, `expenseCategory`, `vendor`,
+`assignedTechnician`, `winningBidUpload`, `comparables`, `procurementRequest` (null for a direct LPO) and
+`items` with `purchaseItem`, `stockKeepingUnit` and `taxType`.
+
+### Response fields
+
+`FacilityProcurementLpoResource`:
+
+| Field | Notes |
+|---|---|
+| `id` | - |
+| `is_direct` | `true` for an LPO raised through `POST /lpos` |
+| `type` | `work`, `purchase` |
+| `title` | Direct LPOs only; `null` for workflow LPOs, whose title is the request's |
+| `notes`, `amount`, `discount_amount`, `amount_after_discount`, `tax`, `total`, `expense_category_id` | - |
+| `delivery_at`, `delivered_at`, `created` | `raw`, `formatted`, `diff` |
+| `status` | `{ value, color }` — `pending`, `lpo`, `delivered`, `cancelled` |
+| `document_number`, `documentUpload` | The supplier's jobcard / delivery note, set when they submit it |
+| `work_advice`, `quality_rating`, `speed_rating`, `communication_rating`, `rating`, `comments` | Set on review |
+| `facility` | The property |
+| `expenseType`, `expenseSubType`, `expenseCategory`, `currency`, `vendor`, `assignedTechnician` | When loaded |
+| `winningBidUpload` | Direct LPOs: the winning quotation |
+| `comparables` | Direct LPOs: the comparable quotations (array of uploads) |
+| `procurementRequest` | Workflow LPOs only |
+| `items` | When loaded |
+| `permissions` | Instance permissions |
 
 ### Review submitted LPO document
 
@@ -108,28 +323,27 @@ List query support:
 
 Purpose:
 
-- Used by App users to approve or reject a vendor-submitted LPO delivery document.
+- Used by App users to accept a vendor-submitted jobcard / delivery document. It marks the LPO `delivered`
+  and generates the supplier bill for it (once per LPO).
 
-Request body (intended contract):
+Request body (`CloseLpoData`; `document_number` and `document_upload_id` are taken from the LPO, and
+`delivered_at` is set to now):
 
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
-| `status` | Yes | string | `approved`, `rejected` |
-| `comments` | Conditional | string | Recommended and typically required when `status=rejected` |
+| `work_advice` | No | string | - |
+| `quality_rating` | No | integer | Default `0` |
+| `speed_rating` | No | integer | Default `0` |
+| `communication_rating` | No | integer | Default `0`. `rating` is the average of the three |
+| `comments` | No | string | - |
 
-Suggested responses:
+The bill takes its property and expense type / sub-type from the LPO itself, so direct and workflow LPOs
+bill the same way.
 
-- Approve success:
-  - `message`: `LPO document approved successfully.`
-  - `lpo.status.value`: expected transition to delivered/approved workflow state
-- Reject success:
-  - `message`: `LPO document rejected successfully.`
-  - `lpo.status.value`: expected transition to review/rejected workflow state
+Success response:
 
-Current backend state:
-
-- Route exists, but the handler is currently a placeholder in `routes/Api/v1/app/property-management.php`.
-- Final payload validation and exact response structure should be confirmed once controller/action is implemented.
+- `message`: `Document accepted!`
+- `lpo`: the updated LPO with `documentUpload`
 
 ## Contracts
 

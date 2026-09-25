@@ -276,17 +276,16 @@ Notes:
 
 `GET /lpos`
 
+Only the vendor's own LPOs are listed, and never a `pending` one (an order still awaiting approval has
+not been placed).
+
 Query params:
 
-- `filter[id]`
-- `filter[procurement_request_id]`
-- `filter[assigned_technician_id]`
-- `filter[created_at]`
-- `filter[delivery_at]`
-- `filter[delivered_at]`
-- `filter[expense_category_id]`
-- `filter[rating]`
-- `sort=id,created_at,amount,delivery_at`
+- `filter[search]`
+- `filter[facility_id]`, `filter[is_direct]` (`1`/`0`), `filter[type]` (`work`, `purchase`)
+- `filter[expense_category_id]`, `filter[status]`, `filter[delivered_at]`, `filter[rating]`
+- `filter[amount]`, `filter[total]`, `filter[created_at]`
+- `sort=id,created_at,delivered_at,amount,total,rating,status`
 - `include=items` (optional)
 - `per_page` (optional)
 - `page` (optional)
@@ -294,6 +293,9 @@ Query params:
 Response item shape (`ProcurementLpoResource`):
 
 - `id`
+- `is_direct` — `true` when staff raised the LPO directly, without a procurement request
+- `type` — `work`, `purchase`
+- `title` — direct LPOs only; a workflow LPO's title is its `procurementRequest.title`
 - `notes`
 - `amount`
 - `discount_amount`
@@ -303,7 +305,8 @@ Response item shape (`ProcurementLpoResource`):
 - `expense_category_id`
 - `delivery_at` (`raw`, `formatted`, `diff`)
 - `delivered_at` (`raw`, `formatted`, `diff`)
-- `procurementRequest`
+- `facility` — the property
+- `procurementRequest` — `null` for a direct LPO
 - `expenseCategory`
 - `currency`
 - `assignedTechnician`
@@ -323,11 +326,13 @@ Includes loaded by controller:
 
 - `currency`
 - `documentUpload`
-- `procurementRequest`
+- `facility`
+- `procurementRequest` (`null` for a direct LPO)
 - `items.purchaseItem`
 - `items.stockKeepingUnit`
 - `items.taxType`
-- `procurementRequest.facility`
+
+A `pending` LPO returns `404`.
 
 ### Submit LPO document
 
