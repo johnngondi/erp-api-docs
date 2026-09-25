@@ -115,7 +115,8 @@ Response item shape (`JobBidResource`):
 - `tax`
 - `total`
 - `delivery` (`raw`, `formatted`, `diff`)
-- `status` (enum object)
+- `status` (enum object) — `bid`, `recommended`, `selected`, `rejected`
+- `rejection_reason` — set when the quote lost to another supplier's (`Another quotation was selected for this request.`)
 - `created` (`raw`, `formatted`, `diff`)
 
 ### Create quote
@@ -333,6 +334,17 @@ Includes loaded by controller:
 - `items.taxType`
 
 A `pending` LPO returns `404`.
+
+### Notifications
+
+Suppliers are notified in the portal inbox (and by mail / SMS where they have an address / phone number):
+
+| Notification `type` | When | `resource_url` opens |
+|---|---|---|
+| `App\Notifications\PropertyManagement\Procurement\LpoIssuedNotification` | An LPO is issued to you — straight away, or once a pending LPO is approved | The LPO |
+| `App\Notifications\PropertyManagement\Procurement\BidRejectedNotification` | Another supplier's quote won the request you quoted on | Your quote |
+
+Alongside the LPO notification, an "Upload jobcard" pending task is raised for the LPO.
 
 ### Submit LPO document
 
