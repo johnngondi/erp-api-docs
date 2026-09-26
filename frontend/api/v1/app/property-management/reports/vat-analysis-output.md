@@ -35,6 +35,10 @@ invoice or credit note: it has been raised but **not posted**, so declaring VAT 
 tax on a document that was never issued. It appears here from the moment it moves to `unpaid`.
 `cancelled` never will be — it was never charged.
 
+**Except a cancelled credit note signed on the ETR.** KRA already holds it, so it stays in the
+report as a negative line. Cancelling it raises a new invoice for the same amount, which appears as
+an ordinary invoice. The two net out, as they do on KRA's side.
+
 Every other status counts, whatever its receipt state: `unpaid`, `partially paid` and `paid` are all
 declared alike. This matches [Input VAT Analysis](./vat-analysis-input.md), and matches the arrears
 reports — [Ageing](./ageing-report.md) and [Debtors Listing](./debtors-listing.md) are folded from

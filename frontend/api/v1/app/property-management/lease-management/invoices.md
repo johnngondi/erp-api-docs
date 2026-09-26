@@ -25,19 +25,20 @@ Base route:
 Supported query params:
 
 - Filters:
-  - `filter[lease_id]`
-  - `filter[due_at]`
-  - `filter[cu_reference_number]`
-  - `filter[is_credit]`
-  - `filter[paid]`
-  - `filter[cu_invoice_number]`
-  - `filter[cu_serial_number]`
-  - `filter[id]`
-  - `filter[status]`
-  - `filter[user_id]` (maps to lease tenant)
+  - `filter[search]` — free text
+  - **Exact** (`=`): `filter[lease_id]`, `filter[status]`, `filter[facility_id]` (through the
+    lease), `filter[user_id]` (the lease's tenant)
+  - **Partial** (`LIKE`): `filter[due_at]`, `filter[created_at]`
 - Sort:
-  - `sort=lease_id,due_at,cu_reference_number,is_credit,paid,cu_invoice_number,cu_serial_number`
+  - `sort=id,due_at,created_at,amount,tax,total,paid,balance`
 - Include: not supported
+> **Exact versus partial matters here.** `lease_id` and `status` are exact. They were declared as
+> bare strings, which Spatie turns into a *partial* match — so `filter[lease_id]=6` returned leases
+> 6, 16, 26, 60-69 and anything else whose id contains a 6, putting another tenant's billing on a
+> lease's page. `filter[status]=paid` also matched `unpaid` and `partially paid`.
+>
+> Dates stay partial on purpose, so `filter[created_at]=2026-09` means "that month".
+
 - Select fields: not supported
 - Pagination: `per_page`, `page`
 
@@ -202,6 +203,56 @@ ETR fields on the invoice resource:
 ## Delete Invoice
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}`
+
+One endpoint, three outcomes, decided by the invoice.
+
+| Invoice | Outcome |
+|---|---|
+| **Payments allocated** | Refused. `permissions.delete` is `false`, so hide the action; a direct call returns **403**. The money is reallocated to another invoice first |
+| **Issued and carrying a CU number** | **Reversed**, not deleted. A credit note for the full value is raised and signed to ETR. The invoice survives |
+| **Pending, or no CU number** | Cancelled and removed, along with its tenant statement entries and lease billings |
+
+A **pending** invoice is always removed outright, even if it carries a CU number: it is a draft the
+tenant never received, so there is nothing filed to reverse.
+
+Response:
+
+| Field | Notes |
+|---|---|
+| `action` | `"cancelled"` or `"reversed"`. Always present — switch on this |
+| `credit_note_id` | The reversing credit note. **Absent** when nothing was reversed, because null values are stripped from responses |
+
+### Reversed invoices read as "paid"
+
+Applying a full credit note drives the balance to zero, and the status follows the balance — so a
+reversed invoice comes to rest as `paid` when nobody paid anything.
+
+`reversal_credit_note_id` on the invoice is what tells the two apart, and
+**`filter[reversed]=true|false`** filters on it. Combine it to get real revenue:
+
+```
+filter[status]=paid&filter[reversed]=false
+```
+
+An invoice counts as reversed only when a credit note covers its **full total**, whether the
+credit note came from deleting or cancelling a filed invoice or was raised by hand. A partial credit
+note leaves `reversal_credit_note_id` unchanged. Cancelling an **unsigned** reversing credit note
+clears the field and reopens the invoice.
+
+The same filter exists on the credit notes list, and a reversing credit note carries
+`reversed_invoice_id` (`null` on a partial credit). The credit note's `invoice_id` is the only
+stored link. `reversed_invoice_id` is worked out from it and the invoice's
+`reversal_credit_note_id`.
+
+The statement line reads `CN#{id} - Reversal for INV#{id} - {invoice notes}`.
+
+### Invoices re-issued from a cancelled credit note
+
+A credit note signed on the ETR cannot be withdrawn. Cancelling one raises a new invoice for the
+same amount instead (see the credit notes doc). That invoice carries
+**`reissued_from_credit_note_id`** (`null` on every other invoice), and
+**`filter[reissued]=true|false`** filters on it. Its notes and statement line read
+`INV#{id} - Re-issued for cancelled ETR signed CN#{creditNoteId} - {credit note notes}`.
 
 ## Dispute Invoice
 

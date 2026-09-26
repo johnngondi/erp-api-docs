@@ -25,19 +25,20 @@ Base route:
 Supported query params:
 
 - Filters:
-  - `filter[id]`
-  - `filter[lease_id]`
-  - `filter[invoice_id]`
-  - `filter[credit_note_id]`
-  - `filter[due_at]`
-  - `filter[cu_reference_number]`
-  - `filter[is_credit]`
-  - `filter[paid]`
-  - `filter[cu_invoice_number]`
-  - `filter[status]`
+  - `filter[search]` — free text
+  - **Exact** (`=`): `filter[lease_id]`, `filter[status]`, `filter[facility_id]` (through the lease)
+  - **Partial** (`LIKE`): `filter[due_at]`, `filter[created_at]`
+  - `filter[reversed]=true|false`: only full reversals, or only everything else
 - Sort:
-  - `sort=lease_id,invoice_id,credit_note_id,due_at,cu_reference_number,is_credit,paid,cu_invoice_number,status`
+  - `sort=id,due_at,created_at,amount,tax,total,paid,balance`
 - Include: not supported
+> **Exact versus partial matters here.** `lease_id` and `status` are exact. They were declared as
+> bare strings, which Spatie turns into a *partial* match — so `filter[lease_id]=6` returned leases
+> 6, 16, 26, 60-69 and anything else whose id contains a 6, putting another tenant's billing on a
+> lease's page. `filter[status]=applied` also matched `unapplied` and `partially applied`.
+>
+> Dates stay partial on purpose, so `filter[created_at]=2026-09` means "that month".
+
 - Select fields: not supported
 - Pagination: `per_page`, `page`
 
@@ -57,8 +58,8 @@ Request body:
 | `due_at` | Yes | date (`YYYY-MM-DD`) | - |
 | `notes` | Yes | string | - |
 | `items` | Yes | array | At least one item |
-| `invoice_id` | No | integer | Optional |
-| `cu_reference_number` | No | string | Optional |
+| `invoice_id` | No | integer | The invoice this credit note reverses. See [One invoice per credit note](#one-invoice-per-credit-note) |
+| `cu_reference_number` | No | string | Optional. Not used for signing: the ETR reference always comes from the linked invoice |
 | `is_credit` | No | boolean | Defaults to `true` |
 | `paid` | No | number | Defaults to `0` |
 | `cu_invoice_number` | No | string | Optional |
@@ -112,6 +113,35 @@ Example response:
 }
 ```
 
+## One invoice per credit note
+
+Every credit note reverses exactly one invoice, and `invoice_id` is the only record of which one.
+
+- **Raised against an invoice** (`invoice_id` sent): it is applied to that invoice when it is
+  processed. Its total cannot exceed the invoice's balance.
+- **Raised open** (no `invoice_id`, e.g. an overpayment brought forward or a goodwill credit): it
+  comes to rest `unapplied`. When the next invoice is raised on the lease, the credit note is
+  applied to it automatically and **that invoice becomes its `invoice_id`**. If the credit is
+  larger than the invoice, the rest stays `partially applied` and is drawn down by later invoices,
+  but `invoice_id` keeps pointing at the first one.
+- **Signing needs the invoice.** An open credit note cannot be signed on the ETR: the device needs
+  the CU number of the invoice it reverses. See [Sign Credit Note](#sign-credit-note-etr).
+
+### Full reversal or partial credit
+
+A credit note is a **reversal** only when it covers the invoice's full total. A partial credit
+still carries `invoice_id`, but it is not a reversal.
+
+| | Full reversal | Partial credit |
+|---|---|---|
+| Invoice `reversal_credit_note_id` | this credit note's id | unchanged |
+| Credit note `reversed_invoice_id` | the invoice id | `null` |
+| `filter[reversed]=true` (on either list) | included | excluded |
+
+A reversed invoice's balance drops to zero, so its status reads `paid` even though nothing was
+paid. Use `reversal_credit_note_id` / `filter[reversed]` to tell the two apart (see the invoices
+doc).
+
 ## Update Credit Note
 
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}`
@@ -124,9 +154,38 @@ Use the same payload shape as create.
 
 No request body required.
 
+What happens depends on whether the credit note has been signed on the ETR (`etr_signed_at` /
+`cu_invoice_number` is set).
+
+**Not signed.** The credit note is withdrawn:
+
+- its lease billing entries are removed
+- the amount goes back onto the invoice's balance. If this credit note was the invoice's reversal,
+  `reversal_credit_note_id` is cleared and the invoice is open again
+- the tenant statement gets a `Cancelled Credit Note # {id} - {notes}` debit line
+
+A queued signing job for the credit note does nothing once it has been cancelled.
+
+**Signed.** KRA already holds the credit note, so it cannot be withdrawn. The credit is **re-billed
+with a new invoice** instead:
+
+- a new invoice is raised for **the same amount as the credit note**. It copies the credit note's
+  lines (component, quantity, cost, tax), is posted straight away without approval, and is queued
+  for ETR signing
+- the new invoice's `reissued_from_credit_note_id` is set to this credit note's id. Its notes, and
+  its tenant statement line, read
+  `INV#{id} - Re-issued for cancelled ETR signed CN#{creditNoteId} - {credit note notes}`
+- the credit note's own billing entries and statement credit stay, and so does the original
+  invoice's `reversal_credit_note_id`. On the statement, the tenant sees the credit and then the
+  new invoice's debit
+- the credit note still counts as a negative line in Output VAT, because KRA has it
+- the response's credit note carries `reissued_invoice_id`
+
 Possible status values returned by API resource:
 
 - `pending` (`secondary`)
+- `unapplied` (`info`)
+- `partially applied` (`warning`)
 - `applied` (`success`)
 - `cancelled` (`danger`)
 
@@ -143,7 +202,7 @@ When to show the action: `permissions.sign` on the credit note resource is `true
 - the user lacks the `sign-facility-credit-note` permission
 - the credit note is `pending` (awaiting approval) or `cancelled`
 - the credit note is already signed (`cu_invoice_number` is set)
-- it is linked to an invoice that is not signed yet (sign the invoice first), or it has neither a linked invoice nor a `cu_reference_number`
+- it has no invoice yet (an open credit note), or its invoice is not signed yet (sign the invoice first). A typed `cu_reference_number` does not stand in for the invoice
 
 Signing runs as a queued job. On a synchronous queue (the default locally) the request returns after the device answers; on a real queue it returns straight away and the CU fields fill in once the job runs. Refetch the credit note (or poll `GET /credit-notes/{creditNote}`) until `etr_signed_at` or `etr_error` is set.
 
@@ -196,9 +255,20 @@ ETR fields on the credit note resource:
 | `etr_signed_at` | object\|null | `{ raw, formatted, diff }` when the system signed it |
 | `etr_error` | string\|null | Reason the last signing attempt failed |
 
+Reversal fields on the credit note resource:
+
+| Field | Type | Notes |
+|---|---|---|
+| `reversed_invoice_id` | integer\|null | The invoice id when this credit note fully reverses it, otherwise `null`. See [Full reversal or partial credit](#full-reversal-or-partial-credit) |
+| `reissued_invoice_id` | integer\|null | The invoice raised when this signed credit note was cancelled |
+
 ## Delete Credit Note
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}`
+
+A credit note signed on the ETR cannot be deleted, because KRA has it. Cancel it instead, which
+re-bills the credit with a new invoice. Deleting a signed one returns `422` with
+`errors.status: ["A credit note signed on the ETR cannot be deleted. Cancel it instead."]`.
 
 ## Dispute Credit Note
 
