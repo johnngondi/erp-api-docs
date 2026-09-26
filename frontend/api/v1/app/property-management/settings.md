@@ -348,6 +348,19 @@ PM seeded general settings starter catalog:
 | `default_management_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for management fees |
 | `default_letting_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for letting/reletting fees |
 | `paybill_number` | `finance` | `text` | `null` | none | Company M-Pesa paybill. Printed on invoices (`mobile_money` block) when the property's management contract has `collection_account_holder = agent`, with the invoice number (e.g. `INV0481`) as the account number. Empty (default) = invoices fall back to each pay-to account's bank paybill |
+| `invoice_reminder_template_id` | `finance` | `select` | remote URI array (document templates endpoint, `filter[document_type]=facility_invoice&filter[is_active]=1`) | none | The invoice document template used to print invoice reminders: the **Reprint** button on the public invoice page, and reminder PDFs sent to tenants. Empty (default) = the company's default invoice template for the invoice's property |
+
+`invoice_reminder_template_id` validation on `PATCH /general/{setting}`: the value must be the id of an
+**active** `facility_invoice` template of the company, or `null` to clear it. Anything else returns `422`
+with `value: "Select an active invoice template."`.
+
+Which template a reminder prints with, for one invoice:
+
+1. The template in `invoice_reminder_template_id`, when it is still active and usable by the invoice's
+   property (company-wide, or its `facility_ids` include the property).
+2. Otherwise the company's default invoice template usable by the property.
+3. Otherwise the newest active invoice template usable by the property.
+4. Otherwise none: the public page hides **Reprint**, and the PDF link returns `404`.
 
 ### Bank Accounts
 

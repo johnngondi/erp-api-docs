@@ -269,6 +269,38 @@ Request body:
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}/dispute`
 
+## Public Invoice Page
+
+Every invoice has a public link that anyone holding it can open without signing in, for example
+from a reminder SMS or email. Invoice responses carry it as `public_url`:
+
+```json
+{
+  "id": 178,
+  "public_url": "https://api.example.com/invoices/Yx3...40 random chars"
+}
+```
+
+The link ends in a random 40-character token, not the invoice id, so invoice numbers cannot be
+guessed. The token is issued when the invoice is created; invoices that existed before this
+feature were given one by the migration.
+
+These are web pages served by the backend, not JSON endpoints:
+
+| Route | Returns |
+|---|---|
+| `GET /invoices/{token}` | HTML page. The left column shows the invoice number, dates, currency and status; the ETR (CU invoice number, CU serial number, KRA verify link and QR); the tenant, landlord and property; the line items; the receipts and credit notes allocated to the invoice; a small ageing analysis of the balance; and a footer with Amount, Tax, Total, Paid and Balance. The right column shows how to pay (the M-Pesa paybill and account number, and the bank accounts that collect the invoiced charges) and a **Reprint** button |
+| `GET /invoices/{token}/pdf` | The invoice as a PDF (`inline`, `INV0178.pdf`), printed with the invoice reminder template chosen in the `invoice_reminder_template_id` setting (see [Settings](../settings.md)) |
+
+Rules:
+
+- An unknown token returns `404`. So does a `pending` invoice, since it has not been approved or
+  issued yet.
+- The payment options are hidden when the balance is zero or less, or the invoice is `cancelled`.
+- **Reprint** is hidden, and `/pdf` returns `404`, when the company has no active invoice template
+  the invoice's property can use.
+- Both routes are limited to 60 requests a minute per IP, and are marked `noindex`.
+
 ## Frontend Error Handling
 
 Apply shared rules in `docs/frontend/app/README.md`.

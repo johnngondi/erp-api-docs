@@ -362,6 +362,10 @@ items[]:        { description, notes, quantity, unit_price, amount, tax, tax_rat
                    current_reading:  { value, read_at, image_url },
                    meter: { name, number },    # null when the item has no reading
                    consumption }               # current − previous value, or null
+                # invoice/cn: lines with the same component, quantity and notes print as one
+                # row with unit_price/amount/tax/total summed (tax_rate null if they differ).
+                # The same component billed again with different notes keeps its own row.
+                # Utility-bill lines are never merged
 totals:         { amount, tax, total, paid, balance }
 tax_summary[]:  { name, rate, taxable, tax }
 payments[]:     { type, number, date, method, reference, amount }      # invoice
@@ -376,10 +380,10 @@ bank_accounts[]:{ component, bank_name, branch, account_name, account_number }  
                 # account appears once, `component` listing the invoiced components it collects;
                 # also carries paybill_number (the bank's paybill, or null)
 mobile_money[]: { component, bank_name, paybill_number, account_number }  # invoice —
-                # agent holds the collection account (facility managementContract
-                # .collection_account_holder = agent) AND the company `paybill_number`
-                # setting is set → one row: company paybill, account_number = invoice
-                # number (INV0481), component "All charges", bank_name null.
+                # the property has its own `facilities.paybill_number` → one row:
+                # that paybill, account_number = invoice number (INV0481),
+                # component "All charges", bank_name null. Who holds the
+                # collection account plays no part.
                 # Otherwise → one row per bank_accounts[] row whose bank has a
                 # paybill_number, account_number = that bank account's number.
                 # Empty array when no paybill is known (the block is then hidden)

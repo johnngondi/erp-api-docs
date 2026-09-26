@@ -404,6 +404,12 @@ List query support:
     `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[expense_sub_type_id]`, `filter[asset_id]`
   - **Partial** (`LIKE`): `filter[title]`, `filter[start_at]`, `filter[end_at]`, `filter[created_at]`
   - Aliases: `filter[property_id]` → `facility_id`, `filter[supplier_id]` → `vendor_id`
+  - `filter[landlord_id]` — **exact**, matched through the contract's property. A contract has no
+    landlord of its own; it is raised against a property, and the property belongs to a landlord.
+    One spelling only, since landlord is the same word in the UI and the schema.
+
+All filters combine, so `filter[landlord_id]=4&filter[property_id]=12&filter[status]=active`
+narrows as you would expect, and any of them can sit alongside `filter[search]`.
 - Sort:
   - `sort=id,title,status,start_at,end_at,created_at`
 - Include:
@@ -431,17 +437,54 @@ Create/Update payload:
 | `amount` | Yes | integer | - |
 | `expense_type_id` | Yes | integer | Must exist in `facility_expense_types.id` |
 | `expense_category_id` | Yes | integer | Must exist in `expense_categories.id` |
-| `title` | No | string | Optional |
+| `title` | No | string | Generated when omitted — see below |
 | `notes` | No | string | Optional |
 | `currency_id` | No | integer | Must exist in `currencies.id` |
 | `expense_sub_type_id` | No | integer | Must exist in `expense_sub_types.id` |
 | `asset_id` | No | integer | Must exist in `assets.id` |
-| `agreement_upload_id` | No | integer | Must exist in `uploads.id` |
+| `agreement_upload_id` | **Yes on create** | integer | Must exist in `uploads.id`. See below |
 | `uploads` | No | array of integer | Supporting documents — addendums, extensions. Each must exist in `uploads.id`. See below |
 | `has_tax` | No | boolean | Default `false` |
 | `tax_id` | No | integer | Must exist in `taxes.id` |
 | `creator_id` | No | integer | Must exist in `users.id` |
 | `approver_id` | No | integer | Must exist in `users.id` |
+
+### Titles are generated, not typed
+
+The create and edit forms no longer ask for a title. When `title` is omitted or sent empty, one is
+generated from the expense type and the property — *"Lift Maintenance Service Contract at Riverside
+Plaza"*. A title that **is** sent is used as given, so nothing breaks if you keep sending one.
+
+On update, an omitted or empty `title` **keeps whatever is stored**. It is never cleared. That
+matters beyond display: contract sync recognises a contract it has already created **by title**, so
+a blank one would make it create a duplicate instead of updating, and the contracts list searches,
+filters and sorts on the same field.
+
+A contract that somehow has no stored title gains a generated one the next time it is saved.
+### The signed document is required
+
+A contract cannot be **created** without its signed document. Creating one without it returns `422`
+with the error keyed on the upload field.
+
+On **update** the rule holds only where it can:
+
+| Situation | Behaviour |
+|---|---|
+| The contract already has a document | It may be **replaced**, but sending `null` is refused |
+| The field is omitted from the payload | The stored document is kept — omitting is not clearing |
+| The contract has no document | The update is allowed, so one can be attached from the edit page |
+
+Contracts already in the system predate this rule and mostly carry no document. Requiring one on
+every save would make them uneditable until the paperwork was found, which is why they stay
+editable instead.
+
+**Contracts the system creates are not affected** and need no upload: a facility's management
+contract created at facility setup, and contracts produced by utility and service contract sync.
+Do not add an upload step to those flows.
+
+Supporting documents in `uploads[]` — addendums, extensions — remain optional. A contract with
+addendums but no signed document is still refused.
+
 
 `status` is **no longer accepted** on create or update. A contract's status belongs to its
 approval chain - see [Approval](#approval) - and the only moves left in a person's hands are

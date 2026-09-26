@@ -318,8 +318,33 @@ Request payload fields:
 | `re_letting_fee_type`   | Yes      | enum           | `none`, `percentage`, `fixed` |
 | `re_letting_fee_rate`   | No       | number/string  | Number or: `half_month_rent`, `one_month_rent`, `two_month_rent` |
 | `wages`                 | No       | object         | Any wage structure object |
-| `contract_upload_id`    | No       | integer        | Upload reference |
+| `contract_upload_id`    | **Yes on create** | integer   | Upload reference. See below |
 | `uploads`               | No       | array of integer | Supporting documents — addendums, extensions. Each must exist in `uploads.id`. See below |
+
+### The signed document is required
+
+A contract cannot be **created** without its signed document. Creating one without it returns `422`
+with the error keyed on the upload field.
+
+On **update** the rule holds only where it can:
+
+| Situation | Behaviour |
+|---|---|
+| The contract already has a document | It may be **replaced**, but sending `null` is refused |
+| The field is omitted from the payload | The stored document is kept — omitting is not clearing |
+| The contract has no document | The update is allowed, so one can be attached from the edit page |
+
+Contracts already in the system predate this rule and mostly carry no document. Requiring one on
+every save would make them uneditable until the paperwork was found, which is why they stay
+editable instead.
+
+**Contracts the system creates are not affected** and need no upload: a facility's management
+contract created at facility setup, and contracts produced by utility and service contract sync.
+Do not add an upload step to those flows.
+
+Supporting documents in `uploads[]` — addendums, extensions — remain optional. A contract with
+addendums but no signed document is still refused.
+
 
 ### Supporting documents
 

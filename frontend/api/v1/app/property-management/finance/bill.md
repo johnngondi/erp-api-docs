@@ -34,7 +34,55 @@ Supported query params:
   - `filter[payable]` — boolean. When true, returns only bills that can still be paid: status
     `unpaid` or `partially-paid` **and** a non-zero `payable_amount`. This is what the "Pay Bills"
     table lists. Off by default, so the unfiltered index is unchanged.
+  - `filter[invoice_validation_status]`, `filter[cu_validation_status]` — exact. `failed` gives
+    the bills someone needs to look at
   - Date-range filters: `filter[invoice_date]`, `filter[created_at]`, `filter[invoice_uploaded_at]`, `filter[expense_posted_at]` — see [Date-range filtering](#date-range-filtering)
+
+### Invoice and CU validation
+
+A posted bill is checked against the invoice document attached to it - invoice number, invoice
+date, amount, **tax** and total. It **records, it never blocks**: the bill is already posted by the
+time the check runs, and a figure read off a scan is not authoritative enough to refuse a posting
+over.
+
+Four fields carry the result, each `{ "value", "color" }` for the status and free text for the
+reason:
+
+`invoice_validation_status`, `invoice_validation_failure_reason`,
+`cu_validation_status`, `cu_validation_failure_reason`
+
+| `value` | `color` | Means |
+|---|---|---|
+| `pending` | `warning` | Queued, the answer has not landed yet |
+| `passed` | `success` | The document agrees with the bill |
+| `failed` | `danger` | Something disagrees; the reason names each figure |
+| `skipped` | `secondary` | No invoice document to read. Not a failure - nothing disagreed |
+
+A document the extraction could read **nothing** from - an unrelated image, or a scan too poor to
+read - comes back `failed`, not `passed`. Absence of one field is not a discrepancy, since plenty
+of invoices carry no separate tax line; absence of every field means the document was never read,
+and reporting that as a match would be worse than saying nothing.
+
+`null` on all four means the bill has not been posted, or predates this. Neither needs attention.
+
+**It is queued**, so posting does not wait on it and the ledger does not depend on the document
+pipeline being reachable. That also means **a queue worker has to be running** - without one the
+status sits on `pending` and the feature looks stuck rather than working.
+
+**Correcting a posted bill re-runs it.** Changing the invoice number, invoice date, CU number or
+the attached document puts the status back to `pending`, clears the old reason and queues a fresh
+check - otherwise a bill would keep reporting a discrepancy that had already been fixed. A posted
+bill only accepts invoice details, so its amount cannot be corrected at that point. An edit that
+touches nothing the check looks at leaves the verdict alone.
+
+**The CU check is a shell.** It needs a KRA lookup that is not built, so `cu_validation_status`
+stays `null`. A bill's CU number comes from the supplier's own fiscal device, so unlike an invoice
+we sign, there is no verification URL to link to yet.
+
+**Suppliers do not see any of this.** The vendor bill endpoints use their own resource, which
+carries none of these fields - it is an internal control, not something to put in front of the
+party being checked.
+
 - Sort:
   - `sort=id,invoice_number,tax_invoice_number,amount,tax,total,paid,balance,invoice_date,invoice_uploaded_at,expense_posted_at,created_at,updated_at`
 - Include:

@@ -127,6 +127,13 @@ Every credit note reverses exactly one invoice, and `invoice_id` is the only rec
 - **Signing needs the invoice.** An open credit note cannot be signed on the ETR: the device needs
   the CU number of the invoice it reverses. See [Sign Credit Note](#sign-credit-note-etr).
 
+### Signs
+
+A credit note's `amount`, `tax`, `total`, `paid` and `balance` are all stored and returned
+**negative** (or zero). `balance` is the credit still available to the tenant: an `unapplied`
+credit note of 8,000 has `paid: 0, balance: -8000`; after 3,000 of it is drawn down it has
+`paid: -3000, balance: -5000`. Show the absolute value where the screen reads "available credit".
+
 ### Full reversal or partial credit
 
 A credit note is a **reversal** only when it covers the invoice's full total. A partial credit

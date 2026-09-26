@@ -364,6 +364,7 @@ Create/update payload example:
   "city_id": 74,
   "physical_address": "Kilimani",
   "coordinates": null,
+  "paybill_number": "888999", // optional, max 20; null or "" clears it
   "auto_generate_utility_meters": true,
   "esd_type": "incotex", // incotex | tevin | novitas | etims | null
   "esd_config": {
@@ -466,6 +467,12 @@ Rules:
 - On update, leave `auth_key` out to keep the stored key. Send `"auth_key": null` to clear it. Send `"esd_config": null` to clear the whole config.
 - With sectioned payloads (`basic` / `location` / `structure`), send `esd_type` and `esd_config` inside `basic` or at the top level.
 
+`paybill_number` is the M-Pesa paybill tenants of this property pay into. When it is
+set, invoices print it with the invoice number (e.g. `INV0481`) as the account. When it
+is blank, invoices print each collection account's bank paybill with that bank account's
+number as the account. On the create/edit property page the field sits on the Basic
+Details step.
+
 Backend-required baseline fields in DTO:
 - `facility_type_id`
 - `space_unit_id`
@@ -511,6 +518,7 @@ Facility response example:
   ],
   "physical_address": "Westlands, Nairobi",
   "coordinates": "-1.2641,36.8106",
+  "paybill_number": "888999",
   "space_unit": "SqFt",
   "status": {
     "value": "active",

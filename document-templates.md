@@ -170,7 +170,7 @@ Each block declares:
 
 | Block | Types | Presentation | Notes |
 | --- | --- | --- | --- |
-| `fiscal_qr` | invoice, credit note | qr | QR of `document.verify_url`, then `document.cu_invoice_number`/`.cu_serial_number` stacked beneath (toggle via `show_cu_invoice_number`/`show_cu_serial_number`) |
+| `fiscal_qr` | invoice, credit note | qr | QR of `document.verify_url`, then `document.cu_invoice_number`/`.cu_serial_number` stacked beneath (toggle via `show_cu_invoice_number`/`show_cu_serial_number`). The CU invoice number is a link to `document.verify_url` (the invoice's `cu_invoice_verify_url`, the credit note's `cu_credit_note_verify_url`) when that is an http(s) address, so it is clickable in the PDF |
 | `document_notes` | invoice, credit note, lpo | text | Binds `document.notes` |
 | `invoice_items` | invoice | table, **flow** | `items.notes`, `.quantity`, `.amount`, `.tax`, `.total`. Meter photos are no longer drawn in the table; see `meter_reading_images` |
 | `meter_reading_images` | invoice | image, **flow** | Reads `items[]` directly (no field list). One group per `is_utility_bill` item with at least one `image_url`, titled with the item description and `· Meter {number} ({name})`. Beneath the title, "Previous reading" (left) and "Current reading" (right) photos sit side by side, each with its reading value and date, followed by "Consumption". A side with no photo shows a "No photo captured" box. `image_url` is only set when the upload's `source_url` file exists on the storage disk. When no utility item has a stored photo, the block renders nothing. Because `BlockType::hidesWhenEmpty()` is true, the renderer also skips the block box: border, background, padding and `min_height`. Config: `heading_text` (default "Meter readings"; `""` hides it), `font_size`, `image_height_mm` (20–150, default 70), `show_reading_values`, `show_consumption`, `show_meter_details` (all default true). Placement is up to the designer, e.g. right after `invoice_items` or at the end of the document |
@@ -181,7 +181,7 @@ Each block declares:
 | `payments` | invoice | table | `payments.type`, `.number`, `.date`, `.method`, `.reference`, `.amount` — receipt + credit-note allocations against this invoice |
 | `invoice_ageing` | invoice | table | `ageing.label`, `.amount` — Current/1-30/31-60/61-90/90+ buckets |
 | `payment_details` | invoice | table | The facility's **collection** `facility_bank_accounts`, one row per lease component: `bank_accounts.component`, `.bank_name`, `.branch`, `.account_name`, `.account_number`, `.paybill_number` |
-| `mobile_money` | invoice | table | M-Pesa paybill rows: `mobile_money.paybill_number`, `.account_number`, `.bank_name`, `.component`. Agent-held collection account + company `paybill_number` setting → company paybill against the invoice number; otherwise each pay-to account's `banks.paybill_number` against its account number. `hidesWhenEmpty` |
+| `mobile_money` | invoice | table | M-Pesa paybill rows: `mobile_money.paybill_number`, `.account_number`, `.bank_name`, `.component`. The property's own `facilities.paybill_number` against the invoice number; when blank, each pay-to account's `banks.paybill_number` against its account number. `hidesWhenEmpty` |
 | `bank_account_details` | receipt | fields | Where the receipt's money landed: `payment_account.bank_name`, `.branch`, `.account_name`, `.account_number` |
 | `payment_transactions` | receipt | table | `transactions.transaction_date`, `.transaction_number`, `.method`, `.amount` |
 | `invoice_allocations` | credit note, receipt | table | Invoices this document cleared: `allocations.invoice_number`, `.invoice_date`, `.invoice_total`, `.allocated`, `.balance` |
@@ -223,6 +223,10 @@ items[]:        { description, notes, quantity, unit_price, amount, tax, tax_rat
                    is_utility_bill, previous_reading: {value, read_at, image_url},
                    current_reading: {value, read_at, image_url},
                    meter: {name, number}, consumption }
+                # invoice/cn — lines sharing component + quantity + notes print as ONE row
+                # (GroupsLineItems): unit_price, amount, tax, total are summed; tax_rate is
+                # null when the lines differ. Utility-bill lines never merge. tax_summary
+                # still reads the raw lines
 totals:         { amount, tax, total, paid, balance }
 tax_summary[]:  { name, rate, taxable, tax }
 payments[]:     { type, number, date, method, reference, amount }      # invoice
@@ -230,10 +234,10 @@ allocations[]:  { invoice_number, invoice_date, invoice_total, allocated, balanc
 ageing:         { as_at, buckets: [ { label, amount } ] }              # invoice
 bank_accounts[]:{ component, bank_name, branch, account_name, account_number, paybill_number }  # invoice
 mobile_money[]: { component, bank_name, paybill_number, account_number }  # invoice —
-                # agent holds the collection account (facility managementContract
-                # .collection_account_holder = agent) AND the company `paybill_number`
-                # setting is set → one row: company paybill, account_number = invoice
-                # number (INV0481), component "All charges", bank_name null.
+                # the property has its own `facilities.paybill_number` → one row:
+                # that paybill, account_number = invoice number (INV0481),
+                # component "All charges", bank_name null. Who holds the
+                # collection account plays no part.
                 # Otherwise → one row per bank_accounts[] row whose bank has a
                 # paybill_number, account_number = that bank account's number.
                 # Empty array when no paybill is known (the block is then hidden)
@@ -595,13 +599,16 @@ cadence rather than collapsing.
 2. Recursively walk `layout` → CSS-grid `<div>`s for sections, each block's
    Blade partial for leaves.
 3. Wrap in `resources/views/documents/template.blade.php` (an `@page` size +
-   print stylesheet; flow blocks repeat their header across pages). The shell
-   also stamps the shared footer onto every page — see §8.1.
+   print stylesheet; flow blocks repeat their header across pages). A block
+   never splits across two pages — see §8.2. The shell ends with the shared
+   footer, printed once at the bottom of the last page — see §8.1.
 4. `pdf()` pipes the HTML to **Browsershot** (headless Chrome) using
    `page_setup` margins/paper/orientation.
 
 `html()` and `pdf()` share one code path, so **preview and PDF cannot drift** —
-`?preview=1` renders sample data through the same renderer.
+`?preview=1` renders sample data through the same renderer. The one difference
+is the footer script (§8.1), which only the PDF gets: the HTML view has no
+pages, so its footer simply follows the body.
 
 A real render is driven by `{ resource_id }` (the id of the underlying
 invoice/receipt/lpo/credit note; the legacy `model_id` key is still accepted as
@@ -618,7 +625,8 @@ company.`).
 ### 8.1 The printout footer
 
 Every template printout carries the same footer. It is **not** a block — the
-designer cannot add, move or remove it; the shell draws it on every page.
+designer cannot add, move or remove it; the shell draws it once, at the bottom
+of the last page.
 
 `resources/views/documents/partials/footer.blade.php`, three strips top to bottom:
 
@@ -636,23 +644,31 @@ In **preview** (`?preview=1`) the footer follows the same rule as every other
 company field — anything the real company leaves unset falls back to the mapper's
 placeholder company, so a company with no services still shows a sample strip.
 
-**Pinned to the foot of every page.** The shell stamps the footer twice, and the
-two copies do two different jobs:
+**Pinned to the bottom of the last page.** The footer follows the document in
+the flow, wrapped in `.dt-footer-last`, which never splits (`break-inside:
+avoid`). When the last page has no room left for it, it moves whole to a page of
+its own. That places it on the right page but not at its bottom, so for the PDF
+(`pdf()` renders the shell with `paginate: true`) a short script at the end of
+the body pushes it down:
 
-1. A hidden copy (`visibility: hidden`) inside the shell table's `<tfoot>`.
-   Chrome repeats a `table-footer-group` on every printed page, so this reserves
-   the footer's exact height at the foot of each one and keeps the body from
-   flowing underneath it. It is hidden rather than sized by hand so the
-   reservation can never drift from what the footer actually measures — add a
-   service, wrap the contacts onto a second line, and the reserve follows.
-2. A `position: fixed; bottom: 0` copy outside the table, which is what paints.
-   Chrome repeats a fixed-position element on every printed page, so the footer
-   lands flush with the bottom of the page each time — including the last one,
-   where the body usually stops well short of it.
+1. It lays the flow out once in page-sized columns — width and height are the
+   sheet (`page_setup.paper` + `orientation`) less `page_setup.margins`. A
+   multi-column box breaks content with the same rules the print does, blocks
+   moving whole included, so each column is one printed page.
+2. The footer's bottom edge, measured from the top of its column, is how much
+   of the last page is used. The column styles come off again, and the rest of
+   the page (less 2px, so rounding cannot tip the footer onto a new page) goes
+   into `#dt-footer-spacer`, an empty div above the footer inside the unbreakable
+   wrapper.
 
-The partial's `<style>` is wrapped in `@once`, so including it twice emits one
-stylesheet. A caller that does not need the footer pinned can include it once on
-its own; it then simply renders in flow.
+A spacer rather than a `margin-top`, because a margin next to a page break is
+truncated to zero — a footer that had moved to its own page would lose it.
+
+Paper sizes the shell knows: A3, A4, A5, Letter, Legal, Tabloid; anything else
+is measured as A4.
+
+The partial's `<style>` is wrapped in `@once`, so a caller including it more
+than once emits one stylesheet.
 
 **Reuse.** The partial carries its own `dtf-` class prefix and its own `<style>`,
 so any other print view can pick it up with a single include and no stylesheet
@@ -672,6 +688,19 @@ colour), only where they are still blank:
 ```bash
 php artisan db:seed --class=CompanyFooterDetailsSeeder
 ```
+
+### 8.2 Blocks never split across pages
+
+A block that does not fit in what is left of a page moves whole to the next
+one. The shell sets `break-inside: avoid` on `.dt-block`, `.dt-block-box`, and
+on `.dt-cell-block` — the renderer adds that class to a grid cell whose child is
+a block, because the grid item is what the page break actually sees. A cell
+holding a nested section does not get it, so a nested section still breaks
+between its rows.
+
+`break-inside: avoid` is a preference, not a guarantee: a block taller than a
+whole page (a long items table, say) still breaks, since there is no page it
+could move to whole. Its header row repeats on the next page as before.
 
 ---
 
