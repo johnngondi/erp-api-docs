@@ -46,6 +46,16 @@ Each bank row now also returns `paybill_number` (string|null): the bank's M-Pesa
 
 Only the list and show endpoints are implemented, so `paybill_number` is set through the database, seeders or the EPMAS import, not through the API.
 
+### Banks: `settlement_template`
+
+Each bank row also returns `settlement_template` (string|null). It names the layout of the bank payment file that a settlement exports when this bank holds the debit account (`GET .../finance/settlements/{settlement}/export?format=excel`). Valid values are the keys of `templates` in `config/settlement_exports.php`: currently `default`, `scbk` and `kcb`. When it is null, the export uses the `default` template.
+
+```json
+{ "id": 1, "name": "KCB Bank", "code": "01", "swift_code": "KCBLKENX", "settlement_template": "kcb" }
+```
+
+Like `paybill_number`, it is set through the database, seeders or the EPMAS import, which copies the legacy bank `template`. There is no API to edit it.
+
 ## Procurement
 
 - `GET|POST /settings/skus`

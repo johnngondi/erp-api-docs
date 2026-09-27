@@ -32,6 +32,8 @@ Base prefix:
   - `docs/frontend/api/v1/app/access-management/approvals.md`
 - Responsibility Transfers:
   - `docs/frontend/api/v1/app/access-management/responsibility-transfers.md`
+- Messaging Channels (company email, SMS and WhatsApp providers):
+  - `docs/frontend/api/v1/app/access-management/messaging-channels.md`
 
 Apply shared auth, tenancy, query, and error handling guidance from:
 

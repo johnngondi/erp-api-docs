@@ -143,6 +143,7 @@ Endpoints:
 List query support:
 
 - Filters:
+  - `filter[search]` — free text over title and division type (comma-separated values match any; a multi-word value must match every word)
   - `filter[id]`, `filter[title]`, `filter[has_tax]`, `filter[division_type]`, `filter[created_at]`
 - Sort:
   - `sort=id,title,has_tax,division_type,created_at`
@@ -186,6 +187,7 @@ Endpoints (these are **common** routes - no `/app/{company}` segment):
 List query support:
 
 - Filters:
+  - `filter[search]` — free text over name, HS code, tax name and expense category name (comma-separated values match any; a multi-word value must match every word)
   - `filter[tax_id]`, `filter[hs_code]`, `filter[name]`, `filter[status]`
   - `filter[is_autobilled]`, `filter[is_a_charge]`, `filter[is_land_fee_charge]`, `filter[is_utility_charge]`
   - `filter[is_legal_fees_deposit]`, `filter[is_deposit]`
@@ -427,6 +429,7 @@ Expense categories endpoints:
 Expense categories list query support:
 
 - Filters:
+  - `filter[search]` — free text over name and description (comma-separated values match any; a multi-word value must match every word)
   - `filter[id]`, `filter[name]`, `filter[description]`, `filter[created_at]`
 - Sort:
   - `sort=id,name,created_at`
@@ -471,10 +474,13 @@ Notes:
 Expense types list query support:
 
 - Filters:
+  - `filter[search]` — free text over name, description and expense category name (comma-separated values match any; a multi-word value must match every word)
   - `filter[id]`, `filter[name]`, `filter[description]`, `filter[expense_category_id]`
   - `filter[is_procurable]`, `filter[can_have_default_vendor]`, `filter[can_have_preferred_vendor]`, `filter[created_at]`
 - Include:
   - `include=expenseSubTypes`
+
+Expense sub-types list (`GET /finance/expense-types/{type}/sub-types`) accepts the same filters except `filter[expense_category_id]`; its `filter[search]` matches name, description and the parent expense type name.
 
 Expense type create/update payload:
 

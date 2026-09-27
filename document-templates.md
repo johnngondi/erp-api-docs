@@ -133,7 +133,7 @@ Each block declares:
   paginating sections)
 - `resolveLabel($fieldKey, $config)` — 3-tier label resolution (see §5)
 
-### Blocks shipped (35)
+### Blocks shipped (37)
 
 **Shared / layout — all six types**
 
@@ -165,6 +165,7 @@ Each block declares:
 | `lpo_title` | lpo | `lpo.title` (the order's title: a direct LPO's as entered, a workflow LPO's copied from its request), `document.notes` |
 | `voucher_details` | payment voucher | `document.number` (`PV0001`), `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
 | `remittance_details` | remittance | `document.number` (`REM0001`), `landlord.name`, `property.name`, `document.period`, `.memo` (e.g. `August 2026`), `.issued_at`, `.status` |
+| `settlement_details` | settlement | `document.number` (`ST0001`), `.debit_bank`, `.debit_account_name`, `.debit_account`, `.method` (the settlement's payment method), `.payment_advice_number`, `.issued_at`, `.status` |
 
 **Content blocks**
 
@@ -187,11 +188,12 @@ Each block declares:
 | `invoice_allocations` | credit note, receipt | table | Invoices this document cleared: `allocations.invoice_number`, `.invoice_date`, `.invoice_total`, `.allocated`, `.balance` |
 | `component_allocations` | receipt | table | What the receipt settled per charge: `component_allocations.component`, `.amount`, with the grand total in `totals.allocated`. VAT is the mapper's last row, not a column. See §4.5 |
 | `signatories` | **lpo only** | fields | See §4.1 — replaces the generic signature block on LPOs specifically |
-| `sign_off` | payment voucher, remittance | sign_off | Rows of labelled fill-in slots to sign by hand. See §4.3 |
+| `sign_off` | payment voucher, remittance, settlement | sign_off | Rows of labelled fill-in slots to sign by hand. See §4.3 |
 | `voucher_items` | payment voucher | table, **flow** | What the voucher pays, with data-driven withholding columns and a total-paid footer. See §4.2 |
 | `remittance_summary` | remittance | fields | `summary.is_advance`, `.total_collections`, `.total_expenses`, `.advance_remittances`, `.total_withheld`, `.total_remitted`. See §4.4 for where each comes from |
 | `remittance_collections` | remittance | table, **flow** | `collections.receipt_number`, `.transaction_date`, `.credit_account`, `.method`, `.reference`, `.tenant`, `.amount` |
 | `remittance_expenses` | remittance | table, **flow** | `expenses.bill_number`, `.transaction_date`, `.reference`, `.supplier`, `.service`, `.amount` |
+| `settlement_items` | settlement | table, **flow** | One row per payment voucher settled: `items.voucher_number`, `.payee`, `.bank`, `.branch`, `.account_name`, `.account_number` (the voucher's credit account), `.reference`, `.amount`. Footer is `totals.amount`, the sum of the vouchers (`show_total_row`, `total_label`) |
 
 ### Serialized form (`BlockRegistry::toArray($documentType)`)
 
@@ -217,6 +219,9 @@ property:       { name, address, lr_number, city, country }
 tenant:         { name, lease_id, tax_pin, phone, email, unit }        # invoice/cn/receipt
 vendor:         { name, tax_pin, phone, email, address }               # lpo
 payee:          { name, tax_pin, address, phone, email }               # payment voucher
+                # settlement: document adds debit_account, debit_account_name, debit_bank,
+                # method, payment_advice_number; items[] is { voucher_number, payee, bank,
+                # branch, account_name, account_number, reference, amount }; totals.amount
 document:       { title, number, raw_number, issued_at, due_at, status, notes, currency,
                    invoice_number, cu_invoice_number, cu_serial_number, verify_url, served_by }
 items[]:        { description, notes, quantity, unit_price, amount, tax, tax_rate, total,
@@ -767,7 +772,9 @@ default templates immediately, not just via a manual seeder run) delegates the
 per-company body to `SeedDefaultDocumentTemplatesAction`, which builds **six
 bespoke per-type layouts** (not one generic shape shared across types — see
 `SeedDefaultDocumentTemplatesAction::invoiceLayout()`/`creditNoteLayout()`/
-`receiptLayout()`/`lpoLayout()`/`paymentVoucherLayout()`/`remittanceLayout()`).
+`receiptLayout()`/`lpoLayout()`/`paymentVoucherLayout()`/`remittanceLayout()`/
+`settlementLayout()`). The settlement type (`facility_settlement`) was added
+2026-09-27: existing installs get its template by re-running the seeder below.
 `facility_ids = NULL`, `is_default = true`.
 Idempotent via `firstOrNew` on `(company_id, document_type, name)`.
 
