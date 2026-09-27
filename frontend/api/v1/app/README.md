@@ -47,6 +47,47 @@ Examples:
 
 If an endpoint does not support `include` or `fields`, sending those params returns a `4xx` error.
 
+## Nested `permissions` on list rows
+
+Every row of a list keeps its own `permissions` map. A resource nested **inside** a
+list row (an invoice row's `lease`, a lease row's `facility`, a bill row's
+`facility`, a payment voucher row's `debit_bank_account`) does **not** carry
+`permissions`, because resolving them for every row was the bulk of the cost of a
+list response.
+
+Show responses are unaffected: a nested resource on a single record keeps its
+`permissions` (the invoice page can still read `invoice.lease.permissions.view`).
+
+- Opt back in on a list with `?with_permissions=1` when a table genuinely needs
+  a nested row's permissions.
+- `GET .../leases/{lease}/deposits` and `GET .../leases/{lease}/opening-balances`
+  always include nested `invoice` / `credit_note` permissions, because their rows
+  link to them.
+- Treat a missing nested `permissions` as "unknown", not as `true`; guard with
+  `row.lease?.permissions?.view` and fall back to the row's own permissions.
+
+Resources that omit `permissions` when nested in a list row: lease, property
+(facility), invoice, ticket, asset, procurement request. Bank accounts and
+approval steps omit it whenever nested (list or show); read an approval step's
+`can_act` / `is_current`, which are always present.
+
+## List payloads: what nested records carry
+
+To keep list endpoints to a fixed number of queries, some fields appear only where the
+record is the subject of the response:
+
+- `approval_steps` — show responses only; `?with_approval_steps=1` adds it to list rows.
+- A lease nested inside another list's rows (an invoice's or credit note's `lease`) omits
+  `rent_per_month`, `service_charge_per_month`, `current_arrears`, `opening_balance` and
+  `total_deposit_amount`. The lease list and lease show keep them, and so does a lease
+  nested in a single record (the exit notice page).
+- A credit note's `invoice` and a receipt allocation's `invoice` are an **invoice summary**:
+  `id`, `notes`, `cu_invoice_number`, `amount`, `total`, `paid`, `balance`, `status`,
+  `due_at` (each only when loaded) and `permissions.view` (show responses only). Fetch the
+  invoice itself for anything else.
+- An upload's `creator` is present only when the endpoint loads it (lease application
+  documents do).
+
 ## Error Handling (Frontend Behavior)
 
 ### 4xx errors (show to user)

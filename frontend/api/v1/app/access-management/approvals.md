@@ -104,3 +104,11 @@ again; that opens a **new attempt** rather than reopening the rejected one.
 The `approval_steps` array on a resource always shows the **current** attempt
 only. Earlier attempts remain in the database as the record of what happened, but
 they are not part of the chain anybody is being asked to act on.
+
+### Show responses only
+
+`approval_steps` is emitted on the record a **show** response is about (and on the
+record returned by create/update/action endpoints). List rows and records nested inside
+another resource leave it out, because building the chain costs several queries per
+record. Pass `?with_approval_steps=1` on a list to get it back for every row.
+

@@ -7,6 +7,39 @@ These apply to `GET` list endpoints. Use Spatie Query Builder query params:
 - `fields[resource]=field1,field2` (only where allowed)
 - `per_page=15&page=2`
 
+## Page size (`per_page`)
+
+Every paginated list reads `per_page` through one helper (`perPage()` in `app/Helpers/helpers.php`),
+so the rules are the same on every endpoint, in every portal:
+
+- Missing, `0` or non-numeric: the default page size, `config('app.query.default_per_page')`
+  (`DEFAULT_PER_PAGE`, 50).
+- Anything else is clamped to `1 .. config('app.query.max_per_page')` (`MAX_PER_PAGE`, 500). Asking
+  for more than the ceiling returns a full page of the ceiling's size, not an error; the response's
+  `meta.per_page` says what was applied.
+- The ceiling is 500 because the frontend still loads some option lists in a single page. Once those
+  lists page or search, it is meant to come down to 100.
+
+Endpoints that used to default to 15 (facility blocks, wings, floors and spaces, project milestones,
+tasks and updates, the common company and company-user lists) now default to the shared default too.
+
+## Default ordering
+
+A list with no `sort` parameter is returned in a stable order, so pages never overlap or skip rows:
+
+| Endpoint | Default order |
+|---|---|
+| `lease-management/leases` | `-created_at, -id` |
+| `finance/payment-vouchers` | `-created_at, -id` |
+| `finance/remittances` | `-created_at, -id` |
+| `finance/expenses` | `-created_at, -id` |
+| `finance/settlements` | `-created_at, -id` |
+| `procurement/inventories/purchase-items` | `-created_at, -id` |
+| `users/vendors`, `users/landlords`, `users/tenants` | `name, id` (alphabetical) |
+
+A `sort` parameter replaces the default entirely. `procurement/inventories/purchase-items` also now
+requires the `view-facility-purchase-item` permission, like its other actions.
+
 | Endpoint | Controller | Allowed Filters | Allowed Sorts | Allowed Includes | Allowed Fields |
 |---|---|---|---|---|---|
 | `/api/v1/app/{company}/facility-management/assets` | `App\Http\Controllers\Api\V1\App\FacilityManagement\Asset\AssetController@index` | ['id', 'name', 'facility_id', 'asset_type_id', 'created_at', 'status', 'warranty_status'] | ['id', 'created_at', 'purchase_price', 'warranty_status', 'warranty_expiration_at'] | - | - |
@@ -57,7 +90,7 @@ These apply to `GET` list endpoints. Use Spatie Query Builder query params:
 | `/api/v1/app/{company}/property-management/lease-management/receipts` | `App\Http\Controllers\Api\V1\App\PropertyManagement\LeaseManagement\Receipting\ReceiptController@index` | ['id', 'receiving_account_id', 'transaction_number', 'transaction_date', 'payment_method_id', 'paying_user_id', 'amount', 'allocated', 'balance', 'receiving_user_id'] | ['id', 'receiving_account_id', 'transaction_number', 'transaction_date', 'payment_method_id', 'paying_user_id', 'amount', 'allocated', 'balance', 'receiving_user_id'] | - | - |
 | `/api/v1/app/{company}/property-management/procurement/contracts` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Procurement\Contract\ContractController@index` | [ 'id', 'title', 'status', 'start_at', 'end_at', 'created_at', 'facility_id', 'expense_type_id', 'expense_category_id', 'expense_sub_type_id', 'asset_id' ] | ['id', 'title', 'status', 'start_at', 'end_at', 'created_at'] | ['bills'] | - |
 | `/api/v1/app/{company}/property-management/procurement/inventories` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Procurement\Inventory\InventoryController@index` | [ 'facility_id', 'inventory_category_id', 'name', 'current_stock', 'storage_room_id', 'shelf_id' ] | - | - | - |
-| `/api/v1/app/{company}/property-management/procurement/inventories/purchase-items` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Procurement\Inventory\PurchaseItemController@index` | [ 'id', 'inventory_category_id', 'name', 'currency_id', 'tax_id', 'base_price' ] | - | - | - |
+| `/api/v1/app/{company}/property-management/procurement/inventories/purchase-items` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Procurement\Inventory\PurchaseItemController@index` | [ 'id', 'inventory_category_id', 'name', 'currency_id', 'tax_id', 'base_price', 'vendor_id', 'facility_id' ] | - (always `-created_at, -id`) | - | - |
 | `/api/v1/app/{company}/property-management/procurement/lpos` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Procurement\LPO\ProcurementLpoController@index` | ['search', 'facility_id' (exact, LPO column), 'is_direct' (exact), 'type' (exact), 'vendor_id', 'expense_category_id', 'status', 'delivered_at', 'rating', 'amount', 'total', 'created_at'] | ['id', 'created_at', 'delivered_at', 'amount', 'total', 'rating', 'status'] | ['items'] | - |
 | `/api/v1/app/{company}/property-management/procurement/requests` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Procurement\Request\ProcurementRequestController@index` | [ 'id', 'title', 'ticket_id', 'facility_id', 'asset_id', 'expense_type_id', 'expense_category_id', 'expense_sub_type_id', 'created_at', 'priority', 'type' ] | ['id', 'title', 'type', 'created_at', 'priority'] | - | - |
 | `/api/v1/app/{company}/property-management/procurement/requests/{procurementRequest}/items` | `App\Http\Controllers\Api\V1\App\PropertyManagement\Procurement\Request\ProcurementRequestItemController@index` | ['id', 'inventory_id', 'quantity', 'selected_vendor_id'] | - | - | - |

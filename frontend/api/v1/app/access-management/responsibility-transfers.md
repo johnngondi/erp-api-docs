@@ -62,7 +62,8 @@ Every status object is the house `{ value, color }` pair.
 ## Rules the UI must respect
 
 - **One open outgoing transfer per user**, counted across every company they belong to. A second
-  initiate returns `422` on `to_user_id`. This is why `mine/outgoing` returns a single object.
+  initiate returns `422` on `to_user_id`. This is why `mine/outgoing` returns a single object
+  (which, being company-scoped, is `null` in the other companies).
 - **Many incoming at once** is normal. `mine/incoming` returns an array.
 - The recipient must be an **active member of the same company and the same department** as the
   transferer. Department is matched exactly, null included. Anything else is `422` on `to_user_id`.
@@ -169,8 +170,13 @@ object, or `null`. This backs the floating left-nav indicator, the countdown and
 `GET /responsibility-transfers/mine/incoming` returns `data.responsibility_transfers`: an array,
 possibly several. This backs the accept/decline prompt.
 
-Both include `pending` and in-force transfers, and both are unscoped by company, because the
-indicator belongs to the caller rather than to the company they happen to be looking at.
+Both include `pending` and in-force (`accepted`, `active`) transfers, and both are scoped to the
+route `{company}`: a transfer sent or received in another company appears when that company is in
+the URL, not here. The one-open-outgoing rule is still counted across every company, so a user whose
+transfer is running in another company gets `null` here and still cannot initiate a second one.
+
+`GET /api/v1/app/{company}/inbox/summary` carries the same two reads as `outgoing_transfer` and
+`incoming_transfers` for polling. See `docs/frontend/api/v1/app/inbox-and-permissions.md`.
 
 ## Resource shape
 

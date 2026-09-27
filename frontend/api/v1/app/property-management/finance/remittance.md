@@ -200,7 +200,7 @@ those figures, so they have to be there before the chain is shaped.
 
 ### Where the chain shows up
 
-Every remittance response carries an `approval_steps` array in the same shape as every other
+Every remittance show response (lists only with `?with_approval_steps=1`) carries an `approval_steps` array in the same shape as every other
 approvable resource: `step_order`, `role`, `actors`, `status`, `comment`, `is_current`,
 `can_act`, `allowed_to_edit`, `can_edit`, `attempt`. An empty array means no chain was raised.
 The landlord-portal remittance endpoints do **not** include it - a landlord does not see the

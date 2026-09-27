@@ -21,6 +21,11 @@ always constrained to the caller (`user_id`), so there is nothing further to
 authorise. Portal segregation is enforced by the route file's `group:vendor` middleware: a user
 signed in to another portal receives `403`.
 
+**Portal.** Each row carries the `user_group_id` of the portal it was raised for, and only this
+portal's rows are returned: an account signed in to two portals (say App and Vendor) sees each
+portal's own tasks rather than one merged list. A `null` `user_group_id` means "unscoped" and is
+shown everywhere, which is what rows written before this scoping existed carry.
+
 Supported query params:
 
 - Filters:

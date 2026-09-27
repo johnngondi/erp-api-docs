@@ -16,6 +16,7 @@ This docs set is a technical reference generated from routes, DTOs, and resource
 - `docs/backend/api/v1/app/enums.md`: enum values and color mappings from code.
 - `docs/backend/api/v1/app/receipt-reallocation.md`: moving a confirmed receipt's money between a tenant's invoices.
 - `docs/backend/api/v1/app/tenants.md`: tenant CRUD — group-membership elevation on create, deactivation on delete.
+- `docs/backend/api/v1/app/inbox-and-permissions.md`: counts-only inbox summary (every portal) and the light `me/permissions` read.
 
 ## Auth and Headers
 Required headers for almost all app routes:
@@ -132,6 +133,61 @@ These are realistic static examples based on current API resources.
   }
 }
 ```
+
+## Nested instance permissions
+
+`App\Http\Resources\Concerns\ResolvesInstancePermissions` offers three ways to
+emit a resource's `permissions` map:
+
+| Method | Emitted |
+|---|---|
+| `resolveInstancePermissions()` | always |
+| `resolveInstancePermissionsUnlessListed()` | unless the resource was built inside a row of a top-level list |
+| `resolveInstancePermissionsUnlessNested()` | only when the resource is the response subject (a list row or a show record) |
+
+Both conditional variants honour `?with_permissions=1` and
+`ResourceNesting::keepNestedPermissions($request)`, which an endpoint calls when its
+client reads nested permissions from list rows (lease deposits and opening balances
+do). Nesting is detected only through resources that use the trait: a parent that
+does not use it renders its children as if they were the subject.
+
+- `UnlessListed`: `LeaseResource`, `FacilityResource`, `FacilityInvoiceResource`,
+  `FacilityTicketResource`, `FacilityAssetResource`, `FacilityProcurementRequestResource`.
+- `UnlessNested`: `BankAccountResource`, `ApprovalStepResource`, `FacilitySpaceResource`,
+  `LeaseItemResource`, `LeaseItemComponentResource`, `LooResource`, `LooTemplateResource`.
+
+### Gate checks and Spatie's `before` hook
+
+Spatie registers a `Gate::before` hook that calls `User::checkPermissionTo($ability)`
+for every ability, policy abilities (`view`, `sign`, ...) included. `User` overrides
+`checkPermissionTo()` to answer a name that is not a permission from an index of
+permission names (built once per loaded Spatie permission collection) instead of
+letting `findByName()` scan the collection and throw `PermissionDoesNotExist`.
+Permission names still go through `hasPermissionTo()`, which memoizes its answers
+per guard, name and company. `hasPermissionTo()` itself still throws for an unknown
+name.
+
+## Keeping list resources query-free
+
+- `ResolvesInstancePermissions::resolveApprovalStepsForSubject()` renders `approval_steps`
+  only for the response subject (not a list row, not nested) or with
+  `?with_approval_steps=1`. Every approvable resource uses it instead of calling
+  `getApprovalSteps()` per row.
+- `FacilityInvoice::hasAllocatedPayments()` reads `has_allocated_payments` when the query
+  added `withExists('payments as has_allocated_payments')` (invoice index and show do);
+  both `FacilityInvoiceResource` and `FacilityInvoicePolicy::delete` use it.
+- `LeaseResource` emits the five lease figures inside another list's rows only when
+  `Lease::withTotals()` preloaded them (`Lease::hasPreloadedTotals()`).
+- `PropertyAllocation::allows()` answers a one-hop path (`lease.facility_id`) from a loaded
+  relation that carries the column, so narrow eager loads include the allocation key:
+  `lease:...,facility_id`, `ticket:...,facility_id`, `asset:...,facility_id`,
+  `procurementRequest:...,facility_id`, `receiptAllocations.invoice:id,lease_id,...`.
+- `FacilityInvoiceSummaryResource` renders an invoice referenced from a credit note or a
+  receipt allocation.
+- `Approvable::currentApprovalStepPreferLoaded()` answers from a loaded `approvalSteps`
+  relation; the remittance index preloads it for the `cancel` policy.
+- Invoice and credit-note item spaces preload `leaseItemComponents` through
+  `FacilitySpace::withAllocatedComponents()`.
 
 ## Error Handling Guidelines (Frontend)
 

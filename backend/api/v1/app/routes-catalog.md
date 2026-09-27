@@ -5,12 +5,22 @@ Base prefix for all routes below:
 /api/v1/app/{company}
 ```
 
-Total routes: **380**
+Total routes: **382**
 
+- Inbox and Me: **2**
 - Users: **26**
 - Property Management: **234**
 - Facility Management: **97**
 - Project Management: **23**
+
+## Inbox and Me
+
+See `docs/backend/api/v1/app/inbox-and-permissions.md`.
+
+| Method | URI | Route Name | Action |
+|---|---|---|---|
+| `GET` | `/api/v1/app/{company}/inbox/summary` | `app.inbox.summary` | `App\Http\Controllers\Api\V1\App\Inbox\InboxSummaryController` |
+| `GET` | `/api/v1/app/{company}/me/permissions` | `app.me.permissions` | `App\Http\Controllers\Api\V1\App\Me\MyPermissionsController` |
 
 ## Users
 

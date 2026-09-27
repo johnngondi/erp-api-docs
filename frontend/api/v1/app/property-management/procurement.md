@@ -530,7 +530,7 @@ Only `POST /contracts` raises a chain. Contracts created by the system - the uti
 service contract sync that runs off a facility's setup, and the EPMAS importers - are in force
 the moment they are written and never enter one.
 
-Every contract response from the staff endpoints carries an `approval_steps` array in the same
+Every contract show response from the staff endpoints (lists only with `?with_approval_steps=1`) carries an `approval_steps` array in the same
 shape as every other approvable resource. The **vendor**-facing contract endpoints do not: a
 supplier does not see the company's internal approvers.
 
