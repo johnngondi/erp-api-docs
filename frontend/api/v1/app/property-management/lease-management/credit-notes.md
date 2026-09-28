@@ -195,6 +195,12 @@ Possible status values returned by API resource:
 - `partially applied` (`warning`)
 - `applied` (`success`)
 - `cancelled` (`danger`)
+- `rejected` (`danger`) — the approval chain was rejected. The credit note was never applied, so
+  it touches no invoice, statement or VAT report. It can only be viewed or deleted (delete removes
+  it outright, with no reversal); every other `permissions` flag is `false` and the endpoints
+  refuse it
+
+`cancelled` is only ever set by this endpoint now; a rejection never produces it.
 
 ## Sign Credit Note (ETR)
 
@@ -207,7 +213,7 @@ The device comes from the property's `esd_type` / `esd_config` (see Facilities).
 When to show the action: `permissions.sign` on the credit note resource is `true`. It is `false` when:
 
 - the user lacks the `sign-facility-credit-note` permission
-- the credit note is `pending` (awaiting approval) or `cancelled`
+- the credit note is `pending` (awaiting approval), `cancelled` or `rejected`
 - the credit note is already signed (`cu_invoice_number` is set)
 - it has no invoice yet (an open credit note), or its invoice is not signed yet (sign the invoice first). A typed `cu_reference_number` does not stand in for the invoice
 

@@ -42,7 +42,7 @@ Supported query params:
 
 Enum filter options:
 
-- `filter[status]`: `pending`, `unpaid`, `paid`, `cancelled` (from `RemittanceStatus` enum)
+- `filter[status]`: `pending`, `unpaid`, `paid`, `cancelled`, `rejected` (from `RemittanceStatus` enum)
 
 `pending` now means "waiting on an approver". A company with no approval template for
 remittances never produces one - see [Approval](#approval).
@@ -233,7 +233,7 @@ documented once in
 | `approve`, not the last step | stays `pending`, next step prompted |
 | `approve`, the last step | `unpaid`, `FacilityRemittanceApprovedEvent` fires |
 | `review` | stays `pending`, the previous step is reopened |
-| `reject` | `cancelled`, and everything it held is released (below) |
+| `reject` | `rejected`, and everything it held is released (below) |
 | Payment voucher raised against it | `paid` |
 | Payment voucher cancelled | back to `unpaid` |
 
@@ -264,6 +264,11 @@ The endpoint is authorized against `cancel-facility-remittance` (it previously c
 
 ### Re-submission
 
-Rejecting terminates the chain and cancels the remittance. A cancelled remittance is not
-edited and re-submitted - raise a new one for the period, which opens its own chain. The
-receipts and expenses the rejected one held are free again, so the new one sees them.
+Rejecting terminates the chain and moves the remittance to `rejected`, which is final. A
+rejected remittance can be viewed and deleted, nothing else: it is not edited, re-submitted,
+cancelled or paid, and every `permissions` flag but `view`/`delete` is `false`. Deleting it
+removes it outright - the rejection already released what it held.
+
+Raise a new one for the period instead, which opens its own chain. A rejected remittance does
+not occupy its period, and the receipts and expenses it held are free again, so the new one
+sees them.

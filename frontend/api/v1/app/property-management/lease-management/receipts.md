@@ -129,6 +129,13 @@ Possible status values returned by API resource:
 - `pending` (`secondary`)
 - `confirmed` (`success`)
 - `cancelled` (`danger`)
+- `rejected` (`danger`) — the approval chain was rejected. The receipt was never posted, so it
+  settles no invoice and counts in no report. It can only be viewed or deleted (delete removes it
+  outright); `update`, `cancel`, `dispute`, `reallocate` and every other `permissions` flag
+  except `view`/`delete` are `false`, and the endpoints refuse it — including approving it
+  through reconciliation
+
+`cancelled` is only ever set by this endpoint now; a rejection never produces it.
 
 ## Reallocate Receipt
 

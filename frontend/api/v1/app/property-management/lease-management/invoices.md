@@ -135,6 +135,13 @@ Possible status values returned by API resource:
 - `partially paid` (`primary`)
 - `paid` (`success`)
 - `cancelled` (`danger`)
+- `rejected` (`danger`) — the approval chain was rejected. The invoice was never issued: it posts
+  nothing to the tenant's statement and counts in no balance, ageing or VAT report. It can only
+  be viewed or deleted (delete removes it outright, with no reversal); `cancel`, `sign`,
+  `dispute`, `update` and every other `permissions` flag except `view`/`delete` are `false`, and
+  the endpoints refuse it
+
+`cancelled` is only ever set by this endpoint now; a rejection never produces it.
 
 ## Sign Invoice (ETR)
 
@@ -147,7 +154,7 @@ The device comes from the property's `esd_type` / `esd_config` (see Facilities).
 When to show the action: `permissions.sign` on the invoice resource is `true`. It is `false` when:
 
 - the user lacks the `sign-facility-invoice` permission
-- the invoice is `pending` (awaiting approval) or `cancelled`
+- the invoice is `pending` (awaiting approval), `cancelled` or `rejected`
 - the invoice is already signed (`cu_invoice_number` is set)
 
 Signing runs as a queued job. On a synchronous queue (the default locally) the request returns after the device answers; on a real queue it returns straight away and the CU fields fill in once the job runs. Refetch the invoice (or poll `GET /invoices/{invoice}`) until `etr_signed_at` or `etr_error` is set.
@@ -295,7 +302,7 @@ These are web pages served by the backend, not JSON endpoints:
 Rules:
 
 - An unknown token returns `404`. So does a `pending` invoice, since it has not been approved or
-  issued yet.
+  issued yet, and a `rejected` one, which never will be.
 - The payment options are hidden when the balance is zero or less, or the invoice is `cancelled`.
 - **Reprint** is hidden, and `/pdf` returns `404`, when the company has no active invoice template
   the invoice's property can use.

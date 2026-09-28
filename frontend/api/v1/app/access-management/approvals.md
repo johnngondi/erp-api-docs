@@ -55,7 +55,14 @@ Behavior by `status`:
 
 - `approve`: marks current step as approved and moves to next pending step; on the last step, marks the approvable with the model's `FINAL_STATUS_ON_APPROVAL` and fires the template's post-approval event.
 - `review`: marks current step as review, sends flow back to previous step, and resets previous step to pending.
-- `reject`: marks the current step as rejected and **terminates the entire workflow** — every remaining pending step for the approvable is also marked rejected (so no later step can be actioned), and the approvable is marked with the model's `FINAL_STATUS_ON_REJECTION`.
+- `reject`: marks the current step as rejected and **terminates the entire workflow** — every remaining pending step for the approvable is also marked rejected (so no later step can be actioned), and the approvable is marked with the model's `FINAL_STATUS_ON_REJECTION`, which is `rejected` on every approvable.
+
+`rejected` is terminal. A rejected resource can be viewed and deleted, and nothing else: it
+cannot be edited, resubmitted, cancelled, signed, paid, processed, closed or moved to any other
+status. Every `permissions` flag on it except `view` and `delete` is `false`, and the endpoints
+behind them answer `403`. Delete removes it outright — it was never posted, so there is nothing
+to reverse. Statuses such as `cancelled` or `inactive` now only ever mean somebody did that by
+hand.
 
 A rejected resource may also run cleanup of its own, beyond the status. The status move is
 written quietly, so this is not something an observer can carry — a resource that needs it says
@@ -97,9 +104,10 @@ half-saved.
 
 ## Attempts and re-submission
 
-Rejecting terminates the chain and sends the resource to its rejection status.
-Where that status is still editable, the resource can be corrected and submitted
-again; that opens a **new attempt** rather than reopening the rejected one.
+Rejecting terminates the chain and sends the resource to `rejected`, which is
+final: no resource can be resubmitted once rejected, and the corrected document is
+raised as a new record. Attempts remain on every step so the history of a chain is
+never rewritten; a chain that is never rejected only ever has attempt `1`.
 
 The `approval_steps` array on a resource always shows the **current** attempt
 only. Earlier attempts remain in the database as the record of what happened, but

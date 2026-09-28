@@ -245,18 +245,18 @@ The canonical example, hung on the CEO step:
 | `approve`, not the last step | stays `pending_approval` |
 | `approve`, the last step | → `approved`, and `LooApprovedEvent` fires |
 | `review` | stays `pending_approval`; the previous step is re-opened |
-| `reject` | → `draft` |
+| `reject` | → `rejected` (final) |
 
 A LOO **does not** enter a chain when it is created. It is drafted first and
 submitted deliberately — `shouldAutoInitiateApproval()` returns `false`, and
 `POST loos/{loo}/submit` calls `ApprovalService::initiate()`.
 
-Rejection returns the LOO to `draft` rather than to a terminal state: an offer
-that has not left the building is rejected so somebody corrects it and sends it
-round again. Re-submitting opens a new **`attempt`**, so the rejected chain stays
-on the record beside the new one — and the chain is re-evaluated against the LOO
-as it now stands, so a figure corrected after a rejection can change which steps
-apply.
+Rejection is **terminal**: the LOO moves to `rejected` and stays there. It can be
+viewed and deleted, and nothing else — `update`, `submit`, `manageSpaces`,
+`comment`, `export`, `send` and the rest all report `false` and answer `403`. Its
+comment threads stay readable. A rejected offer is spent, like a declined or
+expired one, so it does not block generating a fresh LOO for the same source; the
+corrected offer is that new LOO, with its own chain.
 
 Export, send, and everything the tenant portal is allowed to see are gated on
 `approvalChainCleared()`, which reads the **status** rather than the steps — a LOO
@@ -489,7 +489,7 @@ request also carried `rent_breakdown`, in which case yours stands.
 whenever a fee moves, and are not accepted in the payload.
 
 Only while `status` is `draft` or `pending_approval`. An offer in a tenant's
-hands is fixed.
+hands is fixed, and so is a `rejected` one.
 
 ### Granted spaces
 
@@ -661,7 +661,7 @@ needs a fresh offer; the first answer is part of the record.
 acceptance.
 
 `declined` means **the tenant** declined. It is not where a rejected approval
-lands — an offer the landlord's own chain sent back goes to `draft`.
+lands — an offer the landlord's own chain refused goes to `rejected`.
 
 ### Promote
 
@@ -752,7 +752,7 @@ offer is drafted from a source record rather than posted into existence.
 | `view-loo` | app | Reading offers |
 | `generate-loo` | app | Drafting one from a source record |
 | `update-loo` | app | Editing clauses, fields and resolved tags; **granting, withdrawing and re-pricing spaces**; submitting for approval |
-| `delete-loo` | app | Deleting a draft |
+| `delete-loo` | app | Deleting a draft, a pending or a rejected offer |
 | `export-loo` | app | Rendering **either document** — offer or agreement — to PDF or HTML |
 | `send-loo` | app | Delivering to the tenant |
 | `sign-loo` | **app + tenant** | Answering an offer: the tenant in the portal, or staff recording one that came back on paper |

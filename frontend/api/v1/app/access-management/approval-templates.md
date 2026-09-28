@@ -97,7 +97,7 @@ Behavior:
 
 `steps[].conditions` decides whether a step is in a given resource's chain. It is
 evaluated **once, when the chain is initiated** — editing the resource afterwards
-does not reshape a chain somebody is part-way through; re-submitting it does.
+does not reshape a chain somebody is part-way through.
 
 ```json
 {
@@ -176,12 +176,11 @@ does not expose.
 ## Attempts
 
 A resource may be in only one chain at a time; initiating over an open chain is a
-**422**. Rejecting sends the resource to its `FINAL_STATUS_ON_REJECTION` and ends
-that chain — re-submitting afterwards opens a new **`attempt`** rather than
-overwriting the old one, so who rejected attempt 1 and why stays on the record.
+**422**. Rejecting sends the resource to `rejected` and ends that chain for good:
+a rejected resource cannot be initiated again (also a **422**), and the corrected
+document is raised as a new record with a chain of its own.
 
 `attempt` appears on every `approval_steps` row. Everything that means "the chain"
 — the embedded `approval_steps` array on a resource, `is_current`, `can_act` —
-refers to the **highest** attempt. A re-submitted chain is also re-evaluated
-against the resource as it now stands, so a figure corrected after a rejection can
-change which steps apply.
+refers to the **highest** attempt. Records rejected before `rejected` became
+terminal may carry more than one attempt; new chains only ever have attempt `1`.

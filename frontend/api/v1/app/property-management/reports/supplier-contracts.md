@@ -35,7 +35,7 @@ The register answers "which contracts do we have, and which need renewing now?",
   any current period. `header.as_at` is today's date.
 - **Status as shown.** Nothing moves a contract to `expired` when its end date passes, so an
   **`active` contract past its end date is shown, and filtered, as `expired`**. Any other stored status
-  (`pending`, `suspended`, `expired`, `inactive`) is shown as stored.
+  (`pending`, `suspended`, `expired`, `inactive`, `rejected`) is shown as stored.
 - An open-ended contract (no `end_at`) never expires and is never tinted.
 
 ## Filters
@@ -45,7 +45,7 @@ The six [global filters](./README.md#global-filters) plus:
 | Param | Type | Meaning when omitted |
 |---|---|---|
 | six global filters | see the shared contract | all properties (the period is echoed only) |
-| `contract_status` | `pending` \| `active` \| `suspended` \| `expired` \| `inactive` | Any status |
+| `contract_status` | `pending` \| `active` \| `suspended` \| `expired` \| `inactive` \| `rejected` | Any status |
 | `expiring_within_days` | integer ≥ 0 | No expiry warning (expired contracts are still tinted) |
 | `supplier_id` | `users.id` (the contract's `vendor_id`) | All suppliers |
 
@@ -102,7 +102,7 @@ Rows are ordered by `total_value` descending, then by name. The closing row is `
 | Contract Value | `contract_value` | money | `facility_contracts.amount` as stored, in the contract's own currency |
 | Start Date | `start_date` | string `Y-m-d` | `start_at` |
 | End Date | `end_date` | string `Y-m-d` | `end_at`; `null` when open-ended |
-| Status | `status` | string | the status as shown (see above); the cell carries its colour (`pending` warning, `active` success, `suspended` secondary, `expired` danger, `inactive` none) |
+| Status | `status` | string | the status as shown (see above); the cell carries its colour (`pending` warning, `active` success, `suspended` secondary, `expired` danger, `inactive` none, `rejected` danger) |
 | Withholding Taxes | `withholding_taxes` | string | every tax in `facility_contracts.withholding_tax_ids`, by name, **comma-separated in one cell** (e.g. `WHT 5%, VAT WH 2%`); `null` when none |
 
 Rows are ordered by supplier, then property, then start date. The closing row is a label

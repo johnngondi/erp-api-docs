@@ -2,6 +2,14 @@
 
 These values come from enum classes used across App API resources/responses. Use these for badges/chips in frontend.
 
+**`rejected` on approvable documents.** Every document that goes through an approval chain
+(contracts, credit notes, invoices, LOOs, LPOs, receipts, remittances, tenant exit notices) has a
+`rejected` status, and a rejected chain always lands on it — never on `cancelled`, `inactive` or
+`draft`, which now only ever mean what a person did by hand. `rejected` is terminal: the document
+can be viewed and deleted, and nothing else. It cannot be edited, resubmitted, cancelled, signed,
+paid or moved to another status, and its `permissions` block reports every action but `view` and
+`delete` as `false`.
+
 ## AssetStatus
 
 Class: `App\Enums\AssetStatus`
@@ -65,6 +73,7 @@ Class: `App\Enums\ContractStatus`
 | `suspended` | `secondary` |
 | `expired` | `danger` |
 | `inactive` | `muted` |
+| `rejected` | `danger` |
 
 ## CreditNoteStatus
 
@@ -73,8 +82,11 @@ Class: `App\Enums\CreditNoteStatus`
 | Value | Color |
 |---|---|
 | `pending` | `secondary` |
+| `unapplied` | `info` |
+| `partially applied` | `warning` |
 | `applied` | `success` |
 | `cancelled` | `danger` |
+| `rejected` | `danger` |
 
 ## ExpenseStatus
 
@@ -99,6 +111,7 @@ Class: `App\Enums\InvoiceStatus`
 | `partially paid` | `primary` |
 | `paid` | `success` |
 | `cancelled` | `danger` |
+| `rejected` | `danger` |
 
 ## LeaseApplicationStatus
 
@@ -121,15 +134,32 @@ Class: `App\Enums\LeaseStatus`
 | `suspended` | `secondary` |
 | `terminated` | `danger` |
 
+## LooStatus
+
+Class: `App\Enums\LooStatus`
+
+| Value | Color |
+|---|---|
+| `draft` | `secondary` |
+| `pending_approval` | `warning` |
+| `approved` | `info` |
+| `sent` | `primary` |
+| `accepted` | `success` |
+| `declined` | `danger` |
+| `expired` | `danger` |
+| `rejected` | `danger` |
+
 ## LpoStatus
 
 Class: `App\Enums\LpoStatus`
 
 | Value | Color |
 |---|---|
+| `pending` | `warning` |
 | `lpo` | `primary` |
 | `delivered` | `success` |
 | `cancelled` | `danger` |
+| `rejected` | `danger` |
 
 ## PaymentVoucherPayableAs
 
@@ -265,6 +295,7 @@ Class: `App\Enums\ReceiptStatus`
 | `pending` | `secondary` |
 | `confirmed` | `success` |
 | `cancelled` | `danger` |
+| `rejected` | `danger` |
 
 ## RemittanceStatus
 
@@ -276,6 +307,7 @@ Class: `App\Enums\RemittanceStatus`
 | `unpaid` | `warning` |
 | `paid` | `success` |
 | `cancelled` | `danger` |
+| `rejected` | `danger` |
 
 ## SensorCurrentStatus
 

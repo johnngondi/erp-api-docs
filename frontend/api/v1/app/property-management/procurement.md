@@ -214,7 +214,9 @@ forms a chain for this user, the LPO drops to `pending` and waits for that chain
 
 - While `pending` the supplier cannot see it, and no jobcard task is raised for them.
 - On final approval it moves to `lpo` and the supplier gets the "Upload jobcard" task.
-- On rejection it moves to `cancelled`.
+- On rejection it moves to `rejected`, which is final: the supplier never sees it, it does not
+  count as an award to that supplier, and it can only be viewed or deleted (every other
+  `permissions` flag is `false`).
 
 With no template, a bypass role, or no applicable steps, it stays `lpo` and the supplier's jobcard task is
 raised at once.
@@ -345,7 +347,7 @@ Loads `currency`, `documentUpload`, `facility`, `expenseType`, `expenseSubType`,
 | `title` | Every LPO: a direct LPO's as entered; a workflow LPO's is copied from its procurement request |
 | `notes`, `amount`, `discount_amount`, `amount_after_discount`, `tax`, `total`, `expense_category_id` | - |
 | `delivery_at`, `delivered_at`, `created` | `raw`, `formatted`, `diff` |
-| `status` | `{ value, color }` — `pending`, `lpo`, `delivered`, `cancelled` |
+| `status` | `{ value, color }` — `pending`, `lpo`, `delivered`, `cancelled`, `rejected` |
 | `document_number`, `documentUpload` | The supplier's jobcard / delivery note, set when they submit it |
 | `work_advice`, `quality_rating`, `speed_rating`, `communication_rating`, `rating`, `comments` | Set on review |
 | `facility` | The property |
@@ -512,7 +514,9 @@ Allowed transitions - everything else returns **422**:
 | `suspended` | `active` | allowed |
 | anything | `pending` | refused - the chain raises a contract into pending |
 | anything | `active` | refused - approving the chain is what makes a contract active |
-| anything | `inactive` | refused - rejecting the chain is what makes a contract inactive |
+| anything | `inactive` | refused |
+| anything | `rejected` | refused - rejecting the chain is what makes a contract rejected |
+| `rejected` | anything | refused - a rejected contract can only be viewed or deleted |
 | anything | `expired` | refused - derived from `end_at`, never stored |
 
 `expired` is never written to the database. An `active` contract whose `end_at` has passed
@@ -562,7 +566,7 @@ documented once in
 | `approve`, not the last step | stays `pending`, next step prompted |
 | `approve`, the last step | `active`, `FacilityContractApprovedEvent` fires |
 | `review` | stays `pending`, the previous step is reopened |
-| `reject` | `inactive` |
+| `reject` | `rejected` - final; view and delete only |
 | `PATCH {contract}/status` | `active` ↔ `suspended` only |
 
 A `pending` contract is not yet in force: it does not bill, and

@@ -84,6 +84,11 @@ other status in the API.
 | `accepted` | signed by the tenant | `success` | No | Yes |
 | `declined` | tenant declined | `danger` | No | No |
 | `expired` | lapsed unanswered | `danger` | No | No |
+| `rejected` | the approval chain refused it | `danger` | No | No |
+
+`rejected` is final. A rejected offer can be viewed and deleted, and nothing else —
+it is not edited, resubmitted, commented on, exported or sent. It does not count as
+the source's live offer, so a fresh one can be generated beside it.
 
 "Tenant may see" is enforced server-side by a `visibleToTenant()` scope — nothing
 short of a cleared approval chain leaves the staff surface. Export and send are
