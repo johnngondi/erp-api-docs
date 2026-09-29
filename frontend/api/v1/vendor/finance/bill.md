@@ -89,9 +89,32 @@ Sample list response (`Vendor\\FacilityBillResource`):
 | `invoice_number` | Yes | string |
 | `invoice_date` | Yes | date |
 | `tax_invoice_number` | Yes | string |
-| `invoice_upload_id` | No | integer (`uploads.id`) |
+| `invoice_upload_id` | Yes | integer (`uploads.id`) |
 | `expense_category_id` | No | integer (`expense_categories.id`) |
 | `notes` | No | string |
+
+**The document is required.** This endpoint previously accepted a submission with no upload and
+still stamped the bill's `invoice_uploaded_at`, so the bill read as invoiced with nothing attached.
+Without `invoice_upload_id` it now returns `422`:
+
+```json
+{ "errors": { "invoice_upload_id": ["A bill cannot be posted to expenses without its invoice document."] } }
+```
+
+`invoice_uploaded_at` is only set when a document is actually attached.
+
+### Rejected invoices
+
+Staff can reject a submitted invoice while the bill is `pending`. When they do:
+
+- the invoice number, date, CU number (`tax_invoice_number`) and document are cleared, and the
+  document is deleted;
+- the vendor receives a notification with the reason, in the app and by email, SMS and WhatsApp.
+
+The bill then carries `invoice_rejected_at` (`{raw, formatted, diff}`) and
+`invoice_rejection_reason`. When `invoice_rejected_at` is set and the bill is still `pending`, show
+the reason above the upload action so the vendor knows what to fix. Submitting again uses this same
+`upload-invoice` endpoint.
 
 ## Merge bills
 

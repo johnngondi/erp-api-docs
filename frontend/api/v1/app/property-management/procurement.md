@@ -169,6 +169,7 @@ Request body (`CreateDirectLpoData`):
 | `delivery_at` | Yes | string/date | When the work or goods are due |
 | `notes` | No | string | - |
 | `assigned_technician_id` | No | integer | Must exist in `users.id` |
+| `withholding_tax_ids` | No | array of integer | Each must exist in `withholding_taxes.id`, no duplicates. The taxes withheld on the bill generated when the LPO is delivered. When omitted or empty, the bill withholds the property landlord's `withholds` taxes |
 | `winning_bid_upload_id` | Yes | integer | Must exist in `uploads.id`. The supplier's winning quotation |
 | `comparables` | No | array of integer | Each must exist in `uploads.id` and differ from `winning_bid_upload_id`. The other quotations the winning bid was compared against |
 | `items` | Yes | array | At least one item |
@@ -346,6 +347,7 @@ Loads `currency`, `documentUpload`, `facility`, `expenseType`, `expenseSubType`,
 | `type` | `work`, `purchase` |
 | `title` | Every LPO: a direct LPO's as entered; a workflow LPO's is copied from its procurement request |
 | `notes`, `amount`, `discount_amount`, `amount_after_discount`, `tax`, `total`, `expense_category_id` | - |
+| `withholding_tax_ids` | The withholding taxes passed to the bill (array of ids). Direct LPOs: as entered; workflow LPOs: the property landlord's `withholds` when the LPO was raised. `null` when there are none |
 | `delivery_at`, `delivered_at`, `created` | `raw`, `formatted`, `diff` |
 | `status` | `{ value, color }` — `pending`, `lpo`, `delivered`, `cancelled`, `rejected` |
 | `document_number`, `documentUpload` | The supplier's jobcard / delivery note, set when they submit it |
@@ -380,6 +382,10 @@ Request body (`CloseLpoData`; `document_number` and `document_upload_id` are tak
 
 The bill takes its property and expense type / sub-type from the LPO itself, so direct and workflow LPOs
 bill the same way.
+
+The bill withholds the LPO's `withholding_tax_ids` - as entered on a direct LPO, or the landlord's `withholds`
+stamped on a workflow LPO when it was raised - when it has any; otherwise the property landlord's
+`withholds` taxes, as before.
 
 Success response:
 
@@ -656,6 +662,17 @@ Purchase items:
   - `DELETE /inventories/purchase-items/{purchase_item}`
   - `PUT/PATCH /inventories/purchase-items/{item}/prices/{price}`
 
+Purchase item list query support:
+
+- Filters:
+  - `filter[search]` - free text over the item name, its inventory category name and its SKU
+    name; a whole-number word also matches the item id. Several words must all match; several
+    comma-separated terms match any of them.
+  - `filter[id]`, `filter[inventory_category_id]`, `filter[name]`, `filter[currency_id]`,
+    `filter[tax_id]`, `filter[base_price]`
+  - `filter[vendor_id]`, `filter[facility_id]` - items with a price row for that vendor / property
+- Sort: always `-created_at, -id`.
+
 Purchase item create payload:
 
 | Field | Required | Type | Allowed Values / Notes |
@@ -668,7 +685,17 @@ Purchase item create payload:
 | `currency_id` | No | integer | Must exist in `currencies.id` |
 | `is_regulated` | No | boolean | Default `false` |
 | `base_price` | No | number | Default `0` |
-| `vendors` | No | array | Optional |
+| `vendors` | No | array | Supplier user ids. Each must belong to the supplier group and must not be **terminated** |
+
+**Who may be attached.** `vendors` was only checked against `users.id`, so any user could be named -
+a tenant, a landlord, a member of staff - and a price row was then created for them on every
+active property. Each id must now be a supplier, and a terminated supplier is refused with
+*"This supplier has been terminated and cannot be given new work."*
+
+Errors are keyed by position, so the offending row can be marked: `vendors.0`, `vendors.2`.
+
+A **suspended** supplier is still accepted. Suspension is a pause rather than an ending, and the
+same holds on bills, contracts and LPOs.
 
 Purchase item update payload:
 

@@ -25,6 +25,12 @@ Supported query params:
 - Filters:
   - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers)
   - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[status]`
+
+**Ids, `status` and `type` match exactly.** They were partial until 2026-09-29, so
+`filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
+returned rows for facility 60. Send the whole value. Date filters are still partial, so
+`filter[created_at]=2026-09` means that month.
+
   - `filter[created_at]`, `filter[transaction_at]`
 - Sort:
   - `sort=id,invoice_number,amount,tax,total,paid,balance,transaction_at,created_at,updated_at`
@@ -75,7 +81,7 @@ Sample list response (`FacilityExpenseResource`):
 }
 ```
 
-## Create/Update payload (`ExpenseData`)
+## Create payload (`ExpenseData`)
 
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
@@ -95,3 +101,26 @@ Sample list response (`FacilityExpenseResource`):
 | `currency_id` | No | integer | Must exist in `currencies.id` |
 | `tax_id` | No | integer | Must exist in `taxes.id` |
 | `paid` | No | number | Default `0` |
+
+## Update payload (`PUT/PATCH /expenses/{expense}`)
+
+Only these six can be changed after an expense is raised. Everything else is settled at creation
+and is ignored if sent.
+
+| Field | Required | Type | Allowed Values / Notes |
+|---|---|---|---|
+| `notes` | No | string \| null | - |
+| `invoice_number` | No | string | Cannot be set to empty when sent |
+| `invoice_upload_id` | No | integer \| null | Must exist in `uploads.id` |
+| `tax_invoice_number` | No | string \| null | - |
+| `transaction_at` | No | date | Must not be in the future, and must fall in the current month |
+| `expense_category_id` | No | integer \| null | Must exist in `expense_categories.id` |
+
+Notes:
+
+- **Send only what you are changing.** An omitted field keeps its stored value. Editing one field
+  no longer requires resending the other five - doing so previously returned a 500.
+- The `transaction_at` restriction applies only when you are **moving** the date. An expense raised
+  in an earlier month can still have its other fields corrected; its stored date is left untouched
+  and is not re-checked.
+

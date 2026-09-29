@@ -237,8 +237,10 @@ The endpoint removes the `tenant` user group from the person rather than deletin
 a tenant record. For anyone who holds another group as well, their `users` row,
 leases, invoices and receipts stay exactly as they were.
 
-Read the last bullet below before wiring this up: for a tenant who holds no other
-group, the account itself is removed.
+**Nothing is deleted.** This used to remove the account outright when the tenant
+held no other group, which took their records with it — `users` has 25 foreign
+keys that cascade, and the `User` model carries no soft-delete behaviour. That no
+longer happens.
 
 What the caller sees:
 
@@ -246,12 +248,10 @@ What the caller sees:
   `404`, because both are scoped to holders of the `tenant` group.
 - The user keeps every other group they hold. Someone who is both a tenant and a
   landlord stays a landlord and remains visible under `/users/landlords`.
-- Only when the `tenant` group was their **last** group is the user account
-  itself deleted, on the grounds that they can no longer sign in as anything.
-  **That deletion is permanent** — the `User` model carries no soft-delete
-  behaviour, so the row is gone. In practice this is the common case: a tenant
-  who is only ever a tenant holds no other group, so deactivating them removes
-  the account. Warn accordingly in the confirmation dialog.
+- When the `tenant` group was their **last** group, the account is marked
+  `status: inactive` rather than removed. They can no longer sign in as anything,
+  which is what the old deletion was reaching for, but their leases, invoices and
+  receipts are untouched and the person can be brought back.
 
 Re-activating is just `POST /tenants` with the same email, which takes the
 elevate path and grants the group back. There is no separate restore endpoint.
@@ -269,7 +269,9 @@ The returned `user` is the tenant as it was immediately before deactivation, so
 you can render a confirmation without a second fetch.
 
 UI guidance: label the action **Deactivate**, not *Delete*, and word the
-confirmation around losing tenant access rather than losing the record.
+confirmation around losing tenant access rather than losing the record. It is no
+longer correct to warn that the account is removed, or that the action cannot be
+undone.
 
 ## Errors
 

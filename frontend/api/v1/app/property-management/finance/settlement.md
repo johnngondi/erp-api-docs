@@ -26,6 +26,12 @@ Supported query params:
 - Filters:
   - `filter[search]` (Scout-backed search; supports CSV IDs and payment advice numbers)
   - `filter[debit_bank_account_id]`, `filter[payment_method_id]`, `filter[status]`, `filter[created_at]`
+
+**Ids, `status` and `type` match exactly.** They were partial until 2026-09-29, so
+`filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
+returned rows for facility 60. Send the whole value. Date filters are still partial, so
+`filter[created_at]=2026-09` means that month.
+
 - Sort:
   - `sort=id,created_at,updated_at`
 - Include:

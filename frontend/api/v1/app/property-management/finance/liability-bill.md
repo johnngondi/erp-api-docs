@@ -85,7 +85,7 @@ Sample list response (`LiabilityBillWithholdingResource`):
 | `vendor_id` | Yes | integer | Must exist in `users.id` — the tax merchant/withholding authority the bill is payable to |
 | `facility_id` | Yes | integer | Must exist in `facilities.id` |
 | `withholding_tax_id` | Yes | integer | Must exist in `withholding_taxes.id` |
-| `workings_upload_id` | No | integer | Must exist in `uploads.id`; the supporting "workings" document, stored as the liability bill's invoice (`invoice_upload_id`) |
+| `workings_upload_id` | **Yes** | integer | Must exist in `uploads.id`; the supporting "workings" document, stored as the liability bill's invoice (`invoice_upload_id`) |
 | `withholdings` | Yes | array | Non-empty; the withholding rows being paid |
 
 ### Withholding object (`LiabilityBillWithholdingData`)
@@ -122,8 +122,32 @@ On create, a single `liability` `FacilityBill` is recorded:
   `FacilityBillWithholding`.
 - Each selected `FacilityBillWithholding` has its `paid`/`balance` advanced by `to_pay` and its
   status set to `paid` (balance cleared) or `partially-paid`.
-- If `workings_upload_id` is supplied it is stored as the bill's invoice (`invoice_upload_id`) and
+- `workings_upload_id` is stored as the bill's invoice (`invoice_upload_id`) and
   `invoice_uploaded_at` is stamped.
+
+### The workings document is required
+
+A liability bill says "this is the withholding tax we are remitting, and here is the arithmetic".
+Raising one without the arithmetic leaves a payment to KRA with nothing explaining how the figure
+was reached, so the document is required when the bill is created.
+
+Leaving it out — whether by omitting the key or sending `null` — returns `422` keyed
+**`workings_upload_id`**, which is the field name the form sends:
+
+```json
+{
+  "errors": {
+    "workings_upload_id": ["The workings document is required when raising a liability bill."]
+  }
+}
+```
+
+Note the key. The document is *stored* as `invoice_upload_id`, but it is *sent* and *validated* as
+`workings_upload_id`, so that is what errors come back against.
+
+**There is no edit path.** Liability bills are created and listed, nothing else. A wrong document
+cannot be corrected on the bill afterwards, so it is worth confirming the right file before
+submitting.
 
 **Vendor statement effects:**
 

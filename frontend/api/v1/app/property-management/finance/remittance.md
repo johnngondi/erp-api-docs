@@ -33,6 +33,11 @@ Supported query params:
   - `filter[search]` (Scout-backed search; supports CSV IDs)
   - `filter[facility_id]`, `filter[landlord_id]`, `filter[status]`
   - `filter[created_at]`, `filter[period_from]`, `filter[period_to]`
+
+**Ids, `status` and `type` match exactly.** They were partial until 2026-09-29, so
+`filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
+returned rows for facility 60. Send the whole value. Date filters are still partial, so
+`filter[created_at]=2026-09` means that month.
 - Sort:
   - `sort=id,period_from,period_to,total_income,total_expenses,remittable_amount,created_at,updated_at`
 - Include:

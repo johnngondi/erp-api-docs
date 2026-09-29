@@ -46,6 +46,59 @@ Example:
 
 `GET /api/v1/app/12/property-management/lease-management/credit-notes?filter[lease_id]=101&sort=-due_at`
 
+## CU number validation
+
+Every invoice, credit note and bill carries a verdict on whether its CU number is one KRA actually
+has. Two fields, the same shape as the bill's invoice-document check:
+
+| Field | Type |
+|---|---|
+| `cu_validation_status` | `{ "value": "pending", "color": "warning" }` |
+| `cu_validation_failure_reason` | string \| null — set only on `failed` |
+
+| Status | Colour | Means |
+|---|---|---|
+| `pending` | `warning` | Not checked yet. **The default on every document.** |
+| `passed` | `success` | KRA knows the number and agrees with our figures |
+| `failed` | `danger` | KRA does not know it, or the figures disagree — `cu_validation_failure_reason` says which |
+| `skipped` | `secondary` | No CU number on the document to check |
+
+Filter the listings with `filter[cu_validation_status]=failed` to find the ones worth a look.
+
+### When it runs
+
+On its own, after the fact. A document is signed to the fiscal device and issued first; the check
+is queued and the verdict lands afterwards. **Nothing is ever blocked by it** — KRA's checker is a
+portal we do not control, and a reading from it is not authoritative enough to refuse a document
+over. Treat `failed` as "someone should look", not "this is wrong".
+
+That also means a document sits at `pending` until the queue gets to it, and stays `pending` — not
+`failed` — for as long as KRA cannot be reached. Do not read `pending` as a problem.
+
+**An hourly sweep picks up anything left behind.** A document on `pending` or `skipped` that
+now carries a CU number is queued for the check again every hour, so a number added after the
+fact, or a check lost to a queue outage or a long KRA outage, still gets a verdict without anyone
+asking. Nothing is needed from the frontend; the status simply moves on its own.
+
+### What `failed` can say
+
+```json
+{
+  "cu_validation_status": { "value": "failed", "color": "danger" },
+  "cu_validation_failure_reason": "Total on the document is 2234.93 but KRA has 2500.00."
+}
+```
+
+Three kinds of reason, all rendered as plain sentences you can show directly:
+
+- **KRA does not recognise the number** — *"Please enter valid Middleware Invoice Number"*, KRA's
+  own wording.
+- **The figures disagree** — total, amount or tax, named and quoted both ways. Differences of a
+  single cent are forgiven, since KRA's figures are read back off a fiscal receipt.
+- **Wrong kind of document** — *"KRA has this number registered as a credit note, not an
+  invoice."* KRA records each number as a `Tax Invoice` or a `Credit Note`, so a credit note
+  carrying an invoice's number is caught here and nowhere else.
+
 ## Create Credit Note
 
 `POST /api/v1/app/{company}/property-management/lease-management/credit-notes`

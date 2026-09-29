@@ -13,6 +13,7 @@ Base route:
 - `GET /invoices/{invoice}`
 - `PUT/PATCH /invoices/{invoice}`
 - `PATCH /invoices/{invoice}/cancel`
+- `PATCH /invoices/{invoice}/backdate`: change the invoice's ledger date. See [Change Invoice Date (Backdate)](#change-invoice-date-backdate)
 - `POST /invoices/{invoice}/sign`
 - `POST /invoices/{invoice}/dispute`
 - `DELETE /invoices/{invoice}/dispute`
@@ -46,6 +47,59 @@ Examples:
 
 - `GET /api/v1/app/12/property-management/lease-management/invoices?filter[lease_id]=101&sort=-due_at&per_page=10`
 - `GET /api/v1/app/12/property-management/lease-management/invoices?filter[status]=pending`
+
+## CU number validation
+
+Every invoice, credit note and bill carries a verdict on whether its CU number is one KRA actually
+has. Two fields, the same shape as the bill's invoice-document check:
+
+| Field | Type |
+|---|---|
+| `cu_validation_status` | `{ "value": "pending", "color": "warning" }` |
+| `cu_validation_failure_reason` | string \| null — set only on `failed` |
+
+| Status | Colour | Means |
+|---|---|---|
+| `pending` | `warning` | Not checked yet. **The default on every document.** |
+| `passed` | `success` | KRA knows the number and agrees with our figures |
+| `failed` | `danger` | KRA does not know it, or the figures disagree — `cu_validation_failure_reason` says which |
+| `skipped` | `secondary` | No CU number on the document to check |
+
+Filter the listings with `filter[cu_validation_status]=failed` to find the ones worth a look.
+
+### When it runs
+
+On its own, after the fact. A document is signed to the fiscal device and issued first; the check
+is queued and the verdict lands afterwards. **Nothing is ever blocked by it** — KRA's checker is a
+portal we do not control, and a reading from it is not authoritative enough to refuse a document
+over. Treat `failed` as "someone should look", not "this is wrong".
+
+That also means a document sits at `pending` until the queue gets to it, and stays `pending` — not
+`failed` — for as long as KRA cannot be reached. Do not read `pending` as a problem.
+
+**An hourly sweep picks up anything left behind.** A document on `pending` or `skipped` that
+now carries a CU number is queued for the check again every hour, so a number added after the
+fact, or a check lost to a queue outage or a long KRA outage, still gets a verdict without anyone
+asking. Nothing is needed from the frontend; the status simply moves on its own.
+
+### What `failed` can say
+
+```json
+{
+  "cu_validation_status": { "value": "failed", "color": "danger" },
+  "cu_validation_failure_reason": "Total on the document is 2234.93 but KRA has 2500.00."
+}
+```
+
+Three kinds of reason, all rendered as plain sentences you can show directly:
+
+- **KRA does not recognise the number** — *"Please enter valid Middleware Invoice Number"*, KRA's
+  own wording.
+- **The figures disagree** — total, amount or tax, named and quoted both ways. Differences of a
+  single cent are forgiven, since KRA's figures are read back off a fiscal receipt.
+- **Wrong kind of document** — *"KRA has this number registered as a credit note, not an
+  invoice."* KRA records each number as a `Tax Invoice` or a `Credit Note`, so a credit note
+  carrying an invoice's number is caught here and nowhere else.
 
 ## Create Invoice
 
@@ -142,6 +196,42 @@ Possible status values returned by API resource:
   the endpoints refuse it
 
 `cancelled` is only ever set by this endpoint now; a rejection never produces it.
+
+## Change Invoice Date (Backdate)
+
+`PATCH /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}/backdate`
+
+This moves an issued invoice to a different date in the tenant's ledger. Show a **Change Date**
+item in the invoices list row actions and in the view page header actions, but only when
+`invoice.permissions.backdate === true`. That flag is already `false` for invoices that are
+pending, cancelled, rejected, or reversed by a credit note.
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `new_invoice_date` | Yes | string (`YYYY-MM-DD`) | Today or earlier. Cap the date picker at today. |
+
+```json
+{ "new_invoice_date": "2026-08-15" }
+```
+
+Behaviour:
+
+- The invoice's tenant statement lines (`transaction_at`, `created_at`) and its lease billings
+  (`transaction_date`, `created_at`) move to the new date. Statement lines keep their time of day.
+- The invoice's own `created_at` and `due_at` never change, so the list's date column stays the
+  same. The move shows on the tenant statement and in billing reports.
+
+Success (`200`) returns `{ data: { message, invoice } }`. Upsert the invoice with it.
+
+Errors:
+
+- `422` `errors.new_invoice_date`: the date is missing, invalid, or in the future. Show the
+  message under the date picker.
+- `403`: the user lacks `backdate-facility-invoice`, or the invoice is no longer eligible.
+
+Backend reference: `docs/backend/api/v1/app/invoice-backdate.md`.
 
 ## Sign Invoice (ETR)
 

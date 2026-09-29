@@ -50,9 +50,31 @@ Create/Update payload (`PowerSourceData`):
 | `suspension_reason` | No | string | Optional |
 | `decommission_reason` | No | string | Optional |
 
+### Suspend and decommission payloads
+
+These two take **only a reason**. They do not take the create/update payload above.
+
+`PATCH /power-sources/{powerSource}/suspend`
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `suspension_reason` | No | string | Why the source is being taken out of service |
+
+`PATCH /power-sources/{powerSource}/decomission`
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `decommission_reason` | No | string | Why the source is being retired |
+
 Notes:
 
-- Suspend/decommission actions enrich payload with actor and timestamp server-side.
+- The status, the actor and the timestamp are set server-side. Do not send `status`,
+  `activity_status`, `suspended_by`, `suspended_at`, `decommissioned_by` or `decommissioned_at` -
+  they are ignored. Suspending sets `status: suspended`; decommissioning sets
+  `status: decommissioned`. Both set `activity_status: off`.
+- Everything else about the source is left exactly as it was: the description, the asset link and
+  the maintenance contract all survive, and decommissioning keeps the earlier suspension reason.
+- Sending any other field from the create/update table has no effect on these two routes.
 
 ## Power Source Activity Logs
 

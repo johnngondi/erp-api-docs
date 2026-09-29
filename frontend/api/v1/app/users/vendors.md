@@ -15,9 +15,12 @@ Currently implemented:
 - `GET /vendors/{vendor}`
 - `DELETE /vendors/{vendor}`
 
-Route exists but is not implemented in controller:
-
 - `PUT/PATCH /vendors/{vendor}`
+- `PATCH /vendors/{vendor}/suspend`
+- `PATCH /vendors/{vendor}/activate`
+- `PATCH /vendors/{vendor}/terminate`
+
+> A supplier has four states — `active`, `suspended`, `terminated`, or deleted. See below.
 
 ## List Vendors
 
@@ -48,10 +51,119 @@ Supported query params:
 
 `POST /api/v1/app/{company}/users/vendors`
 
-Behavior:
+Behavior, by what the email matches:
 
-- If `email` matches an existing user, backend elevates that user to vendor.
-- If no user exists, backend creates a new user then elevates.
+| The email | Result |
+|---|---|
+| belongs to nobody | A new user is created and made a supplier |
+| belongs to someone who is **not** a supplier | That person is elevated, **and the supplier details sent with the request are applied to them** |
+| belongs to someone who **is already a supplier** | `422` on `email`: *"A vendor with this email already exists."* |
+
+**Read the returned `message`.** An elevation answers *"User with details already exists. They have
+been elevated to a vendor"*, not *"Vendor created successfully"* — showing a generic success on an
+elevation is what made a returning email look like a new supplier with blank fields.
+
+On an elevation, identity is deliberately left alone: `name`, `phone` and `email` belong to the
+person, who may already be a tenant or landlord under that name. Only supplier fields are written —
+`tax_pin`, `address`, `business_registration_number`, `country_id`, `city_id`, `has_vat`,
+`is_tax_merchant`, `is_statutory_vendor`, `is_withholding_exempt` — and only where the request
+actually sent them.
+
+## Suspend, Terminate and Activate
+
+```
+PATCH /api/v1/app/{company}/users/vendors/{vendor}/suspend
+PATCH /api/v1/app/{company}/users/vendors/{vendor}/terminate
+PATCH /api/v1/app/{company}/users/vendors/{vendor}/activate
+```
+
+No request body on any of them.
+
+| Action | Permission | What it does |
+|---|---|---|
+| Suspend | `suspend-vendor` | `status` → `suspended`. Nothing else changes. |
+| Terminate | `update-status-vendor` | `status` → `terminated`, **their contracts** → `terminated`, **their prequalified categories** switched off |
+| Activate | `activate-vendor` | `status` → `active`, and prequalified categories restored |
+
+**Terminate does not touch open LPOs or unpaid bills.** An unpaid bill is money owed, and ending a
+relationship is not a decision to stop owing it.
+
+**A terminated supplier can be given no new work.** New bills, liability bills, contracts and
+direct LPOs naming them are refused with `422` on `vendor_id`:
+
+> "This supplier has been terminated and cannot be given new work. Their existing bills and LPOs are unaffected."
+
+Their **existing** bills and LPOs are untouched and run to finalisation as normal — an unpaid bill
+is money owed. Filter supplier pickers with `filter[status]=active` so a terminated supplier is not
+offered in the first place.
+
+**A terminated supplier loses vendor portal access.** `ValidateUserIsActive` runs on every portal
+and now turns them away the way it already turned away suspended accounts — they can still sign in
+and get a token, but every portal call returns `403`:
+
+> "Sorry! Your account has been terminated. Please contact the property manager."
+
+Their existing bills and LPOs still run to finalisation; that paperwork is finished from the app
+side rather than by the supplier.
+
+Suspended suppliers are **not** blocked from new work. Suspension is a pause rather than an ending,
+so it only affects how they are shown.
+
+**Activating a terminated supplier does not reinstate their contracts.** Those stay `terminated`
+and are brought back deliberately, one at a time. Only the prequalified categories the termination
+itself switched off are restored — any that were already off beforehand stay off, so coming back
+never re-approves something somebody had withdrawn.
+
+`ContractStatus` gained `terminated` alongside `pending`, `active`, `suspended`, `expired` and
+`inactive`. It renders `danger`.
+
+### Which buttons to show
+
+All four options are exposed and gated by permission alone — pick what to show from the supplier's
+`status`, which is on the resource beside them:
+
+```json
+"permissions": {
+  "view": true, "update": true,
+  "suspend": true, "activate": true, "terminate": true,
+  "delete": false
+}
+```
+
+`delete` is the exception: it comes from the policy and goes **false** as soon as the supplier
+holds anything at all — contracts, bills, LPOs, bids, bank accounts or prequalified categories —
+because such a supplier would be terminated rather than deleted.
+
+## Delete Vendor
+
+`DELETE /api/v1/app/{company}/users/vendors/{vendor}`
+
+**A delete request does not always delete.** The backend looks at what the supplier holds and
+decides:
+
+- **Holding nothing** — they are removed, `"Vendor deleted successfully"`.
+- **Holding anything** — they are **terminated instead**, and told so:
+
+```json
+{
+  "message": "This supplier was terminated rather than deleted, because they hold 4 contracts. Their contracts have been terminated and their prequalified categories switched off."
+}
+```
+
+Both are `200`. Read the message rather than assuming the supplier is gone — and re-read the
+returned `user`, whose `status` will be `terminated` in the second case.
+
+This replaced a delete that destroyed records: `users` has 25 foreign keys that cascade, so
+deleting a supplier took their financial history with it, or returned `500` where something further
+down blocked the cascade.
+
+> The endpoint's permission was also corrected. It gated on `delete-landlord`, so the flag the
+> screen read and the permission the endpoint enforced belonged to different roles. It now checks
+> `delete-vendor` when it will delete, and `update-status-vendor` when it will terminate.
+
+`expense_sub_types` is **optional on update**. Omitting it leaves the supplier's prequalifications
+untouched; sending `[]` clears them. It used to be required, so a supplier who had never been given
+any could not be saved at all.
 
 Request fields:
 

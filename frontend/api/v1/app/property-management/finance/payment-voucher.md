@@ -28,6 +28,11 @@ Supported query params:
   - `filter[payable_user_id]`, `filter[credit_bank_account_id]`
   - `filter[payable_as]`, `filter[status]`
   - `filter[created_at]`, `filter[released_at]`, `filter[paid_at]`
+
+**Ids, `status` and `type` match exactly.** They were partial until 2026-09-29, so
+`filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
+returned rows for facility 60. Send the whole value. Date filters are still partial, so
+`filter[created_at]=2026-09` means that month.
 - Sort:
   - `sort=id,amount,paid_at,released_at,created_at,updated_at`
 - Include:

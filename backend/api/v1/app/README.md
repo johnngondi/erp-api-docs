@@ -15,6 +15,9 @@ This docs set is a technical reference generated from routes, DTOs, and resource
 - `docs/backend/api/v1/app/request-contracts.md`: request DTO field contracts (required/optional + enum inputs + validation hints).
 - `docs/backend/api/v1/app/enums.md`: enum values and color mappings from code.
 - `docs/backend/api/v1/app/receipt-reallocation.md`: moving a confirmed receipt's money between a tenant's invoices.
+- `docs/backend/api/v1/app/receipt-backdate.md`: changing a confirmed receipt's date (receipt, tenant statement, cashbook and collection dates) and the remittance rules that block it.
+- `docs/backend/api/v1/app/bill-backdate.md`: changing a posted bill's posting date (bill `expense_posted_at`, expense `transaction_at`/`created_at`) and the remittance rules that block it.
+- `docs/backend/api/v1/app/invoice-backdate.md`: changing an issued invoice's ledger date (tenant statement `transaction_at`/`created_at`, lease billing `transaction_date`/`created_at`).
 - `docs/backend/api/v1/app/tenants.md`: tenant CRUD — group-membership elevation on create, deactivation on delete.
 - `docs/backend/api/v1/app/inbox-and-permissions.md`: counts-only inbox summary (every portal) and the light `me/permissions` read.
 

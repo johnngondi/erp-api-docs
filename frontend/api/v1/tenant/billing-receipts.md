@@ -36,6 +36,30 @@ Supported query params:
   - `per_page`
   - `page`
 
+### Proof of payment
+
+Each receipt carries its proof of payment: `pop_message` for a reference, and `pop_upload` for a
+document, alongside the bare `pop_upload_id`.
+
+```json
+{
+  "pop_upload_id": 41,
+  "pop_upload": {
+    "id": 41,
+    "file_name": "deposit-slip.pdf",
+    "source_url": "https://…",
+    "type": "application/pdf",
+    "extension": "pdf",
+    "size": 20481
+  },
+  "pop_message": "STK ref QK12345678"
+}
+```
+
+`pop_upload` is `null` when no document is attached — the key is always present, so read it rather
+than testing for its existence. The tenant side is read-only: the proof is set and corrected from
+the app side.
+
 ## Access Rules
 
 - Tenant can view receipts paid by tenant or allocated to tenant invoices.

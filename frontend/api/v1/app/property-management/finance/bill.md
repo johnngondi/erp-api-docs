@@ -14,8 +14,9 @@ Base route:
 - `PUT/PATCH /bills/{bill}`
 - `DELETE /bills/{bill}`
 - `PATCH /bills/{bill}/cancel`
+- `PATCH /bills/{bill}/backdate`: change the posting date. See [Change Bill Date (Backdate)](#change-bill-date-backdate)
 - `PUT /bills/{bill}/post-bill`
-- `PUT /bills/{bill}/reject-invoice`
+- `PUT /bills/{bill}/reject-invoice`: reject the vendor's submitted invoice. See [Reject invoice](#reject-invoice)
 - `PUT /bills/bulk-post-bill`
 - `POST /bills/merge`
 - `POST /bills/bulk-settlement` — see [Bulk bills payment](bulk-bills-payment.md)
@@ -29,6 +30,12 @@ Supported query params:
 - Filters:
   - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers)
   - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[type]`, `filter[status]`
+
+**Ids, `status` and `type` match exactly.** They were partial until 2026-09-29, so
+`filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
+returned rows for facility 60. Send the whole value. Date filters are still partial, so
+`filter[created_at]=2026-09` means that month.
+
   - `filter[landlord_id]` — bills whose facility belongs to the given landlord (`users.id`)
   - `filter[contract_id]` — bills raised against a given contract (`facility_contracts.id`)
   - `filter[payable]` — boolean. When true, returns only bills that can still be paid: status
@@ -58,6 +65,26 @@ reason:
 | `failed` | `danger` | Something disagrees; the reason names each figure |
 | `skipped` | `secondary` | No invoice document to read. Not a failure - nothing disagreed |
 
+### The two checks answer different questions
+
+They are separate on purpose, and a bill can pass one and fail the other:
+
+- **`invoice_validation_*`** — does the document the supplier gave us match the bill we keyed in?
+  Read out of the attached file.
+- **`cu_validation_*`** — is the CU number on it one KRA has actually issued, for these amounts?
+  Asked of KRA directly.
+
+A forged document with real figures passes the first and fails the second. A genuine document keyed
+in wrongly does the reverse.
+
+**`cu_validation_status` now starts at `pending` rather than empty.** It was never written before,
+so the column sat null and read as "fine"; every bill, invoice and credit note now begins at
+`pending`, which says plainly that nobody has checked it yet. A bill stays `pending` — not
+`failed` — for as long as KRA cannot be reached, so don't render `pending` as a problem.
+
+The CU check reads the number from `tax_invoice_number` on a bill, which is where the supplier's
+fiscal number is kept. Our own invoices and credit notes keep theirs in `cu_invoice_number`.
+
 A document the extraction could read **nothing** from - an unrelated image, or a scan too poor to
 read - comes back `failed`, not `passed`. Absence of one field is not a discrepancy, since plenty
 of invoices carry no separate tax line; absence of every field means the document was never read,
@@ -74,6 +101,13 @@ the attached document puts the status back to `pending`, clears the old reason a
 check - otherwise a bill would keep reporting a discrepancy that had already been fixed. A posted
 bill only accepts invoice details, so its amount cannot be corrected at that point. An edit that
 touches nothing the check looks at leaves the verdict alone.
+
+**An hourly sweep picks up anything left behind.** A posted bill whose `invoice_validation_status`
+is `pending` or `skipped` and that now has a document attached, or whose `cu_validation_status` is
+`pending` or `skipped` and that now has a `tax_invoice_number`, is queued for that check again
+every hour. A document or CU number added after posting, or a check lost to a queue or KRA outage,
+still gets a verdict without anyone re-saving the bill. Unposted bills are left alone, because
+posting runs both checks.
 
 **The CU check is a shell.** It needs a KRA lookup that is not built, so `cu_validation_status`
 stays `null`. A bill's CU number comes from the supplier's own fiscal device, so unlike an invoice
@@ -207,10 +241,71 @@ negative figures).
 | `billable_type` | No | string | Optional |
 | `billable_id` | No | integer | Optional |
 | `notes` | No | string | Optional |
-| `invoice_number` | No | string | Optional |
-| `invoice_date` | No | date | Optional |
-| `invoice_upload_id` | No | integer | Must exist in `uploads.id` |
-| `tax_invoice_number` | No | string | Optional |
+| `post_direct` | No | boolean | Post the bill straight to the expense ledger at creation |
+| `invoice_number` | Conditional | string | **Required when `post_direct` is true** |
+| `invoice_date` | Conditional | date | **Required when `post_direct` is true** |
+| `invoice_upload_id` | Conditional | integer | Must exist in `uploads.id`. **Required when `post_direct` is true** |
+| `tax_invoice_number` | Conditional | string | **Required when `post_direct` is true** |
+
+### The invoice date cannot be in the future
+
+An invoice dated tomorrow has not been issued yet, and posting it puts the expense in a tax period
+that has not happened. Refused on all four paths — create with `post_direct`, `post-bill`,
+`bulk-post-bill` and editing a bill — with `422` on `invoice_date`:
+
+```json
+{ "errors": { "invoice_date": ["The invoice date cannot be in the future."] } }
+```
+
+Setting the picker's maximum to today will keep users out of it.
+
+**One carve-out worth knowing.** A bill that *already* carries a future date — some were created
+before this rule — can still be saved as long as the date is unchanged. Without that, the edit form
+resends the stored date, the rule refuses it, and edits that have nothing to do with the date become
+impossible. Moving such a bill to a *different* future date is still refused; correcting it to today
+or earlier works.
+
+### The invoice document is required to post
+
+Nothing reaches the expense ledger without the supplier's invoice document. That applies to every
+path a person can post through:
+
+| Endpoint | Rule |
+|---|---|
+| `POST .../bills` with `post_direct: true` | all four invoice fields required |
+| `PUT .../bills/{bill}/post-bill` | `invoice_upload_id` required, unless the bill already carries one |
+| `PUT .../bills/bulk-post-bill` | `invoice_upload_id` required on the shared payload |
+| `POST /api/v1/vendor/finance/bills/{bill}/upload-invoice` | `invoice_upload_id` required |
+| `PUT .../bills/{bill}` on an **already posted** bill | the document may be replaced, not removed |
+
+All of them return `422` keyed `invoice_upload_id`:
+
+```json
+{ "errors": { "invoice_upload_id": ["A bill cannot be posted to expenses without its invoice document."] } }
+```
+
+and the posted-bill edit returns
+
+```json
+{ "errors": { "invoice_upload_id": ["The invoice document cannot be removed. Replace it with another instead."] } }
+```
+
+**Saving a pending bill is unchanged** — the document stays optional right up until the bill posts,
+and a pending bill's document can still be removed as well as replaced.
+
+> Note: `post_direct` is the trigger on create, not the presence of an invoice number. Sending
+> invoice fields without `post_direct: true` raises an ordinary pending bill and requires nothing.
+> Previously the three non-document invoice fields were only enforced when sent as an explicit
+> `null`, so omitting them posted a bill with no invoice details at all; they are now enforced
+> either way.
+
+**Bills raised before this rule stay editable.** A posted bill that never had a document can still
+be saved without one — that is how a missing document gets attached. Only taking away a document
+that is there is refused.
+
+**System-raised bills are not affected.** Utility billing, LPO close, tenant exit notices,
+remittances and the data migration raise (and sometimes post) bills with no supplier invoice to
+give, and they keep working.
 
 ### Bill item object
 
@@ -224,16 +319,113 @@ negative figures).
 
 ## Upload/post payload (`UploadInvoiceBillData`)
 
-Used by `post-bill`, `reject-invoice`, and some updates.
+Used by `post-bill` and some updates. It is **not** used by `reject-invoice`; see [Reject invoice](#reject-invoice).
 
 | Field | Required | Type |
 |---|---|---|
 | `invoice_number` | Yes | string |
 | `invoice_date` | Yes | date |
 | `tax_invoice_number` | Yes | string |
-| `invoice_upload_id` | No | integer (`uploads.id`) |
+| `invoice_upload_id` | Conditional | integer (`uploads.id`) — required when posting, unless the bill already carries one; on a posted bill it may be replaced but not set to `null` |
 | `expense_category_id` | No | integer (`expense_categories.id`) |
 | `notes` | No | string |
+
+Editing `invoice_date` on a posted bill changes **only** the invoice date. It no longer moves
+`expense_posted_at` or the expense's dates. The invoice date records when the invoice was
+generated. To move the posting date, use [Change Bill Date](#change-bill-date-backdate).
+
+## Reject invoice
+
+`PUT /api/v1/app/{company}/property-management/finance/bills/{bill}/reject-invoice`
+
+This rejects the invoice a vendor submitted against a **pending** bill. It clears the invoice so the
+vendor can submit it again. It never posts the bill.
+
+Show a **Reject Invoice** item in the bills list row actions and in the view page header actions,
+but only when `bill.permissions.validate === true`. The flag needs the `validate-bill-invoice`
+permission and is `false` for any bill that is not `pending`. The reject flow is separate from Post
+Bill and uses its own modal.
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `reason` | Yes | string (max 1000) | Sent to the vendor and kept on the bill. |
+
+```json
+{ "reason": "The CU number does not match the attached invoice." }
+```
+
+What happens:
+
+- These fields are set to `null`: `invoice_number`, `invoice_date`, `tax_invoice_number` (the CU
+  invoice number), `invoice_upload_id`, `invoice_uploaded_at`, `invoice_validation_status`,
+  `invoice_validation_failure_reason`, `cu_validation_status` and `cu_validation_failure_reason`.
+- The uploaded invoice file is deleted.
+- `invoice_rejected_at`, `invoice_rejected_by` and `invoice_rejection_reason` record the rejection.
+- The bill stays `pending`. No expense or vendor statement entry is written.
+- The vendor is notified in the app, by email, by SMS and by WhatsApp. The notification carries
+  the reason and links to the bill.
+
+New bill resource fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `invoice_rejected_at` | `{raw, formatted, diff}` or `null` | When the invoice was last rejected. |
+| `invoice_rejection_reason` | string or `null` | Why it was rejected. |
+| `invoice_rejected_by` | `{id, name}` | Present when loaded (it is loaded on this endpoint's response). |
+
+These fields keep the last rejection even after the vendor submits again. Show them in the Invoice
+Details card whenever `invoice_rejected_at` is set.
+
+Success (`200`) returns `{ data: { message, bill } }`.
+
+Errors:
+
+- `422` `errors.reason`: the reason is missing or longer than 1000 characters. Show it under the
+  reason field.
+- `422` `errors.bill`: the bill has no invoice to reject, or it stopped being pending after the
+  screen loaded. Show it as a toast and close the modal.
+- `403`: the user lacks `validate-bill-invoice`, or the bill is not pending.
+
+## Change Bill Date (Backdate)
+
+`PATCH /api/v1/app/{company}/property-management/finance/bills/{bill}/backdate`
+
+This moves a posted bill to a different posting date. Show a **Change Date** item in the bills
+list row actions and in the view page header actions, but only when
+`bill.permissions.backdate === true`. That flag is already `false` for bills that are pending,
+cancelled, never posted, or whose expense has been remitted. Credit notes are included.
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `new_bill_posted_date` | Yes | string (`YYYY-MM-DD`) | Today or earlier. It may fall before `invoice_date`. Cap the date picker at today. |
+
+```json
+{ "new_bill_posted_date": "2026-08-15" }
+```
+
+Behaviour:
+
+- `expense_posted_at` and the expense's `transaction_at` and `created_at` move to the new date.
+  The original time of day is kept.
+- `invoice_date` and `posted_at` never change.
+- If a non-advance landlord remittance for the property covers the chosen month, the request is
+  refused. The user has to pick a date in a different month.
+
+Success (`200`) returns `{ data: { message, bill } }`. Upsert the bill with it.
+
+Errors:
+
+- `422` `errors.new_bill_posted_date`: the date is missing, invalid, in the future, or in a month
+  that has already been remitted. Show the message under the date picker.
+- `422` `errors.bill`: the bill's expense was remitted after the screen loaded. Show it as a toast
+  and close the modal.
+- `403`: the user lacks `backdate-facility-bill`, or the bill is no longer eligible.
+
+Backend reference: `docs/backend/api/v1/app/bill-backdate.md`.
 
 ## Bulk post to expenses (`BulkUploadInvoiceFacilityBillData`)
 
@@ -256,7 +448,7 @@ Constraints (the whole request is rejected with a `422` if any fails):
 | `invoice_number` | Yes | string | Applied to every bill |
 | `invoice_date` | Yes | date | Applied to every bill |
 | `tax_invoice_number` | Yes | string | Applied to every bill |
-| `invoice_upload_id` | No | integer | Must exist in `uploads.id` |
+| `invoice_upload_id` | Yes | integer | Must exist in `uploads.id`. One document covers the whole batch |
 | `expense_category_id` | No | integer | Must exist in `expense_categories.id` |
 | `notes` | No | string | Optional |
 
