@@ -131,8 +131,9 @@ snippet; only the URL differs.
 
 ### What the files contain
 
-The same single statement table as the app-side export — Date / Particulars / Debit / Credit /
-Balance, opened by **Balance B/F** and closed by **Total** and **Balance C/F** — laid out portrait
+The same single statement table as the app-side export — Date / Ref / Property / Particulars /
+Debit / Credit / Balance, with the Property column dropped when `filter[facility_id]` or
+`filter[facility_contract_id]` is set — opened by **Balance B/F** and closed by **Total** and **Balance C/F** — laid out portrait
 in the PDF and on one worksheet in Excel. See
 [What the files contain](../../app/property-management/finance/vendor-statement.md#what-the-files-contain).
 

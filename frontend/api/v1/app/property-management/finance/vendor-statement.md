@@ -190,6 +190,8 @@ Both formats render the same single statement table:
 | Column | Source |
 |---|---|
 | Date | the line's `transaction_at`, formatted `05-Jun-26` (`d-M-y`); the PDF cover prints the period the same way |
+| Ref | the voucher's transaction number, or the invoice number of the bill the line posts |
+| Property | the line's `facility` name. **Only present when neither `filter[facility_id]` nor `filter[facility_contract_id]` is set**; a filtered statement is on one property, which the cover already names |
 | Particulars | the line's `notes` |
 | Debit | the line's `debit` |
 | Credit | the line's `credit` |
@@ -202,7 +204,8 @@ tinted. Amounts carry the base currency code — vendor statements are single-cu
 - **PDF** — portrait A4, flowing onto further pages for a long period. It opens with the company
   logo and the title **Vendor Statement**, then a panel naming the statement: **Vendor** on the
   left — with the contract appended (`Acme Plumbing - Quarterly Maintenance`) when filtered by
-  `facility_contract_id` — and **Period** on the right. The company's printout footer closes the
+  `facility_contract_id` — and **Period** on the right. **Property** is printed on the cover when the
+  statement is filtered by `facility_id`, or by a contract (its property). The company's printout footer closes the
   last page. The table has no title of its own — the header already names it.
 - **Excel** — a single worksheet, same rows and columns, no header or footer. The filename is what
   identifies it.
