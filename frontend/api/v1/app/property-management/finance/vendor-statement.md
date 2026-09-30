@@ -26,6 +26,8 @@ Supported query params:
 
 - Filters:
   - `filter[vendor_id]` — **required** (`users.id`). A statement is always for one vendor.
+  - `filter[facility_id]` — optional (`facilities.id`); restrict to lines raised against a single
+    property. The opening balance is scoped to the same property.
   - `filter[facility_contract_id]` — optional (`facility_contracts.id`); restrict to lines raised
     against a single contract. The opening balance is scoped to the same contract.
   - `filter[transaction_at]` — optional date range over the line date — see
@@ -66,6 +68,7 @@ Sample response:
 {
   "data": {
     "vendor_id": 7,
+    "facility_id": null,
     "facility_contract_id": null,
     "period": { "from": "2026-06-01", "to": "2026-06-30" },
     "brought_forward": 1000.0,
@@ -73,6 +76,8 @@ Sample response:
       {
         "id": 5012,
         "transaction": { "type": "FacilityBill", "id": 1201 },
+        "facility_id": 22,
+        "facility": { "id": 22, "name": "Riverside Court" },
         "facility_contract": null,
         "notes": "Bill#1201 - INV#INV-1001 - Quarterly maintenance",
         "debit": "0.00000",
@@ -87,8 +92,10 @@ Sample response:
       {
         "id": 5044,
         "transaction": { "type": "FacilityPaymentVoucher", "id": 801 },
+        "facility_id": 22,
+        "facility": { "id": 22, "name": "Riverside Court" },
         "facility_contract": null,
-        "notes": "PV#801 - Payment for Bill#1201 - INV#INV-1001 - Quarterly maintenance",
+        "notes": "PV#801 - Payment for Bill#1201 (INV#INV-1001)",
         "debit": "1160.00000",
         "credit": "0.00000",
         "balance": 1000.0,
@@ -111,6 +118,8 @@ Field notes (`FacilityVendorStatementResource`):
 |---|---|---|
 | `transaction.type` | string\|null | Source model short name: `FacilityBill`, `FacilityBillWithholding`, or `FacilityPaymentVoucher`. |
 | `transaction.id` | integer\|null | Id of that source record. |
+| `facility_id` | integer\|null | The property the line was raised against. `null` only on lines recorded before the column existed. |
+| `facility` | object\|null | `{ id, name }` of that property. |
 | `facility_contract` | object\|null | Present (`{ id, title }`) for lines raised against a contract. |
 | `notes` | string | Human-readable line description. |
 | `debit` / `credit` | string | Decimal (5 dp), currency units. |
@@ -128,7 +137,8 @@ server-side from those filters, so what you download is always what the table is
 
 - `format` — **required**, `excel` or `pdf`. Anything else ⇒ `422` on `format`.
 - `filter[vendor_id]` — **required**, as on the statement itself.
-- `filter[facility_contract_id]`, `filter[transaction_at]` — optional, exactly as above.
+- `filter[facility_id]`, `filter[facility_contract_id]`, `filter[transaction_at]` — optional, exactly
+  as above.
 
 Example:
 
@@ -215,10 +225,22 @@ create them directly.
 | Bill posted to expenses | credit = bill total | the `FacilityBill` | `Bill#{id} - INV#{invoice} - {notes}` |
 | Credit note raised | negative credit | the credit-note `FacilityBill` | `Bill#{srcId} - INV#{srcInvoice} - CreditNote#{id} {notes}` |
 | Withholding settled (liability bill raised) | debit | the `FacilityBillWithholding` | `Bill#{srcId} - INV#{srcInvoice} - Withholding {rate%} - {notes}` |
-| Bill paid via voucher | debit | the `FacilityPaymentVoucher` | `PV#{id} - Payment for Bill#{billId} - INV#{invoice} - {notes}` |
+| Bill paid via voucher | debit, one per property + contract | the `FacilityPaymentVoucher` | `PV#{id} - Payment for Bill#{billId} (INV#{invoice}), Bill#{billId} (INV#{invoice})` |
 
 `INV#` is always the original bill's `invoice_number`. The contract (`facility_contract_id`) is
 carried whenever the originating bill was generated from a fixed contract.
+
+Every line carries the property (`facility_id`) of the bill it concerns: the bill itself, the source
+bill of a credit note or withholding, or the bills a voucher pays. A liability bill's withholdings
+all come from bills on the liability bill's own property (see
+[Liability bills](./liability-bill.md)), so its lines share that property too.
+
+A voucher that pays several bills writes **one debit per property and contract**, summing the bills
+that share them and naming each in the notes — the same way a receipt spanning several leases
+writes one tenant statement line per lease. A voucher paying two bills on one property and one on
+another therefore produces two lines. Bills in different currencies are never summed into one line.
+
+Lines recorded before `facility_id` was introduced carry `null` and are not backfilled.
 
 ### Cancellation side-effects
 

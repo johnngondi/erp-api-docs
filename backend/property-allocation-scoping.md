@@ -83,8 +83,14 @@ column form.** Every chained model in this domain reaches a table that already c
 
 The paths in use: `lease.facility_id` (invoices, credit notes, tenant statements, exit notices and
 the six lease children), `procurementRequest.facility_id` (LPOs, site visit reports),
-`facilityContract.facility_id` (vendor statements), `bill.facility_id` (bill withholdings),
+`bill.facility_id` (bill withholdings),
 `expense.facility_id` (project expenses), and `id` for `Facility` itself.
+
+Vendor statements used to reach their property through `facilityContract.facility_id`, which hid
+every line without a contract (LPO, other and liability bills, and their voucher and withholding
+lines) from allocated staff. They now carry their own `facility_id`, stamped from the bill each line
+concerns, and use the default path. Lines recorded before the column existed hold `null` and were
+not backfilled, so allocated staff do not see them; unallocated users are unaffected.
 
 ### When no path can describe it
 

@@ -145,11 +145,26 @@ Leaving it out — whether by omitting the key or sending `null` — returns `42
 Note the key. The document is *stored* as `invoice_upload_id`, but it is *sent* and *validated* as
 `workings_upload_id`, so that is what errors come back against.
 
+### Withholdings must belong to the bill's property
+
+A liability bill is raised against one property (`facility_id`), and every withholding it settles
+must come from a bill on that same property. Withholdings from bills on several properties need one
+liability bill per property. Selecting a withholding whose bill sits on another property returns
+`422` keyed **`withholdings`**:
+
+```json
+{
+  "errors": {
+    "withholdings": ["All withholdings must come from bills on the selected property."]
+  }
+}
+```
+
 **There is no edit path.** Liability bills are created and listed, nothing else. A wrong document
 cannot be corrected on the bill afterwards, so it is worth confirming the right file before
 submitting.
 
-**Vendor statement effects:**
+**Vendor statement effects** (every line carries the liability bill's `facility_id`):
 
 - On create, a single **credit** for the bill total is posted to the tax merchant (the bill's
   `vendor_id`) — what they are owed for the withholdings being remitted. No debit is posted to the

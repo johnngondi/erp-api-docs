@@ -26,6 +26,8 @@ closing balance.
 
 Supported query params (all optional):
 
+- `filter[facility_id]` — restrict to lines raised against a single property (`facilities.id`). The
+  opening balance is scoped to the same property.
 - `filter[facility_contract_id]` — restrict to lines raised against a single contract
   (`facility_contracts.id`). The opening balance is scoped to the same contract.
 - `filter[transaction_at]` — date range over the line date — see
@@ -57,6 +59,7 @@ Sample response:
 {
   "data": {
     "vendor_id": 7,
+    "facility_id": null,
     "facility_contract_id": null,
     "period": { "from": "2026-06-01", "to": "2026-06-30" },
     "brought_forward": 1000.0,
@@ -64,6 +67,8 @@ Sample response:
       {
         "id": 5012,
         "transaction": { "type": "FacilityBill", "id": 1201 },
+        "facility_id": 22,
+        "facility": { "id": 22, "name": "Riverside Court" },
         "facility_contract": null,
         "notes": "Bill#1201 - INV#INV-1001 - Quarterly maintenance",
         "debit": "0.00000",
@@ -95,7 +100,8 @@ authenticated user exactly as it is on the statement. The statement is regenerat
 export by **replaying the current query string with `format` appended**.
 
 - `format` — **required**, `excel` or `pdf`. Anything else ⇒ `422` on `format`.
-- `filter[facility_contract_id]`, `filter[transaction_at]` — optional, exactly as above.
+- `filter[facility_id]`, `filter[facility_contract_id]`, `filter[transaction_at]` — optional, exactly
+  as above.
 
 Example:
 
