@@ -152,6 +152,40 @@ Reason:
 - `GET /facilities/{facility}/roles`
 - `PUT /facilities/{facility}/roles/{role}`
 
+### 4.2.1 `collection_account` on a property
+
+`GET /facilities` and `GET /facilities/{facility}` return the property's default collection
+account, so a receipt form can prefill its receiving account the moment a property is chosen.
+
+```json
+"collection_account": {
+  "id": 18,
+  "account_name": "Kahawa Collections",
+  "account_number": "0123456789",
+  "alias": null,
+  "bank_branch": { "id": 1, "name": "...", "code": "..." },
+  "purpose": { "value": "collection", "color": "success", "label": "Collection" },
+  "facility_bank_account_id": 1
+}
+```
+
+| Field | Notes |
+|---|---|
+| `id` | **The `bank_accounts` id - bind `receiving_account_id` to this.** |
+| `facility_bank_account_id` | The link row's id. Reference only; never send it as `receiving_account_id` |
+| `purpose` | `collection` or `both` - the two that count as collection |
+
+**Bind to `id`, not `facility_bank_account_id`.** They are different tables with unrelated keys,
+and the link row's id is usually *also* a valid `bank_accounts` id belonging to a different
+account - so sending the wrong one does not fail validation, it routes the money elsewhere.
+
+`collection_account` is **`null`** when the property has no active collection account. Leave the
+field unprefilled and let the user pick; it is not an error, and receipts still validate normally.
+
+Which account is chosen, when a property has several: an account with no `lease_components`
+restriction wins, then the oldest. Accounts marked `expense` or `remittance`, and inactive ones,
+are not considered.
+
 ## 4.3 Facility Utilities
 
 - `GET /facilities/{facility}/utilities`

@@ -577,6 +577,17 @@ Per-property overrides:
   `PUT` with a partial payload rather than one `PATCH` per field, and each field
   can be cleared back to the company default by sending `null`.
 
+## Ticket Settings
+
+UI placement:
+
+- `SettingsPage > Group Tab (Tickets) > Categories Tab`
+
+Categories are created, edited, activated and deactivated at
+`/settings/tickets/categories`. See
+[Ticket Categories Settings API](settings/ticket-categories.md) - a category in use is
+**deactivated**, never deleted, and the pickers drop a deactivated one on their own.
+
 ## Errors
 
 Use shared behavior in `docs/frontend/app/README.md`:

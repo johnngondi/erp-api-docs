@@ -47,7 +47,11 @@ Examples:
 
 `GET /api/v1/app/{company}/property-management/tickets/categories`
 
-Use this to populate create/update forms.
+Use this to populate create/update forms. It returns **active categories only** - one
+deactivated in settings drops out of here on its own, so nothing has to change on this screen.
+
+Managing the categories themselves (create, edit, activate, deactivate) lives in Settings:
+[Ticket Categories Settings API](settings/ticket-categories.md).
 
 ## Create/Update Ticket
 
