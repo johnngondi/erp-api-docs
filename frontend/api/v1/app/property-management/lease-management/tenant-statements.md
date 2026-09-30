@@ -57,7 +57,11 @@ A tenant is a receivable, so a **positive balance is what the tenant owes**. Eac
 balance by `debit − credit`:
 
 - Raising an invoice **debits** (raises) the balance.
-- A receipt is a **credit** (lowers it).
+- A receipt is a **credit** (lowers it). A receipt posts **one line per lease**, not one per
+  invoice. The credit is the sum of what the receipt settled on that lease, and the notes list the
+  invoices: `Receipt #{id} - {payment method} - {transaction number} - for Invoice#0002, Invoice#0003`.
+  Cancelling the receipt posts a matching `cancelled` debit per lease, with notes that start with
+  `Cancelled Receipt #{id}`. The payment method or transaction number is left out when missing.
 - A credit note is a **credit** (lowers it).
 
 > ⚠️ **This is the opposite of the [Vendor Statement](../finance/vendor-statement.md), which is a
@@ -101,7 +105,7 @@ Sample response:
       {
         "id": 3244,
         "transaction": { "type": "FacilityReceipt", "id": 412 },
-        "notes": "RCT#412 - Payment for INV#INV-2001",
+        "notes": "Receipt #412 - Cheque Deposit Slip - 002057 - for Invoice#2001",
         "debit": "0.00000",
         "credit": "15000.00000",
         "balance": 12000.0,

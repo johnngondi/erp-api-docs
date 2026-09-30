@@ -280,6 +280,17 @@ Backend reference: `docs/backend/api/v1/app/receipt-backdate.md`.
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}`
 
+A confirmed receipt that has not been remitted is cancelled first, then deleted. When the receipt
+ends up `cancelled` (it was already cancelled, or it was cancelled by this call), the delete also
+removes everything it left behind:
+
+- its tenant statement lines, both the confirmed credit lines and the cancelled reversal lines;
+- any lease collections still tied to its allocations, and the allocations themselves.
+
+Invoice and invoice item balances are not touched again, because the cancellation already
+reversed them. A remitted receipt that was reversed stays `confirmed` with `is_reversed: true`,
+and its records, including the mirror receipt, are kept because the remittance depends on them.
+
 ## Dispute Receipt
 
 `POST /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}/dispute`

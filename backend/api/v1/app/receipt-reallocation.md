@@ -109,7 +109,7 @@ tenant's next invoice automatically.
 | `FacilityInvoice` `paid` / `balance` / `status` | Reversed on the old invoices, applied to the new ones. |
 | `FacilityInvoiceItem` `paid` / `balance` | Same, split by the facility's `lease_component_allocation_priority_method`. |
 | `LeaseCollection` | Deleted and rebuilt from the new split — unless the receipt is remitted. |
-| `TenantStatement` | The receipt's rows are deleted and re-posted, one confirmed credit per new allocation. |
+| `TenantStatement` | The receipt's rows are deleted and re-posted, one confirmed credit per lease, summing that lease's new allocations. |
 
 ## Remitted receipts — collections are frozen
 
