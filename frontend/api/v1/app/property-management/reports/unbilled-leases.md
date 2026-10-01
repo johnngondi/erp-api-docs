@@ -54,6 +54,11 @@ unbilled:
 Testing for the invoice covers both. **A cancelled invoice does not count**: cancelling it puts the
 lease back on the report, which is correct — nothing was billed.
 
+A lease whose every auto-billed component is priced at zero has nothing to bill. The automatic
+biller skips it (no invoice, `next_due_at` unchanged), so it stays on this report until someone
+prices a component or raises an invoice by hand. That is intended: this report is where such
+leases surface.
+
 ## Filters
 
 The six [global filters](./README.md#global-filters) and nothing else.

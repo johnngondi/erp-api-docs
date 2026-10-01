@@ -141,12 +141,17 @@ Eligibility (returns `422` validation error otherwise):
 
 - Lease `status` must be `active`.
 - Lease must have a billing schedule (`next_due_at` set).
+- At least one auto-billed component must be priced above zero. Otherwise the lease has nothing to
+  bill: `422` with `lease`: `This lease has nothing to bill: every component is priced at zero.`
+  No invoice is created and `next_due_at` does not move.
 - Unlike the scheduler, the "next due" date check is **skipped** — `next_due_at` may be in the future.
 
 Behavior:
 
 - The invoice `notes` describe the billing **period** being generated for (derived from `next_due_at` and
   the billing cycle), not the date it was generated.
+- Every invoice line carries a value. A component priced at zero stays on the lease but is never
+  invoiced, so the invoice holds only the priced components.
 - `next_due_at` is advanced to the start of the next period when the invoice is created.
 
 Success response:
