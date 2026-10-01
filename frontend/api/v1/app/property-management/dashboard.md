@@ -126,7 +126,7 @@ behind it.
 |---|---|
 | `billings` | Sum of `lease_billings.total` dated in the period, for leases on the scoped properties. Same as the Collections Summary report's "billed". |
 | `collections` | Sum of **confirmed** `lease_collections.total` dated in the period. A cancelled receipt is not money collected. Same as the reports' "collected". |
-| `arrears` | `total - paid` over every issued invoice raised **on or before the end of the period** (today for an open end). Pending and cancelled invoices are not owed. Same as the Ageing Report and Debtors Listing. |
+| `arrears` | Everything billed less everything collected **on or before the end of the period** (today for an open end): the two sums above with no lower bound. On All Time it is exactly `billings - collections`, so the three cards always reconcile. |
 
 `change_percent` is `(value - previous) / |previous| * 100`, rounded to one decimal. It is `null`
 when there is no previous period or the previous value is zero; render that as `+0.0%` or hide the
