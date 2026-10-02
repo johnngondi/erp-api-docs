@@ -48,6 +48,33 @@ Examples:
 - `GET /api/v1/app/12/property-management/lease-management/invoices?filter[lease_id]=101&sort=-due_at&per_page=10`
 - `GET /api/v1/app/12/property-management/lease-management/invoices?filter[status]=pending`
 
+### Invoices already being paid by a pending receipt
+
+An invoice that sits on a receipt which is still **awaiting approval** (receipt status `pending`)
+is locked: it cannot be put on another receipt, credited by a new credit note, or have more
+money reallocated onto it until that receipt is confirmed, rejected or cancelled. It still
+reads `unpaid` / `partially paid` and **still appears** in the list, so a picker built from
+`filter[status]=unpaid,partially paid` keeps showing it. Both list rows and the show payload say
+which receipt holds it:
+
+```json
+{
+  "id": 9001,
+  "status": { "value": "unpaid", "color": "warning" },
+  "balance": "1102.00000",
+  "pending_receipt": { "id": 2500, "transaction_number": "RCPT-1004" },
+  "permissions": { "pay": false, "issueCreditNote": false }
+}
+```
+
+- `pending_receipt` is `null` when nothing locks the invoice. A rejected, cancelled or confirmed
+  receipt never locks.
+- `permissions.pay` and `permissions.issueCreditNote` are `false` while locked; the receipt and
+  credit-note endpoints refuse the invoice with a `422` naming the receipt (see those docs).
+- Show the invoice in pickers with a "being paid in receipt #2500" hint and do not let it be
+  selected; the receipt that holds it may still be edited to use it (its own allocations do not
+  lock it against itself).
+
 ## CU number validation
 
 Every invoice, credit note and bill carries a verdict on whether its CU number is one KRA actually

@@ -166,6 +166,23 @@ Example response:
 }
 ```
 
+### Validation (`422`) on `invoice_id`
+
+| Condition | Message |
+|---|---|
+| Invoice does not exist | Invoice not found |
+| Invoice has no balance left | Invoice is already paid for fully |
+| Invoice is cancelled / rejected | Invoice is already cancelled / Invoice was rejected |
+| Invoice is on a receipt that is awaiting approval | Invoice #9001 is already being paid in receipt #2500 (RCPT-1004), which is awaiting approval. |
+| Items total more than the invoice balance | Credit note total exceeds invoice balance |
+
+The pending-receipt rule is the lock described under
+[Invoices → already being paid](./invoices.md#invoices-already-being-paid-by-a-pending-receipt).
+The invoice list still returns such an invoice (with `pending_receipt` set and
+`permissions.issueCreditNote: false`), so the picker should show it as unavailable rather than
+let the request fail. It applies to credit notes raised through this endpoint; credits the system
+raises itself (invoice reversal, opening balances, exit notices) are not held up by it.
+
 ## One invoice per credit note
 
 Every credit note reverses exactly one invoice, and `invoice_id` is the only record of which one.

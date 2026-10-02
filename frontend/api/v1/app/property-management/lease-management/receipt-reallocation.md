@@ -94,7 +94,8 @@ when it is `false` — do not render it disabled.
       "paid": "0.00000",
       "balance": "50000.00000",
       "currency": { "id": 1, "code": "KES", "name": "Kenyan Shilling" },
-      "allocated_from_this_receipt": 0
+      "allocated_from_this_receipt": 0,
+      "pending_receipt": null
     }
   ],
   "collections_frozen": false
@@ -102,6 +103,12 @@ when it is `false` — do not render it disabled.
 ```
 
 Notes for rendering:
+
+- `pending_receipt` (`{ id, transaction_number } | null`) names another receipt, still
+  awaiting approval, that already holds this invoice. Money may be **kept on or moved off**
+  such a row, but not added to it: cap the input at `allocated_from_this_receipt` and show a
+  "Being paid in receipt #N" badge. The server refuses an increase with a `422` on
+  `allocations`.
 
 - `invoices` is already filtered to what this receipt may be allocated to — same property,
   same tenant, still open, or already carrying this receipt's money. **Do not filter further.**

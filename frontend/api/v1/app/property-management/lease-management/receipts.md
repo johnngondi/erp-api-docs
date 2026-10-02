@@ -106,11 +106,45 @@ Example response:
 }
 ```
 
+### Validation (`422`)
+
+| Key | Condition | Message |
+|---|---|---|
+| `allocations` | An invoice is not on a lease of `facility_id` | Some of the allocated invoices do not belong to leases in the selected property. |
+| `allocations` | An invoice is already on another receipt that is awaiting approval | Invoice #9001 is already being paid in receipt #2500 (RCPT-1004), which is awaiting approval. |
+| `invoice` | An invoice has no balance left | Invoice with invoice_id 9001 is already paid for fully |
+
+The second rule is the pending-receipt lock described under
+[Invoices → already being paid](./invoices.md#invoices-already-being-paid-by-a-pending-receipt):
+the invoice list still returns the invoice, with `pending_receipt` naming the receipt, so the
+picker can show it as unavailable instead of letting the request fail.
+
 ## Update Receipt
 
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}`
 
-Update request body:
+What the endpoint accepts depends on the receipt's status.
+
+### Editing a pending receipt
+
+A receipt that is still `pending` (awaiting approval) has posted nothing, so it is edited in
+full with the **same body as Create**: `facility_id`, `transaction_number`,
+`receiving_account_id`, `transaction_date`, `payment_method_id`, `paying_user_id`, `amount`,
+`currency_id` and `allocations[]`. The allocations are replaced wholesale by the ones sent, as
+`pending`. Omit `pop_message` / `pop_upload_id` to keep the current proof of payment (see
+**Proof of payment** below for what sending them means).
+
+The same `422` rules as Create apply, with one difference: the receipt's own pending allocations
+never lock an invoice against itself, so an invoice already on this receipt may be kept. An
+invoice held by a *different* pending receipt is refused with the lock message.
+
+Who may do it: anyone with `update-facility-receipt`, or the person who submitted the receipt
+for approval while it is returned to them for changes (see
+[Approvals → Returned for changes](../../access-management/approvals.md)).
+
+### Editing a confirmed receipt
+
+Once confirmed, only the fields below may change:
 
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
