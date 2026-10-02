@@ -31,7 +31,8 @@ company you are not a member of: `403`. Not signed in: `401`.
       "timestamp_to": "2026-09-27T10:00:00+03:00",
       "to_user": { "id": 5, "name": "Jane" }
     },
-    "incoming_transfers": 1
+    "incoming_transfers": 1,
+    "session": { "locked": false, "locks_in_seconds": 212, "idle_minutes": 5 }
   }
 }
 ```
@@ -51,6 +52,13 @@ portal's own tasks, alerts and notifications, plus legacy rows that carry no por
   `null` on other portals.
 - `incoming_transfers`: App only, how many rows `mine/incoming` would return: open transfers naming
   the caller in this company, pending and held (`accepted`/`active`) alike. `0` on other portals.
+- `session`: the PIN lock as the server sees it, on every portal. `locked` is whether the token
+  has idled past the window and every ordinary request now comes back `423`. **When it is `true`,
+  put the lock screen up** - this poll answers behind the lock and does not count as activity,
+  so it is how a tab nobody is near learns it has been locked. `locks_in_seconds` counts down to
+  the lock and is `null` when the server will never lock this session (enforcement off, or no
+  PIN set), which reads as "run nothing". `idle_minutes` is the window, for the label. See
+  [session-pin.md](../common/session-pin.md).
 
 Every key is always present on every portal.
 

@@ -42,7 +42,8 @@ unauthenticated call gets `401`.
       "timestamp_to": "2026-09-27T10:00:00+03:00",
       "to_user": { "id": 5, "name": "Jane" }
     },
-    "incoming_transfers": 1
+    "incoming_transfers": 1,
+    "session": { "locked": false, "locks_in_seconds": 212, "idle_minutes": 5 }
   }
 }
 ```
@@ -58,6 +59,7 @@ empty value: `"open_tickets": null`, `"outgoing_transfer": null`, `"incoming_tra
 | `open_tickets` | app (null elsewhere) | `open_tickets.total` of `GET /app/{company}/property-management` with no filters |
 | `outgoing_transfer` | app (null elsewhere) | `GET /app/{company}/access-management/responsibility-transfers/mine/outgoing` |
 | `incoming_transfers` | app (0 elsewhere) | row count of `.../responsibility-transfers/mine/incoming` |
+| `session` | all | `App\Support\Auth\SessionActivity::state()`: the same clock `EnforceSessionPinLock` refuses on |
 
 `outgoing_transfer` is either null or the four fields shown. `status` is the raw
 `ResponsibilityTransferStatus` value (`pending`, `accepted` or `active`, the open set);
