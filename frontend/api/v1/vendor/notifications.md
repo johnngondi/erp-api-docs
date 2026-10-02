@@ -94,6 +94,34 @@ Notes for the front-end:
   Vendor recipient. Sending `filter[domain]` returns `400` rather than a silently empty page. The
   App portal's copy of this endpoint does expose it.
 
+## Notification types
+
+### Quotation reminder
+
+`type`: `App\Notifications\PropertyManagement\Procurement\QuoteSubmissionReminderNotification`
+
+Sent to a supplier who was invited to quote on a procurement request and has not quoted yet. It goes
+out **every working day (Monday to Friday) at 09:00** for as long as the request is open for quotes
+(its current procurement step is waiting for quotations and the deadline has not passed), and stops
+once the supplier submits a quotation or the deadline passes. A supplier receives **at most one per
+request per working day**. It is also delivered by email, SMS and WhatsApp where the supplier has an
+address or a phone number.
+
+`data` keys:
+
+| Key | Type | Notes |
+|---|---|---|
+| `title` | string | "Quotation reminder" |
+| `message` | string | e.g. "Your quotation for Rewire the lobby at Riverside Apartments is due by 07 Oct 2026, 17:00. Please submit it before then." |
+| `procurement_request_id` | integer | The request to quote on. |
+| `request_title` | string | The request's title. |
+| `facility_name` | string | The property the work is for. |
+| `deadline` | string | The quotation deadline, ISO-8601 (e.g. `2026-10-07T17:00:00+03:00`). |
+| `resource_type` / `resource_id` / `resource_url` | | The standard resource payload. `resource_url` points at the request on the vendor's open-job page (`/api/v1/vendor/procurement/rfq/open-jobs/{id}`). |
+
+The reminder is queued, so if the scheduled run is ever triggered a second time on the same day before
+the queue has drained, a supplier may receive the day's reminder twice.
+
 ## Mark one as read
 
 `PATCH /api/v1/vendor/notifications/{notification}/read`

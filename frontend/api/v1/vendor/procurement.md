@@ -11,6 +11,8 @@ Auth:
 
 ## RFQ Open Jobs
 
+Invited suppliers who have not quoted on an open request receive a daily quotation reminder (working days, 09:00) until they quote or the deadline passes; see the `QuoteSubmissionReminderNotification` type in [notifications.md](notifications.md).
+
 ### List open jobs
 
 `GET /rfq/open-jobs`
