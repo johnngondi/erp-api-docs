@@ -17,6 +17,8 @@ Base route:
 - `PATCH /leases/{lease}/suspend`
 - `PATCH /leases/{lease}/terminate`
 - `POST /leases/{lease}/generate-invoice-for-next-period`
+- `GET /leases/{lease}/invoice-components`: what a manual invoice on the lease can bill. See
+  [Invoices](invoices.md#components-a-manual-invoice-can-bill)
 
 ## List Leases
 

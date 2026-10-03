@@ -18,6 +18,8 @@ Base route:
 - `POST /invoices/{invoice}/dispute`
 - `DELETE /invoices/{invoice}/dispute`
 - `DELETE /invoices/{invoice}`
+- `GET /leases/{lease}/invoice-components`: the components a manual invoice on that lease can
+  bill. See [Components a manual invoice can bill](#components-a-manual-invoice-can-bill)
 
 ## List Invoices
 
@@ -92,6 +94,10 @@ The lease on every invoice carries the property it belongs to:
 Read `lease.facility.name` for a Property column, and `lease.facility.id` to confirm
 `filter[facility_id]` did what you asked. It is eager loaded, so it costs one query for the page
 rather than one per row.
+
+The show, create and update responses carry the same `lease.facility`, so the invoice view can
+name the property and keep the spaces (`invoice_items[].lease_item_component.lease_item.facility_space`)
+as secondary text.
 
 **An empty result from `filter[facility_id]` is usually scoping, not a broken filter.** Staff see
 only the invoices of properties they are allocated to, so filtering to a property outside that set
@@ -235,7 +241,8 @@ Request body:
 
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
-| `lease_item_component_id` | Yes | integer | Must belong to the supplied lease |
+| `lease_component_id` | One of the two | integer | A catalogue component (`lease_components.id`). The API picks the lease line to bill — see below |
+| `lease_item_component_id` | One of the two | integer | A line already on the lease. Must belong to the supplied lease. Wins when both are sent |
 | `notes` | Yes | string | - |
 | `quantity` | Yes | integer | Minimum `1` |
 | `amount` | Yes | number | Minimum `0` |
@@ -243,7 +250,99 @@ Request body:
 
 Notes:
 
-- `lease_item_component_id` must be unique within the same request.
+- Two items may not end up on the same lease line. `lease_item_component_id` must be unique within
+  the request, and that includes the lines the API picks for `lease_component_id`.
+- The create screen sends `lease_component_id`. `lease_item_component_id` stays for the screens and
+  imports that already know the exact line.
+
+### Billing a catalogue component
+
+When an item names a `lease_component_id`, the API finds the lease line to bill:
+
+| The component is… | The lease carries it | Result |
+|---|---|---|
+| Autobilled, or a rent, service charge, parking or signage component | On any of its spaces | Billed on that line — the first space that carries it. Rent held on space A and service charge on space B bill on A and B respectively |
+| Autobilled, or a rent, service charge, parking or signage component | No | **422** |
+| Not autobilled (electricity, water, deposit, excess service charge, …) | On any of its spaces | Billed on that line |
+| Not autobilled | No | A line is added to the lease's first space with a cost of `0`, and the item is billed on it |
+
+A line added this way costs `0`, so the billing cycle never bills it. Rent, service charge, parking
+and signage are never added, even when a company has turned their autobilling off, because those
+lines decide which lease occupies a space.
+
+The 422 is keyed to the item:
+
+```json
+{
+  "message": "Service Charge is billed automatically and is not on this lease, so it cannot be invoiced here.",
+  "errors": {
+    "items.1.lease_component_id": [
+      "Service Charge is billed automatically and is not on this lease, so it cannot be invoiced here."
+    ]
+  }
+}
+```
+
+A lease with no spaces at all answers 422 on `lease_id`, since there is nothing to bill against. An
+inactive catalogue component answers 422 on its item.
+
+### Components a manual invoice can bill
+
+`GET /api/v1/app/{company}/property-management/lease-management/leases/{lease}/invoice-components`
+
+Feeds the component dropdown on the create screen. It returns every active catalogue component,
+sorted by name and not paginated, and works out the table above for this lease, so the screen can
+disable what the API would refuse.
+
+Requires permission to create invoices and to view the lease; otherwise `403`.
+
+```json
+{
+  "data": [
+    {
+      "id": 3,
+      "name": "Rent",
+      "tax_id": 1,
+      "is_autobilled": true,
+      "lease_item_component_id": 455,
+      "facility_space": { "id": 88, "name": "Shop 4" },
+      "amount": 950,
+      "selectable": true,
+      "reason": null
+    },
+    {
+      "id": 4,
+      "name": "Service Charge",
+      "tax_id": 1,
+      "is_autobilled": true,
+      "lease_item_component_id": null,
+      "facility_space": null,
+      "amount": null,
+      "selectable": false,
+      "reason": "Service Charge is billed automatically and is not on this lease, so it cannot be invoiced here."
+    },
+    {
+      "id": 9,
+      "name": "Water",
+      "tax_id": 2,
+      "is_autobilled": false,
+      "lease_item_component_id": null,
+      "facility_space": null,
+      "amount": null,
+      "selectable": true,
+      "reason": null
+    }
+  ]
+}
+```
+
+- `lease_item_component_id`, `facility_space` and `amount` describe the lease line the item would
+  be billed on. They are `null` when the lease does not carry the component yet.
+- `amount` is the line's monthly cost, so use it to prefill the item. A line added at `0` has
+  nothing to prefill, so leave the amount for the user.
+- `tax_id` is the line's tax when the lease carries the component, otherwise the catalogue's.
+- `selectable: false` comes with a `reason`. Show the option disabled with the reason as a hint.
+  The create endpoint enforces the same rule, so a stale screen still gets the 422 above.
 
 Example request:
 
@@ -255,7 +354,7 @@ Example request:
   "cu_reference_number": "INV-REF-3001",
   "items": [
     {
-      "lease_item_component_id": 455,
+      "lease_component_id": 3,
       "notes": "Base rent",
       "quantity": 1,
       "amount": 950,

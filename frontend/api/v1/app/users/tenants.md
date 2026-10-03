@@ -99,6 +99,10 @@ Query params:
   - `filter[email]`
   - `filter[phone]`
   - `filter[created_at]`
+  - `filter[facility_id]` — only tenants who hold a lease in that property. Any lease
+    counts except a `rejected` one, so a tenant whose lease has ended still appears and
+    can still pay off what they owe. Combine it with `filter[search]` for a payer picker
+    that searches within one property.
 - Sort: `sort=id,name,created_at` (prefix with `-` to reverse)
 - **Default order: newest first** (`users.created_at` descending, id descending to break ties), so a
   tenant created a moment ago is at the top of page one. It was alphabetical before. Pass `sort=name`
@@ -121,6 +125,7 @@ Example:
 
 ```http
 GET /api/v1/app/12/users/tenants?filter[email]=@gmail.com&sort=name&per_page=25
+GET /api/v1/app/12/users/tenants?filter[facility_id]=60&filter[search]=otieno
 ```
 
 Response is a standard paginated collection: `data`, `links`, `meta`.
