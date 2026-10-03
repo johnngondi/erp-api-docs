@@ -94,6 +94,18 @@ Errors are keyed by position, so the offending row can be marked: `deposits.1.am
 
 One deposit at a time still works exactly as documented above, and still raises its own invoice.
 
+### Deposits on a pending lease are billed when the lease is approved
+
+While the lease is `pending`, a deposit is saved **without an invoice**: the row comes back with
+`billed: false` and `invoice: null`, and nothing is sent to the tenant. When the lease becomes
+active, by approval or through the activate endpoint, every unbilled deposit on it is raised on
+**one invoice**, the rows switch to `billed: true` with their `invoice`, and the invoice is
+emailed to the tenant once it is processed. A rejected lease never bills its deposits.
+
+On a pending lease, update and delete change the row alone; there is no invoice to reissue or
+cancel. On any other lease, deposits bill at once, as before. The `billed` request field is
+ignored: the server decides.
+
 ## Update Lease Deposit
 
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/leases/{lease}/deposits/{leaseDeposit}`

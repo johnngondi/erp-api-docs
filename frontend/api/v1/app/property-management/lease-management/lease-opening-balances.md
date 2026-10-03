@@ -103,6 +103,18 @@ Errors are keyed by position: `opening_balances.1.amount`.
 
 One opening balance at a time still works exactly as documented above.
 
+### Opening balances on a pending lease are billed when the lease is approved
+
+While the lease is `pending`, an opening balance is saved **without a document**: the row comes
+back with `invoice: null` and `credit_note: null`, and `billed_amount` already shows what will be
+billed (`amount` plus `tax_amount`). When the lease becomes active, by approval or through the
+activate endpoint, every opening balance on it without a document is raised the same way as a
+batch: every component in arrears on **one invoice**, every component in credit on **one credit
+note**, dated by `opening_balance_at`. A rejected lease never bills its opening balances.
+
+On a pending lease, update and delete change the row alone; there is no document to reissue,
+cancel or reverse. On any other lease, opening balances bill at once, as before.
+
 ## Update Lease Opening Balance
 
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/leases/{lease}/opening-balances/{leaseOpeningBalance}`

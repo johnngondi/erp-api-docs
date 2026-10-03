@@ -51,7 +51,8 @@ goes with the link alone.
 
 | Not emailed | How it is recognised |
 |---|---|
-| Pending, rejected or cancelled documents | status; the public page hides pending and rejected, and a cancelled document is not issued |
+| Pending, rejected or cancelled documents | status; the public page hides pending and rejected, and a cancelled document is not issued. `SendDocumentEmailAction` also refuses any `pending` document outright, whatever its definition says |
+| Anything on a lease that is still pending | its deposits and opening balances raise no document until the lease is approved or activated; the deposit invoice is emailed then |
 | An invoice or credit note for a lease opening balance | a `lease_opening_balances` row (trashed included) names it in `invoice_id` / `credit_note_id`. This covers the documents raised by creating, updating and deleting an opening balance |
 | An invoice re-issued for a cancelled ETR-signed credit note | `facility_invoices.reissued_from_credit_note_id` is set |
 | A credit note that reverses an ETR-signed invoice | an invoice names it in `reversal_credit_note_id` |

@@ -151,8 +151,9 @@ An issued document is emailed by `App\Actions\Documents\SendDocumentEmailAction:
 called wherever the document becomes final. It looks the model up in
 `config('emails.documents')` and sends `DocumentIssuedNotification` (queued, email only) once:
 
-- nothing for a model with no definition, a definition whose `shouldSend()` is false, a
-  recipient with no address, or a document whose `emailed_at` is set;
+- nothing for a model with no definition, a document still `pending` (whatever its
+  definition says), a definition whose `shouldSend()` is false, a recipient with no address, or
+  a document whose `emailed_at` is set;
 - otherwise it stamps `emailed_at` (quietly, in the caller's transaction) and sends through
   `OutboundEmail`. Inside `suppress()` it neither sends nor stamps.
 
@@ -176,6 +177,14 @@ attached inside a try/catch; with no template, or a render that fails (logged wi
 
 Registered definitions: `InvoiceEmail`, `CreditNoteEmail`, `ReceiptEmail`, `LpoEmail`,
 `PaymentVoucherEmail`, `RemittanceEmail`.
+
+**A document goes out only after it is processed, never while it is pending.** The hooks that
+call `SendDocumentEmailAction` sit in the processing step (`ProcessInvoiceAction`,
+`ProcessCreditNoteAction`, `ProcessReceiptAction`, the remittance and voucher release paths),
+never in creation, and the action itself refuses any document whose status is `pending`. The LPO,
+which is issued outside this action, follows the same rule: `IssueLpoToVendorService` sends only
+for a placed order (`lpo`). A lease's deposit and opening balance documents are not even raised
+while the lease is pending (see the lease deposits and opening balances API docs).
 
 ## Adding an email type
 
