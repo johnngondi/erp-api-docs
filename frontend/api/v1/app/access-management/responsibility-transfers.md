@@ -19,6 +19,7 @@ Implemented:
 - `PATCH /responsibility-transfers/{transfer}/accept`
 - `PATCH /responsibility-transfers/{transfer}/decline`
 - `PATCH /responsibility-transfers/{transfer}/reclaim`
+- `PATCH /responsibility-transfers/{transfer}/withdraw`
 
 `mine/outgoing` and `mine/incoming` are registered ahead of the `{transfer}` wildcard, so `mine`
 is never read as a transfer id.
@@ -45,6 +46,7 @@ No approval chain is involved in any of these.
 | `reclaimed` | The transferer pulled it back. Grants reversed. |
 | `returned` | A temporary transfer reached `timestamp_to` and reversed itself. |
 | `expired` | Nobody answered before `timestamp_to` passed. Nothing to reverse. |
+| `withdrawn` | The transferer took it back before it was answered. Nothing changed hands. |
 | `accepted` | Reserved. Accept writes `active`; treat both as in force if you filter on status. |
 
 Transitions:
@@ -53,7 +55,8 @@ Transitions:
 pending ──accept──▶ active ──reclaim───▶ reclaimed
    │                  │
    │                  └──timestamp_to──▶ returned
-   ├──decline──▶ declined
+   ├──decline───▶ declined     (recipient)
+   ├──withdraw──▶ withdrawn    (transferer)
    └──timestamp_to──▶ expired
 ```
 
@@ -69,7 +72,11 @@ Every status object is the house `{ value, color }` pair.
   transferer. Department is matched exactly, null included. Anything else is `422` on `to_user_id`.
 - A **temporary** transfer requires `timestamp_to`, and it must be in the future.
 - A **permanent** transfer must not send `timestamp_to`, has no countdown, and rejects reclaim
-  with `422`.
+  with `422`. It may still be **withdrawn** while pending, because nothing has changed hands yet.
+- The two levers belong to different people and different moments: **decline** is the recipient's
+  answer to a pending transfer, **withdraw** is the transferer taking a pending transfer back, and
+  **reclaim** is the transferer ending one already in force. Read `can_withdraw` and `can_reclaim`
+  rather than deriving either from `status`.
 
 ## List transfers
 
@@ -148,6 +155,26 @@ Answering a transfer that is no longer `pending` returns `422`.
 Only the named recipient. Marks the transfer `declined` and notifies the transferer. No property,
 role or pending task is touched, and the transferer's outgoing slot is freed.
 
+## Withdraw
+
+`PATCH /api/v1/app/{company}/access-management/responsibility-transfers/{transfer}/withdraw`
+
+Only the transferer, and only while the transfer is still `pending`. Marks it `withdrawn`, stamps
+`withdrawn_at` and notifies the recipient — who had it waiting in `mine/incoming`, and would
+otherwise watch it disappear without explanation.
+
+Nothing is granted while a transfer is pending, so nothing is revoked here: no property, no role
+and no pending task is touched, and the transferer's outgoing slot is freed. It is the mirror of
+decline, not of reclaim.
+
+- Already accepted, declined, expired or withdrawn: `422` on `status`. Use `can_withdraw` to hide
+  the button rather than letting the user discover this.
+- Someone other than the transferer: `403`. The recipient's lever is decline.
+- A **permanent** transfer may be withdrawn, unlike reclaimed. The rule that a real handover
+  cannot be undone applies to a handover that happened; while it is pending there is nothing to
+  undo, and refusing would leave a permanent transfer sent to the wrong person endable only by
+  that person.
+
 ## Reclaim
 
 `PATCH /api/v1/app/{company}/access-management/responsibility-transfers/{transfer}/reclaim`
@@ -194,6 +221,7 @@ transfer is running in another company gets `null` here and still cannot initiat
   "include_pending_tasks": true,
   "status": { "value": "active", "color": "success" },
   "can_reclaim": true,
+  "can_withdraw": false,
   "timestamp_to": {
     "raw": "2026-10-01T17:00:00.000000Z",
     "iso": "2026-10-01T17:00:00+00:00",
@@ -205,6 +233,7 @@ transfer is running in another company gets `null` here and still cannot initiat
   "accepted": { "raw": "...", "formatted": "...", "diff": "..." },
   "declined": { "raw": null, "formatted": null, "diff": null },
   "reclaimed": { "raw": null, "formatted": null, "diff": null },
+  "withdrawn": { "raw": null, "formatted": null, "diff": null },
   "returned": { "raw": null, "formatted": null, "diff": null },
   "created": { "raw": "...", "formatted": "...", "diff": "..." },
   "updated": { "raw": "...", "formatted": "...", "diff": "..." },
@@ -257,9 +286,9 @@ is what guarantees reversal cannot take it away.
 
 | Code | When |
 | --- | --- |
-| `403` | Wrong person for the action: not the recipient on accept/decline, not the transferer on reclaim, not a participant on `show`. |
+| `403` | Wrong person for the action: not the recipient on accept/decline, not the transferer on reclaim/withdraw, not a participant on `show`. |
 | `404` | The transfer does not belong to route `{company}`. |
-| `422` | Validation, plus: a second open outgoing transfer, a recipient outside the company or department, reclaiming a permanent transfer, or answering a transfer that is no longer pending. |
+| `422` | Validation, plus: a second open outgoing transfer, a recipient outside the company or department, reclaiming a permanent transfer, withdrawing one that is no longer pending, or answering a transfer that is no longer pending. |
 
 Apply shared auth, tenancy, query, and error handling guidance from:
 

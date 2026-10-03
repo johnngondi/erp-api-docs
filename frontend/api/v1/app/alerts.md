@@ -56,7 +56,7 @@ Supported query params:
       "id": 12,
       "title": "Three invoices are overdue",
       "notes": "Review the overdue invoices for Riverside Apartments.",
-      "priority": { "value": "high", "color": "danger" },
+      "priority": { "value": "high", "color": "danger", "label": "High" },
       "domain": {
         "value": "property-management",
         "color": "primary",

@@ -30,6 +30,8 @@ Supported query params:
   - **Exact** (`=`): `filter[lease_id]`, `filter[status]`, `filter[facility_id]` (through the
     lease), `filter[user_id]` (the lease's tenant)
   - **Partial** (`LIKE`): `filter[due_at]`, `filter[created_at]`
+  - **Date range**: `filter[created_between]`, `filter[due_between]` — see below
+  - **Fiscal**: `filter[etr_status]`, `filter[cu_validation_status]` — see below
 - Sort:
   - `sort=id,due_at,created_at,amount,tax,total,paid,balance`
 - Include: not supported
@@ -39,6 +41,88 @@ Supported query params:
 > lease's page. `filter[status]=paid` also matched `unpaid` and `partially paid`.
 >
 > Dates stay partial on purpose, so `filter[created_at]=2026-09` means "that month".
+
+### Fiscal status: signed and validated
+
+Two different questions, each with its own filter.
+
+`filter[etr_status]` — has our control unit stamped the document?
+
+| Value | Colour | Meaning |
+| --- | --- | --- |
+| `signed` | `success` | It carries a CU invoice number. |
+| `failed` | `danger` | It has no CU number, and the last signing attempt failed (`etr_error` is set). |
+| `not signed` | `secondary` | It has no CU number and no recorded failure. |
+
+Returned on each record as `etr_status`, the usual `{ value, color }` pair. Note the space in
+`not signed`; URL-encode it in the filter. Every document has exactly one of the three, so the
+three counts add up to the unfiltered total, and an unrecognised value returns an empty list rather
+than an error.
+
+A CU number outranks an error: a document signed after an earlier failed attempt is `signed`.
+Signing again clears `etr_error`, so a retried document leaves `failed` as soon as the attempt
+starts.
+
+A document counts as signed once it carries a CU invoice number, whether our own signer wrote it or
+it came across from another system. `etr_signed_at` sits beside it but is not the test: it records
+that we ran the step, while the number is the evidence KRA holds the document. Read `etr_status`
+rather than deriving the state from the timestamp.
+
+`filter[cu_validation_status]` — has KRA accepted that number? `pending | passed | failed |
+skipped`, with `cu_validation_failure_reason` carrying the text when it is `failed`.
+
+**These are sequential, not interchangeable.** Signing is where a CU number comes from; validating
+it is queued immediately afterwards. So a freshly issued document is normally `signed` with
+`cu_validation_status` still `pending`, and stays that way until KRA answers. A single combined
+"fiscal status" badge will misreport every new document for that whole window.
+
+### Each row names its property
+
+The lease on every invoice carries the property it belongs to:
+
+```json
+"lease": {
+  "id": 101,
+  "facility": { "id": 60, "name": "Kahawa House" },
+  "user": { "id": 42, "name": "Acme Traders Ltd" },
+  "currency": { "id": 1, "code": "KES" }
+}
+```
+
+Read `lease.facility.name` for a Property column, and `lease.facility.id` to confirm
+`filter[facility_id]` did what you asked. It is eager loaded, so it costs one query for the page
+rather than one per row.
+
+**An empty result from `filter[facility_id]` is usually scoping, not a broken filter.** Staff see
+only the invoices of properties they are allocated to, so filtering to a property outside that set
+returns nothing — correctly. Compare against an unfiltered page before reporting it as a bug.
+
+### Date ranges
+
+`filter[created_between]=2026-09-01,2026-09-30`
+`filter[due_between]=2026-09-01,2026-09-30`
+
+Two dates as `Y-m-d,Y-m-d`. The **end date is inclusive of its whole day**, so an invoice created
+at 23:40 on the 30th is in the range above. Dates are read in Nairobi time, which is what
+timestamps are stored in, so send plain `Y-m-d` and do no conversion.
+
+They are separate names rather than an extension of `filter[created_at]`, which keeps working
+exactly as documented: a single value there is still a partial match, so `filter[created_at]=2026-09`
+still means that month. Use whichever suits the control you are building — a month picker or a
+range picker.
+
+A range that is backwards, malformed, incomplete, or names a date that does not exist is a **422**
+keyed to the filter itself:
+
+```json
+{ "message": "Use two valid dates in ascending order: Y-m-d,Y-m-d.",
+  "errors": { "filter.created_between": ["Use two valid dates in ascending order: Y-m-d,Y-m-d."] } }
+```
+
+Same shape as the audit trail report's `filter[created_between]`.
+
+> Other parts of the API express ranges as `filter[x][from]` and `filter[x][to]` — bills and
+> statements, for instance. Those are unchanged and do not accept `_between`.
 
 - Select fields: not supported
 - Pagination: `per_page`, `page`
@@ -381,6 +465,23 @@ same amount instead (see the credit notes doc). That invoice carries
 ## Dispute Invoice
 
 `POST /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}/dispute`
+
+**`permissions.dispute` says whether this invoice can be disputed at all**, and it now follows the
+invoice's status. Read it per record rather than per user: holding `dispute-facility-invoice` is
+necessary but not sufficient.
+
+| Status | `permissions.dispute` |
+| --- | --- |
+| `unpaid`, `partially paid` | `true` |
+| `pending`, `paid`, `cancelled`, `rejected` | `false` |
+
+A paid invoice is refused alongside the closed ones — there is nothing outstanding left to argue
+with.
+
+The endpoint enforces the same rule, so a `false` flag and a `422` keyed `invoice` are the same
+decision reached twice. Previously the flag said `true` on paid, cancelled and rejected invoices
+while the endpoint refused them, so the button appeared and then failed; that is fixed, and the two
+now read one rule.
 
 Request body:
 

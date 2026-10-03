@@ -65,7 +65,7 @@ Examples:
   "id": 6,
   "name": "Lift Breakdowns",
   "description": "Lift and escalator faults.",
-  "priority": { "value": "high", "color": "danger" },
+  "priority": { "value": "high", "color": "danger", "label": "High" },
   "expense_type_id": 3,
   "expense_sub_type_id": 4,
   "is_procurable": true,
@@ -159,12 +159,12 @@ No body. Both return the updated row under `data.ticket_category`.
             "ticket_category": { "id": 6, "status": { "value": "inactive", "color": "danger", "label": "Inactive" } } } }
 ```
 
-Two refusals, both **422** keyed `ticket_category`:
+Two refusals, both **422**, each with its own error key:
 
-| When | Message |
-|---|---|
-| The category is already in that state | `This ticket category is already inactive.` |
-| It is the **only** active category left | `This is the only active ticket category. Activate another one before deactivating this one, otherwise tickets and disputes cannot be raised.` |
+| When | Key | Message |
+|---|---|---|
+| Already in that state | `ticket_category_already_active` / `ticket_category_already_inactive` | `This ticket category is already inactive.` |
+| The **only** active category left | `ticket_category_last_active` | `This is the only active ticket category. Activate another one before deactivating this one, otherwise tickets and disputes cannot be raised.` |
 
 The last one exists because raising a ticket needs a category and a dispute picks one on the
 tenant's behalf. With none active, no tenant could dispute an invoice at all.
@@ -173,14 +173,34 @@ tenant's behalf. With none active, no tenant could dispute an invoice at all.
 
 `DELETE /api/v1/app/{company}/property-management/settings/tickets/categories/{ticketCategory}`
 
-Soft-deletes a category **no ticket has used**. Otherwise **422**, keyed `ticket_category`:
+Soft-deletes a category **no ticket has used**. Otherwise **422**, keyed
+`ticket_category_in_use`:
 
 ```json
 { "message": "3 tickets are already filed under this category, so it cannot be deleted. Deactivate it instead to take them out of the pickers and keep those tickets intact.",
-  "errors": { "ticket_category": ["3 tickets are already filed under this category, ..."] } }
+  "errors": { "ticket_category_in_use": ["3 tickets are already filed under this category, ..."] } }
 ```
 
 Read `tickets_count` on the row and offer **Deactivate** up front rather than waiting for this.
+
+## Every refusal has its own key
+
+These endpoints never make you read the message to know what happened. Each refusal is a **422**
+under a key of its own, so a client can branch on the key and treat the message purely as text to
+display.
+
+| Key | Raised by | What the user should be offered |
+|---|---|---|
+| `ticket_category_in_use` | `DELETE` | Deactivate instead - tickets are filed under it |
+| `ticket_category_last_active` | `PATCH .../deactivate` | Activate another category first |
+| `ticket_category_already_active` | `PATCH .../activate` | Nothing; the row was stale, refresh it |
+| `ticket_category_already_inactive` | `PATCH .../deactivate` | Nothing; the row was stale, refresh it |
+
+The first two are worth their own dialogs. The last two mean the list on screen is out of date -
+refreshing it is the whole fix.
+
+`ticket_category_in_use` should be rare if delete is disabled while `tickets_count` is above zero;
+it is there for the race where someone files a ticket between the list loading and the click.
 
 ## Which list to call
 

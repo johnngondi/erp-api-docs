@@ -100,9 +100,19 @@ Query params:
   - `filter[phone]`
   - `filter[created_at]`
 - Sort: `sort=id,name,created_at` (prefix with `-` to reverse)
+- **Default order: newest first** (`users.created_at` descending, id descending to break ties), so a
+  tenant created a moment ago is at the top of page one. It was alphabetical before. Pass `sort=name`
+  for the old order; nothing else about the endpoint changed.
+- `created_at` and `id` mean the **user's** values, not the pivot's. The tenant list joins the
+  user-group table, which carries its own `created_at` — the date the person was added to the tenant
+  group, which differs from when their record was made on anything imported.
 - Include: not supported
 - Select fields: not supported
 - Pagination: `per_page`, `page`
+
+**Clearing the search**: send `filter[search]=` empty, or drop the parameter — both return the full
+list. A value that is only whitespace is treated as empty too, so there is no need to special-case
+it client-side.
 
 There is no `filter[status]` on this endpoint. Deactivated tenants are not in the
 result set at all, so a status filter would have nothing to select.

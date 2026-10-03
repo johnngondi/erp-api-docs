@@ -14,6 +14,12 @@ Base route:
 
 - `POST /auth/logout`
 - `POST /auth/logout-all`
+- `POST|PUT /auth/pin`, `POST /auth/pin/verify`
+- `POST /auth/pin/temporary`, `POST /auth/pin/temporary/verify`
+- `POST /auth/touch`
+
+The PIN endpoints and the idle lock are documented separately in
+[Session PIN & Idle Lock](session-pin.md).
 
 ## Notes
 

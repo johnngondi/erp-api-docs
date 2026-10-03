@@ -92,6 +92,33 @@ Like `paybill_number`, it is set through the database, seeders or the EPMAS impo
 - `GET /settings/file-management/uploads/{upload:uuid}/preview` (public)
 - `GET /settings/file-management/uploads/{upload:uuid}/download` (public)
 
+### Uploading
+
+`POST /settings/file-management/uploads` is `multipart/form-data`.
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `upload` | Yes | The file |
+| `title` | No | What the document is called. Falls back to the file's own name |
+| `description` | No | |
+| `path` | No | Sub-folder to store it under |
+
+`title` is what lists of documents display, so it is worth asking the user for: a landlord's
+documents read "KRA PIN Certificate" rather than `whv-cert-0491.pdf`, and it is the only thing
+telling them which file they are about to delete. The file keeps its own `file_name` either way.
+
+### Renaming
+
+`PATCH /settings/file-management/uploads/{upload}` takes `title` and `description`, and changes
+only the fields the request carries — a rename does not need to resend the description. Sending
+an empty `title` resets it to the file name rather than clearing it.
+
+### Deleting
+
+`DELETE /settings/file-management/uploads/{upload}` soft-deletes the file, which removes it from
+whatever it was attached to. This is how a document is taken off a landlord, a lease or a company:
+delete the upload the user picked.
+
 ## Companies
 
 - `GET|POST /settings/companies`
@@ -125,7 +152,7 @@ Create / update payload:
 | `text_color_on_brand_bg` | string&#124;null | No | `null` | Hex text colour printed on `brand_color`; falls back to `COMPANY_TEXT_COLOR_ON_BRAND_BG` (`#ffffff`) |
 | `accent_color` | string&#124;null | No | `null` | Hex colour of the printout footer's services strip (documents and report PDF exports); falls back to `COMPANY_ACCENT_COLOR` (`#ed1c24`) |
 | `text_color_on_accent_bg` | string&#124;null | No | `null` | Hex text colour printed on `accent_color`; falls back to `COMPANY_TEXT_COLOR_ON_ACCENT_BG` (`#ffffff`) |
-| `profile_photo_path` | string&#124;null | No | `null` | Company logo storage path from `POST /settings/file-management/uploads` |
+| `profile_photo_path` | string&#124;int&#124;null | No | `null` | Company logo: the upload `id` from `POST /settings/file-management/uploads` (stored as a string), or a storage path |
 | `type_of_properties` | array&#124;null | No | `null` | Optional array |
 | `collection_contract` | boolean | No | `false` | Collection contract enabled flag |
 | `registration_type` | string&#124;null | No | `null` | `national_id` or `business_license` or `passport` |

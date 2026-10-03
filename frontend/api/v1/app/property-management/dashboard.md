@@ -104,7 +104,7 @@ An unknown `landlord_id`, `facility_id` or `company_department_id`, or an unpars
           "title": "HVAC noisy in office wing",
           "property": { "id": 7, "name": "Maple Heights" },
           "owner": { "id": 19, "name": "Brian" },
-          "priority": { "value": "normal", "color": "primary" },
+          "priority": { "value": "normal", "color": "primary", "label": "Normal" },
           "status": { "value": "open", "color": "primary" },
           "created": { "raw": "2026-05-02T08:14:00.000000Z", "formatted": "02 May, 2026", "diff": "3 weeks ago" }
         }

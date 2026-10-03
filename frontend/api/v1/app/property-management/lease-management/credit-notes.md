@@ -27,6 +27,7 @@ Supported query params:
 - Filters:
   - `filter[search]` — free text
   - **Exact** (`=`): `filter[lease_id]`, `filter[status]`, `filter[facility_id]` (through the lease)
+  - **Fiscal**: `filter[etr_status]`, `filter[cu_validation_status]` — see below
   - **Partial** (`LIKE`): `filter[due_at]`, `filter[created_at]`
   - `filter[reversed]=true|false`: only full reversals, or only everything else
 - Sort:
@@ -364,6 +365,18 @@ re-bills the credit with a new invoice. Deleting a signed one returns `422` with
 
 `POST /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}/dispute`
 
+**`permissions.dispute` says whether this credit note can be disputed at all**, and it follows the
+credit note's status. Read it per record.
+
+| Status | `permissions.dispute` |
+| --- | --- |
+| `unapplied`, `partially applied`, `applied` | `true` |
+| `pending`, `cancelled`, `rejected` | `false` |
+
+The endpoint enforces the same rule, so a `false` flag and a `422` keyed `credit_note` are the same
+decision reached twice. The flag previously said `true` on cancelled and rejected credit notes while
+the endpoint refused them.
+
 Request body:
 
 | Field | Required | Type | Notes |
@@ -410,3 +423,37 @@ Rules:
 ## Frontend Error Handling
 
 Apply shared rules in `docs/frontend/app/README.md`.
+
+### Fiscal status: signed and validated
+
+Two different questions, each with its own filter.
+
+`filter[etr_status]` — has our control unit stamped the document?
+
+| Value | Colour | Meaning |
+| --- | --- | --- |
+| `signed` | `success` | It carries a CU invoice number. |
+| `failed` | `danger` | It has no CU number, and the last signing attempt failed (`etr_error` is set). |
+| `not signed` | `secondary` | It has no CU number and no recorded failure. |
+
+Returned on each record as `etr_status`, the usual `{ value, color }` pair. Note the space in
+`not signed`; URL-encode it in the filter. Every document has exactly one of the three, so the
+three counts add up to the unfiltered total, and an unrecognised value returns an empty list rather
+than an error.
+
+A CU number outranks an error: a document signed after an earlier failed attempt is `signed`.
+Signing again clears `etr_error`, so a retried document leaves `failed` as soon as the attempt
+starts.
+
+A document counts as signed once it carries a CU invoice number, whether our own signer wrote it or
+it came across from another system. `etr_signed_at` sits beside it but is not the test: it records
+that we ran the step, while the number is the evidence KRA holds the document. Read `etr_status`
+rather than deriving the state from the timestamp.
+
+`filter[cu_validation_status]` — has KRA accepted that number? `pending | passed | failed |
+skipped`, with `cu_validation_failure_reason` carrying the text when it is `failed`.
+
+**These are sequential, not interchangeable.** Signing is where a CU number comes from; validating
+it is queued immediately afterwards. So a freshly issued document is normally `signed` with
+`cu_validation_status` still `pending`, and stays that way until KRA answers. A single combined
+"fiscal status" badge will misreport every new document for that whole window.

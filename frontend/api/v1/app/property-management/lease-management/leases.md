@@ -61,7 +61,7 @@ Request body:
 | `period_in_months` | Yes | integer | - |
 | `billing_cycle` | Yes | string | `biennial`, `annually`, `biannual`, `quarterly`, `monthly`, `weekly`, `daily`, `hourly` |
 | `next_due_at` | Yes | date (`YYYY-MM-DD`) | - |
-| `status` | No | string | `active`, `suspended`, `terminated` |
+| `status` | No | string | `pending`, `active`, `suspended`, `terminated`, `rejected`. Not worth sending on create — see approval below |
 | `currency_id` | No | integer | Must exist in `currencies.id` (defaults to `1` when omitted) |
 
 Example request:
@@ -96,6 +96,39 @@ Example response:
   }
 }
 ```
+
+
+## Creation approval
+
+A new lease goes through an approval chain before it becomes active, when the company has a
+template configured for it.
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | Raised, waiting on its approval step. Not yet a working lease. |
+| `active` | Approved, or created when no approval template is configured. |
+| `rejected` | Refused. Terminal. |
+| `suspended`, `terminated` | As before, set by hand later in the lease's life. |
+
+**Do not send a status when creating.** The server decides: it writes `pending` and opens the
+chain when a template applies, and leaves the lease `active` when none does. A status in the
+payload is ignored for this purpose.
+
+**A pending lease is deliberately not a working lease.** It is not invoiced, its space is not
+marked occupied, and it does not appear in the dashboard counts or the tenant reports until it is
+approved. If a lease seems to have vanished after creation, check whether it is awaiting approval
+rather than assuming it failed to save.
+
+**Approval and rejection run through the usual endpoints** — see
+[approvals](../../access-management/approvals.md). The lease exposes `approval_steps` like any
+other approvable record, so the same screens work for it.
+
+**A lease promoted from a Letter of Offer skips this.** The Loo was approved on the way in, and
+asking for a second approval of the same agreement would stall every promotion. Those leases are
+created `active` with no chain.
+
+**Nothing changes until a template exists.** With no active template for `Lease`, leases are
+created `active` exactly as before, so this can be deployed ahead of the configuration.
 
 ## Update Lease
 

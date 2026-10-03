@@ -88,6 +88,51 @@ record is the subject of the response:
 - An upload's `creator` is present only when the endpoint loads it (lease application
   documents do).
 
+## Wording: Supplier and Property
+
+The words the API *says* have changed. **Nothing it takes or returns as data has.**
+
+| Reads as | Used to read |
+|---|---|
+| Supplier | Vendor |
+| Property | Facility |
+
+What this covers: response `message` strings, validation messages, permission labels
+(`name`, `resource`, `tag`), notification text and activity log lines.
+
+What is deliberately unchanged, and will stay that way:
+
+- Routes — `/users/vendors`, `/property-management/facilities/...`
+- Payload and response field names — `facility_id`, `vendor_id`, `facility_type_id`
+- Validation error **keys** — a message about a property is still keyed `facility_id`
+- Permission slugs — `create-facility-ticket` is still what a permission check resolves
+- Columns, models and enum values
+
+So a client that maps errors by key, checks permissions by slug, or reads `facility_id` off a
+response needs no change. Only text shown to a person is different.
+
+### Two consequences worth knowing
+
+**A validation message will not match its key.** `facility_id` can come back with "The property
+field is required." That is intended — do not key error display off the words.
+
+**Permission labels are rendered, not stored.** `permissions.name` returns "Create Property
+Ticket" while the underlying slug stays `create-facility-ticket`. Match on the slug, never on the
+label.
+
+### Some messages dropped an internal prefix
+
+Messages that leaked model names now read as plain English:
+
+| Now | Was |
+|---|---|
+| `Bill created successfully.` | `FacilityBill created successfully.` |
+| `Ticket withdrawn successfully.` | `FacilityTicket withdrawn successfully.` |
+| `Expense marked as paid successfully.` | `FacilityExpense marked as paid successfully.` |
+
+If any screen matches on message text rather than status code, it needs updating. Matching on
+message text is worth removing anyway.
+
 ## Error Handling (Frontend Behavior)
 
 ### 4xx errors (show to user)

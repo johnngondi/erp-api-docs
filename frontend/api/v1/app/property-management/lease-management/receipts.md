@@ -330,6 +330,17 @@ and its records, including the mirror receipt, are kept because the remittance d
 
 `POST /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}/dispute`
 
+**`permissions.dispute` says whether this receipt can be disputed at all**, and it follows the
+receipt's status. Read it per record.
+
+| Status | `permissions.dispute` |
+| --- | --- |
+| `confirmed` | `true` |
+| `pending`, `cancelled`, `rejected` | `false` |
+
+The endpoint enforces the same rule, so a `false` flag and a `422` keyed `receipt` are the same
+decision reached twice.
+
 Request body:
 
 | Field | Required | Type | Notes |

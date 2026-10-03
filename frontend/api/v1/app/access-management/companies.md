@@ -67,7 +67,7 @@ Create payload table:
 | `text_color_on_brand_bg` | string&#124;null | No | `null` | Hex text colour printed on `brand_color`; falls back to `COMPANY_TEXT_COLOR_ON_BRAND_BG` (`#ffffff`) |
 | `accent_color` | string&#124;null | No | `null` | Hex colour of the printout footer's services strip (documents and report PDF exports); falls back to `COMPANY_ACCENT_COLOR` (`#ed1c24`) |
 | `text_color_on_accent_bg` | string&#124;null | No | `null` | Hex text colour printed on `accent_color`; falls back to `COMPANY_TEXT_COLOR_ON_ACCENT_BG` (`#ffffff`) |
-| `profile_photo_path` | string&#124;null | No | `null` | Company logo storage path (e.g. from the uploads endpoint) |
+| `profile_photo_path` | string&#124;int&#124;null | No | `null` | Company logo: the upload `id` from the uploads endpoint, or a storage path. Stored as a string |
 | `type_of_properties` | array&#124;null | No | `null` | Optional array |
 | `collection_contract` | boolean | No | `false` | Collection contract enabled flag |
 | `registration_type` | string&#124;null | No | `null` | `national_id` or `business_license` or `passport` |
@@ -87,9 +87,9 @@ Validation note:
 
 Logo handling:
 
-- Upload the file through `POST /api/v1/settings/file-management/uploads`, then send the stored path as `profile_photo_path`.
-- `profile_photo_path` is the raw stored path; send `null` to clear the logo.
-- Responses return both `profile_photo_path` and `profile_photo_url` (resolved URL; falls back to a generated avatar built from the company name when no logo is set).
+- Upload the file through `POST /api/v1/settings/file-management/uploads`, then send the upload's `id` as `profile_photo_path` (a raw storage path is still accepted). An integer id is stored as its string form, e.g. `13016` → `"13016"`.
+- Send `null` to clear the logo.
+- Responses return both `profile_photo_path` and `profile_photo_url`. For an upload id, `profile_photo_url` is the upload's preview URL; for a path, it is the storage URL; with no logo, it is a generated avatar built from the company name. Document and report PDFs resolve the logo the same way.
 
 ## Update Payload
 

@@ -16,6 +16,28 @@ Example shape:
 GET /.../resource?filter[search]=...&filter[status]=...&sort=-created_at&per_page=20
 ```
 
+## Searching by ID
+
+`filter[search]` is answered by the search engine **and** by a direct ID match, not one or the
+other. A numeric term matches any record whose ID it is, on top of whatever the engine returns.
+
+This applies to invoices, leases, credit notes, bills, receipts, procurement requests, LPOs,
+payment vouchers and remittances.
+
+Two consequences worth knowing:
+
+**Pasting an ID always finds the record.** Even when the search index is missing, stale or the
+engine is unreachable. That is the case people reach for an ID in, so it is the case that most
+needs to work.
+
+**A numeric term is still a text search as well.** Searching `1004` finds the record whose ID is
+1004 *and* the one whose invoice number is `1004`. The ID match is added, never substituted, so
+nothing that used to be found stops being found.
+
+> This is a floor for IDs, not a cover for a broken index. A text search against an unreachable
+> engine still correctly returns nothing rather than silently falling back to a slower, different
+> search — a broken index should look broken.
+
 ## Invoice (`/lease-management/invoices`)
 
 ### Supported filters

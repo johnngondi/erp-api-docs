@@ -8,16 +8,11 @@ Base prefix:
 
 ## Endpoints
 
-Currently implemented:
-
 - `GET /landlords`
 - `POST /landlords`
 - `GET /landlords/{landlord}`
-- `DELETE /landlords/{landlord}`
-
-Route exists but is not implemented in controller:
-
 - `PUT/PATCH /landlords/{landlord}`
+- `DELETE /landlords/{landlord}`
 
 ## List Landlords
 
@@ -282,15 +277,138 @@ Example response:
   "uploads": [
     {
       "id": 1,
-      "title": "Pin Certificate"
-    },
-    {
-      "id": 2,
-      "title": "Other Document"
+      "title": "Pin Certificate",
+      "description": null,
+      "source_url": "https://api.example.com/api/v1/settings/file-management/uploads/ccabadcf-0a09-42c0-a3b3-b0c486ead1ea/preview",
+      "thumbnail_url": "/storage/",
+      "file_name": "pin-certificate.pdf",
+      "type": "application/pdf",
+      "extension": "pdf",
+      "size": 20480,
+      "creator": {
+        "id": 1,
+        "name": "Super Admin",
+        "email": "admin@example.com",
+        "phone": "712345678",
+        "profile_photo_url": "https://example.com/avatar.png"
+      },
+      "created": {
+        "raw": "2026-09-24T23:54:14.000000Z",
+        "formatted": "25 Sep, 2026",
+        "diff": "5 days ago"
+      }
     }
   ]
 }
 ```
+
+### Landlord documents
+
+Each row of `uploads` is the shared upload shape, the same one a lease's Documents tab renders.
+This response used to carry only `id`, `title`, `source_url` and `extension`, which left a shared
+documents table with no file name, size, type, uploader or date to show.
+
+| Field | Notes |
+|---|---|
+| `id`, `title`, `description` | `description` is usually `null` |
+| `source_url` | Preview/download link. Absent if the upload has no uuid |
+| `thumbnail_url` | Images only; otherwise a bare storage path |
+| `file_name`, `type`, `extension`, `size` | `size` is bytes; `type` is the MIME type |
+| `creator` | Who uploaded it, or `null` |
+| `created` | `raw`, `formatted` (`25 Sep, 2026`) and `diff` (`5 days ago`) |
+
+**Not included:** `source`, `context` and `removable`. Those belong to a lease's Documents tab,
+where a document may come from the lease itself, the offer letter that promoted it, or the
+application behind that, and `removable` follows from which. A landlord document has one origin,
+so there is nothing for those three to say. A client sharing one table across both should treat
+them as absent rather than expect a constant.
+
+## Update Landlord
+
+`PUT/PATCH /api/v1/app/{company}/users/landlords/{landlord}`
+
+Edits the landlord's own record and the documents attached to it.
+
+Send only what changed. Every field is optional, and an omitted field keeps its stored value.
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Max 255. Cannot be sent empty |
+| `email` | string | Must be unique across users. Sending the landlord's own back is fine |
+| `phone` | string | Unique. Sending its own back is fine |
+| `has_vat` | boolean | See the tax PIN rule below |
+| `tax_pin` | string \| null | Unique |
+| `withholds` | array of integer | Withholding tax ids. Replaces the stored list |
+| `other_docs` | array of integer | Upload ids to attach. **Adds, never removes** |
+| `pin_certificate_upload_id` | integer | Upload id |
+| `incorporation_cert_upload_id` | integer | Upload id |
+| `contract_upload_id` | integer | Upload id |
+
+Example request:
+
+```json
+{ "phone": "700111222", "has_vat": true, "tax_pin": "P051234599Z" }
+```
+
+The response is the same payload as `GET /landlords/{landlord}`, under `data.user`, with
+`data.message` set to `Landlord updated successfully.`
+
+### Documents are added, not replaced
+
+`other_docs` attaches the uploads it names and leaves the rest alone. Sending a shorter list does
+**not** detach anything.
+
+This is deliberate. Once attached, nothing distinguishes a PIN certificate from an incorporation
+certificate or an "other" document - they are all uploads owned by the landlord. Treating
+`other_docs` as the full set would silently detach the PIN certificate the moment a form saved
+without it.
+
+To remove one, delete the upload itself:
+
+`DELETE /api/v1/settings/file-management/uploads/{upload}`
+
+It soft-deletes the file, which takes it off the landlord's list. Delete the document the user
+picked, not the difference between two lists.
+
+### Name documents as they are uploaded
+
+`POST /api/v1/settings/file-management/uploads` takes an optional `title`. Send one and the
+landlord's documents read "KRA PIN Certificate" rather than `whv-cert-0491.pdf`; omit it and the
+title falls back to the file's own name.
+
+`PATCH /api/v1/settings/file-management/uploads/{upload}` renames one afterwards. It changes only
+the fields the request carries, so a rename need not resend the description.
+
+This matters here because nothing else records what a landlord's document is. The create form's
+`pin_certificate_upload_id` and `incorporation_cert_upload_id` decide **which** uploads to attach;
+they are not stored, so afterwards the title is the only thing that says which file is which - and
+the only thing a user has to go on before pressing delete.
+
+### A landlord registered for VAT needs a tax PIN
+
+`has_vat: true` with no tax PIN - sent or already stored - is refused:
+
+```json
+{ "message": "A landlord registered for VAT needs a tax PIN.",
+  "errors": { "tax_pin": ["A landlord registered for VAT needs a tax PIN."] } }
+```
+
+The same refusal covers clearing the PIN (`"tax_pin": null`) of a landlord already marked for VAT,
+because the check reads the stored flag as well as the payload.
+
+### What this endpoint does not touch
+
+Properties, bank accounts and management contracts are not editable here. Each has its own
+endpoints, and detaching a property from a landlord reaches the leases and management contracts
+under it - rules that are not specified anywhere yet.
+
+### Errors
+
+| Status | When |
+|---|---|
+| `404` | The target user is not in the landlord group |
+| `403` | The caller lacks `update-landlord` |
+| `422` | Validation, including a duplicate email, phone or tax PIN, an upload id that does not exist, or the VAT rule above |
 
 ## Landlord Management Contracts
 
@@ -394,12 +512,6 @@ Example response:
   }
 }
 ```
-
-## Update Landlord
-
-`PUT/PATCH /api/v1/app/{company}/users/landlords/{landlord}`
-
-Route exists via `Route::apiResource(...)`, but `update` is not implemented in `LandlordController`.
 
 ## Status Enum (Returned in Resource)
 

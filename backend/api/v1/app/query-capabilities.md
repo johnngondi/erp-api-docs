@@ -23,6 +23,38 @@ so the rules are the same on every endpoint, in every portal:
 Endpoints that used to default to 15 (facility blocks, wings, floors and spaces, project milestones,
 tasks and updates, the common company and company-user lists) now default to the shared default too.
 
+## Free-text search (`filter[search]`)
+
+Where a list declares a `search` filter, the term is resolved in one of two ways.
+
+**A term that is nothing but an id is answered by the database.** If a record with that id exists
+in the list being searched, that record is the whole result and the search engine is not consulted.
+Pasting an id into a search box is how people say "this record", and returning it alongside
+everything the engine also matched for those digits - an amount, a date, a reference containing
+them - buries the row that was asked for.
+
+**Everything else goes to the engine**, unioned with an id match so a record stays findable by its
+own id when the Meilisearch index is missing or stale:
+
+```sql
+WHERE id IN (engine keys) OR id IN (numeric tokens) OR <per-filter extra matches>
+```
+
+The id lookup is conditional, not absolute, because a numeric term is ambiguous: `1004` is a
+plausible invoice *number* as well as an id. When nothing carries that id the term falls through to
+the union above and is still found as text.
+
+Two further rules:
+
+- The lookup runs against the query **as it stands**, so it respects the company scope and every
+  filter already applied. An id belonging to another company, or outside a status being filtered on,
+  is not a match and the term goes to the engine instead.
+- A **mixed** term such as `1004 acme` is a text search that happens to contain digits. It is not
+  short-circuited, because answering it with one row would drop the half the user typed in words.
+
+Shared implementation: `app/QueryFilters/Concerns/MatchesIdsBeforeSearch.php`, used by the invoice,
+bill, credit note, receipt, lease, remittance, payment voucher, procurement request and LPO filters.
+
 ## Default ordering
 
 A list with no `sort` parameter is returned in a stable order, so pages never overlap or skip rows:
@@ -35,7 +67,8 @@ A list with no `sort` parameter is returned in a stable order, so pages never ov
 | `finance/expenses` | `-created_at, -id` |
 | `finance/settlements` | `-created_at, -id` |
 | `procurement/inventories/purchase-items` | `-created_at, -id` |
-| `users/vendors`, `users/landlords`, `users/tenants` | `name, id` (alphabetical) |
+| `users/vendors`, `users/landlords` | `name, id` (alphabetical) |
+| `users/tenants` | `users.created_at, users.id` (newest first) |
 
 A `sort` parameter replaces the default entirely. `procurement/inventories/purchase-items` also now
 requires the `view-facility-purchase-item` permission, like its other actions.

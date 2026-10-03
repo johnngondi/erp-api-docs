@@ -28,8 +28,29 @@ Base route:
 Supported query params:
 
 - Filters:
-  - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers)
+  - `filter[search]` — free text, and a comma-separated list. See below.
   - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[type]`, `filter[status]`
+  - `filter[contract_id]`, `filter[contract_type]` (`fixed` / `variable`), `filter[lpo_number]`
+
+**Contract and LPO filters.** A bill does not store its contract or LPO; the link is the
+`billable` morph, set when the bill is raised from one. Both filters follow it:
+
+- `filter[contract_type]=fixed` — bills raised against a fixed or variable contract. A bill billed
+  to an LPO, or to nothing, is excluded from both values rather than appearing under one.
+- `filter[lpo_number]=LPO-9001,LPO-9002` — bills raised from those LPOs, matched on the LPO's
+  **document number**, not its id, since that is what appears on the document. Comma-separated, as
+  the search box is. An unknown number returns nothing rather than everything.
+
+**Searching by number.** `filter[search]` takes a comma-separated list, and with more than one
+value it matches a bill id, an **invoice number** or a **CU invoice number** — the same box covers
+all three, so a pasted column of numbers works whichever of them the user copied:
+
+```
+filter[search]=56124,56123
+filter[search]=20482,20469
+```
+
+A single value goes to the search engine, which also reads the notes and the supplier.
 
 **Ids, `status` and `type` match exactly.** They were partial until 2026-09-29, so
 `filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
@@ -121,6 +142,8 @@ party being checked.
   - `sort=id,invoice_number,tax_invoice_number,amount,tax,total,paid,balance,invoice_date,invoice_uploaded_at,expense_posted_at,created_at,updated_at`
 - Include:
   - `include=items`, `include=withholdings`, `include=withholdings.withholdingTax`
+  - `include=expense.remittances`, `include=paymentVouchers.paymentVoucher` — only needed for more
+    detail than the `remittances` / `payment_vouchers` row fields already carry
   - `include=creditNotes` — embeds the credit notes raised against each bill
   - `include=mergedChildren` — embeds the bills merged into this one (see [Merge bills](#merge-bills))
 - Pagination:
@@ -202,6 +225,45 @@ owed to the supplier:
 Both are omitted when `withholdings` is not loaded (e.g. a resource rendered from a create/update
 response).
 
+### Row link fields
+
+The list eager-loads these, so they are on every bill without an `include`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `submitted` | bool | Has the bill reached the expense ledger? True exactly when `posted_at` is set, so the badge and the date beneath it are one fact rather than two that can disagree. |
+| `remittances` | array | The remittances this bill went out on: `[{ id, status: { value, color } }]`. Empty until the bill is posted and remitted. |
+| `payment_vouchers` | array | The vouchers that paid it: `[{ id, transaction_number, status: { value, color } }]`. Empty until paid. |
+| `invoice_upload` | object \| null | The uploaded invoice. `source_url` is the download link. **`null`, never `{}`** — see below. |
+
+Both lists are **lists on purpose**. A bill can be settled by several vouchers, and a voucher that
+holds more than one item for the same bill still appears once. `remittances` is a list for the same
+reason, and both are `[]` rather than absent when there is nothing to link to, so a column never
+has to handle a missing key.
+
+`remittances` is reached through the bill's expense rather than from the bill itself — posting
+creates the expense, and it is the expense that joins the remittance. A bill that has not been
+posted therefore has no remittance by definition, not merely none yet.
+
+**`invoice_upload` is `null` when there is no file**, including when the upload has been deleted
+while the bill still carries its id. It previously came back as `{}` in that case, which reads as a
+file to a caller testing `if (bill.invoice_upload)`. Test for `invoice_upload?.source_url` before
+offering a download.
+
+### KRA verification link
+
+`tax_invoice_number` is the CU invoice number. There is no verify URL on a bill — unlike our own
+invoices and credit notes, a bill's CU number belongs to the supplier and our fiscal device never
+issued it. Build the link client-side:
+
+```
+https://itax.kra.go.ke/KRA-Portal/invoiceChk.htm?actionCode=loadPage&invoiceNo=<tax_invoice_number>
+```
+
+This is display only and changes nothing server-side: `cu_validation_status` and
+`invoice_validation_status` are still checked against KRA on our side, on the usual sweep, and
+remain the authoritative answer. The link is a convenience for a human who wants to look it up.
+
 ### Credit-note indicator fields
 
 Every bill in the list/detail response carries a summary of the **active** (non-cancelled) credit
@@ -282,6 +344,24 @@ All of them return `422` keyed `invoice_upload_id`:
 
 ```json
 { "errors": { "invoice_upload_id": ["A bill cannot be posted to expenses without its invoice document."] } }
+```
+
+### The CU number on a non-vatable bill
+
+`tax_invoice_number` is **not required when the bill charges no VAT** — that is, when `tax_type` is
+`none`. A CU number is issued by a VAT-registered supplier's control unit, so a supplier who
+charges no VAT has none to give, and demanding it did not inconvenience the user: it stopped the
+bill being posted at all.
+
+This holds on every route that posts a bill — creating with `post_direct`, `PUT .../post-bill`, and
+`PUT .../bulk-post-bill`. A bill with `tax_type` of `rate` or `fixed` still requires it, and the
+other invoice fields (`invoice_number`, `invoice_date`, `invoice_upload_id`) are required
+regardless.
+
+On a bulk post the invoice is shared across the set, so the number is still required if **any**
+bill in it charges VAT; only an entirely non-vatable set is excused.
+
+```
 ```
 
 and the posted-bill edit returns

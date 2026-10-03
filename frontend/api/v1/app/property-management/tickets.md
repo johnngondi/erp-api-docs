@@ -93,7 +93,7 @@ Example response:
   "ticket": {
     "id": 901,
     "title": "Water leak at Block A",
-    "priority": { "value": "high", "color": "danger" },
+    "priority": { "value": "high", "color": "danger", "label": "High" },
     "status": { "value": "open", "color": "primary" }
   }
 }
