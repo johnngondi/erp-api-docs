@@ -59,6 +59,7 @@ Sample list response (`FacilityRemittanceResource`):
   "data": [
     {
       "id": 910,
+      "public_url": "https://api.example.com/remittances/Yx3...40 random chars",
       "notes": "May landlord remittance",
       "period_from": {
         "raw": "2026-05-01T00:00:00.000000Z",
@@ -92,6 +93,9 @@ Sample list response (`FacilityRemittanceResource`):
   ]
 }
 ```
+
+`public_url` is the remittance advice page the landlord opens without signing in - see
+[Public Remittance Page](#public-remittance-page).
 
 ## Create/preview payload
 
@@ -277,3 +281,42 @@ removes it outright - the rejection already released what it held.
 Raise a new one for the period instead, which opens its own chain. A rejected remittance does
 not occupy its period, and the receipts and expenses it held are free again, so the new one
 sees them.
+
+## Public Remittance Page
+
+Every remittance has a public link that anyone holding it can open without signing in, for
+example from the message sent to the landlord with a payout. Remittance responses carry it as
+`public_url`:
+
+```json
+{
+  "id": 910,
+  "public_url": "https://api.example.com/remittances/Yx3...40 random chars"
+}
+```
+
+The link ends in a random 40-character token, not the remittance id, so remittance numbers
+cannot be guessed. The token is issued when the remittance is created; remittances that existed
+before this feature were given one by the migration.
+
+These are web pages served by the backend, not JSON endpoints:
+
+| Route | Returns |
+|---|---|
+| `GET /remittances/{token}` | HTML page. The left column shows the remittance number, status, period, month, issue date, whether it is an advance remittance and the currency; the landlord (KRA PIN, phone, email) and the property (address, LR number); a summary of total collections, less expenses, less advance remittances, less withheld and the total remitted; the collections (receipts) and the expenses deducted in the period; who prepared it; and its notes. The right column shows the amount remitted and a **Download** button |
+| `GET /remittances/{token}/pdf` | The remittance advice as a PDF (`inline`, `REM0910.pdf`), printed with the template chosen in the `remittance_advice_template_id` setting (see [Settings](../settings.md)) |
+
+The figures are the same ones the remittance advice PDF prints, so the page and the printout
+never disagree.
+
+Rules:
+
+- An unknown token returns `404`. So does a `pending` remittance, which is still waiting on an
+  approver, and a `rejected` one, which will never be paid out.
+- `unpaid`, `paid` and `cancelled` remittances are shown, with their status badge.
+- **Download** is hidden, and `/pdf` returns `404`, when the company has no active remittance
+  template the remittance's property can use.
+- The PDF template is the one named by the company's `remittance_advice_template_id` setting when
+  it is active and usable by the property; otherwise the property's default remittance template;
+  otherwise the newest active remittance template.
+- Both routes are limited to 60 requests a minute per IP, and are marked `noindex`.

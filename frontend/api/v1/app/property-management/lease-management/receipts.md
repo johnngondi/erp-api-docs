@@ -97,6 +97,7 @@ Example response:
   "message": "Receipt created successfully",
   "receipt": {
     "id": 2501,
+    "public_url": "https://api.example.com/receipts/Yx3...40 random chars",
     "transaction_number": "RCPT-1005",
     "amount": 1102,
     "allocated": 1102,
@@ -339,6 +340,38 @@ Request body:
 ## Withdraw Receipt Dispute
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}/dispute`
+
+## Public Receipt Page
+
+Every receipt has a public link that anyone holding it can open without signing in, for example
+from a payment confirmation SMS or email. Receipt responses carry it as `public_url`:
+
+```json
+{
+  "id": 2501,
+  "public_url": "https://api.example.com/receipts/Yx3...40 random chars"
+}
+```
+
+The link ends in a random 40-character token, not the receipt id, so receipt numbers cannot be
+guessed. The token is issued when the receipt is created; receipts that existed before this
+feature were given one by the migration.
+
+These are web pages served by the backend, not JSON endpoints:
+
+| Route | Returns |
+|---|---|
+| `GET /receipts/{token}` | HTML page. The left column shows the receipt number, status, receipt date, payment method, reference, currency and who served the payment; the payer (KRA PIN, unit, phone, email), the landlord and property, and the bank account the money was paid into (left out when the receipt has none); the payment itself; the invoices it was allocated to (invoice total, amount allocated, invoice balance); and, when the allocation was split by charge, the distribution by component with its total, plus a footer with Amount received and Allocated. Notes on the receipt show in their own card. The right column shows the amount received and a **Download** button |
+| `GET /receipts/{token}/pdf` | The receipt as a PDF (`inline`, `RCP2501.pdf`), printed with the company's default receipt template that the receipt's property can use, else its newest active receipt template |
+
+Rules:
+
+- An unknown token returns `404`. So does a `pending` receipt, since it has not been confirmed
+  yet, and a `rejected` one, which never will be.
+- A `cancelled` receipt is still shown, with its **Cancelled** badge.
+- **Download** is hidden, and `/pdf` returns `404`, when the company has no active receipt
+  template the receipt's property can use.
+- Both routes are limited to 60 requests a minute per IP, and are marked `noindex`.
 
 ## Frontend Error Handling
 

@@ -160,6 +160,7 @@ Example response:
   "message": "Credit note created successfully.",
   "credit_note": {
     "id": 410,
+    "public_url": "https://api.example.com/credit-notes/Yx3...40 random chars",
     "total": 139.2,
     "status": { "value": "pending", "color": "secondary" }
   }
@@ -345,6 +346,12 @@ Reversal fields on the credit note resource:
 | `reversed_invoice_id` | integer\|null | The invoice id when this credit note fully reverses it, otherwise `null`. See [Full reversal or partial credit](#full-reversal-or-partial-credit) |
 | `reissued_invoice_id` | integer\|null | The invoice raised when this signed credit note was cancelled |
 
+Public link field on the credit note resource:
+
+| Field | Type | Notes |
+|---|---|---|
+| `public_url` | string | The page a tenant opens without signing in. See [Public Credit Note Page](#public-credit-note-page) |
+
 ## Delete Credit Note
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}`
@@ -367,6 +374,38 @@ Request body:
 ## Withdraw Credit Note Dispute
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}/dispute`
+
+## Public Credit Note Page
+
+Every credit note has a public link that anyone holding it can open without signing in, for
+example from an SMS or email to the tenant. Credit note responses carry it as `public_url`:
+
+```json
+{
+  "id": 410,
+  "public_url": "https://api.example.com/credit-notes/Yx3...40 random chars"
+}
+```
+
+The link ends in a random 40-character token, not the credit note id, so credit note numbers
+cannot be guessed. The token is issued when the credit note is created; credit notes that existed
+before this feature were given one by the migration.
+
+These are web pages served by the backend, not JSON endpoints:
+
+| Route | Returns |
+|---|---|
+| `GET /credit-notes/{token}` | HTML page. The left column shows the credit note number, date, currency, lease, the invoice it was raised against and its status; the tenant, landlord and property; the ETR (CU invoice number, CU serial number, KRA verify link and QR); the credit lines; the invoice the credit was allocated to (its number, date, total, the amount allocated and the invoice balance); the notes; and a footer with Amount, Tax, Total, Applied and Unapplied. The right column shows the credit total and a **Download** button |
+| `GET /credit-notes/{token}/pdf` | The credit note as a PDF (`inline`, `CN0410.pdf`), printed with the company's default credit note template the credit note's property can use, else its newest active one |
+
+Rules:
+
+- An unknown token returns `404`. So does a `pending` credit note, since it has not been approved
+  yet, and a `rejected` one, which never will be.
+- A `cancelled` credit note is still shown, with its `Cancelled` badge.
+- **Download** is hidden, and `/pdf` returns `404`, when the company has no active credit note
+  template the credit note's property can use.
+- Both routes are limited to 60 requests a minute per IP, and are marked `noindex`.
 
 ## Frontend Error Handling
 

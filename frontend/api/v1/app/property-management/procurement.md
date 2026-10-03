@@ -343,6 +343,7 @@ Loads `currency`, `documentUpload`, `facility`, `expenseType`, `expenseSubType`,
 | Field | Notes |
 |---|---|
 | `id` | - |
+| `public_url` | The LPO's public page, opened without signing in. See [Public LPO Page](#public-lpo-page) |
 | `is_direct` | `true` for an LPO raised through `POST /lpos` |
 | `type` | `work`, `purchase` |
 | `title` | Every LPO: a direct LPO's as entered; a workflow LPO's is copied from its procurement request |
@@ -391,6 +392,40 @@ Success response:
 
 - `message`: `Document accepted!`
 - `lpo`: the updated LPO with `documentUpload`
+
+### Public LPO Page
+
+Every LPO has a public link that anyone holding it can open without signing in, for example the
+supplier the order was sent to. LPO responses carry it as `public_url`:
+
+```json
+{
+  "id": 412,
+  "public_url": "https://api.example.com/lpos/Yx3...40 random chars"
+}
+```
+
+The link ends in a random 40-character token, not the LPO id, so LPO numbers cannot be guessed.
+The token is issued when the LPO is created; LPOs that existed before this feature were given one by
+the migration.
+
+These are web pages served by the backend, not JSON endpoints:
+
+| Route | Returns |
+|---|---|
+| `GET /lpos/{token}` | HTML page. The left column shows the LPO number, title, order date, delivery date, currency and status; the supplier (KRA PIN, phone, email, address) and the property it is delivered to (address, landlord); the line items (quantity, unit price, amount, tax rate, tax, total) with a footer of Amount, Tax and Total; a tax summary per tax type; the approvals (who prepared the LPO and who approved it, with dates); and the notes, when there are any. The right column shows the order total and delivery date, and a **Print LPO** button |
+| `GET /lpos/{token}/pdf` | The LPO as a PDF (`inline`, `LPO0412.pdf`) |
+
+Rules:
+
+- An unknown token returns `404`. So does a `pending` LPO, since it has not been approved yet, and a
+  `rejected` one, which never will be. `lpo` (badge "Issued"), `delivered` and `cancelled` LPOs are shown with their
+  status badge.
+- The PDF prints with the company's default LPO template that the LPO's property can use, else its
+  newest active LPO template the property can use.
+- **Print LPO** is hidden, and `/pdf` returns `404`, when the company has no active LPO template the
+  LPO's property can use.
+- Both routes are limited to 60 requests a minute per IP, and are marked `noindex`.
 
 ## Contracts
 

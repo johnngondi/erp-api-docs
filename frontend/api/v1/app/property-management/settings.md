@@ -351,12 +351,21 @@ PM seeded general settings starter catalog:
 | `default_letting_fee_expense_type` | `finance` | `select` | remote URI array (facility expense types endpoint) | none | Default expense type for letting/reletting fees |
 | `paybill_number` | `finance` | `text` | `null` | none | Company M-Pesa paybill. Printed on invoices (`mobile_money` block) when the property's management contract has `collection_account_holder = agent`, with the invoice number (e.g. `INV0481`) as the account number. Empty (default) = invoices fall back to each pay-to account's bank paybill |
 | `invoice_reminder_template_id` | `finance` | `select` | remote URI array (document templates endpoint, `filter[document_type]=facility_invoice&filter[is_active]=1`) | none | The invoice document template used to print invoice reminders: the **Reprint** button on the public invoice page, and reminder PDFs sent to tenants. Empty (default) = the company's default invoice template for the invoice's property |
+| `payment_voucher_advice_template_id` | `finance` | `select` | remote URI array (document templates endpoint, `filter[document_type]=facility_payment_voucher&filter[is_active]=1`) | none | The payment voucher template used by the public payment voucher page download and when a voucher is sent to the payee: a payment advice layout rather than the internal voucher. Empty (default) = the company's default payment voucher template. A voucher has no property, so only company-wide templates apply |
+| `remittance_advice_template_id` | `finance` | `select` | remote URI array (document templates endpoint, `filter[document_type]=facility_remittance&filter[is_active]=1`) | none | The remittance template used by the public remittance page download and when a remittance is sent to the landlord. Empty (default) = the default remittance template for the remittance's property |
 
-`invoice_reminder_template_id` validation on `PATCH /general/{setting}`: the value must be the id of an
-**active** `facility_invoice` template of the company, or `null` to clear it. Anything else returns `422`
-with `value: "Select an active invoice template."`.
+Template setting validation on `PATCH /general/{setting}`: each of the three template settings must hold
+the id of an **active** template of its own document type belonging to the company, or `null` to clear it.
+Anything else returns `422` on `value`:
 
-Which template a reminder prints with, for one invoice:
+| Key | Document type | Message |
+|---|---|---|
+| `invoice_reminder_template_id` | `facility_invoice` | `Select an active invoice template.` |
+| `payment_voucher_advice_template_id` | `facility_payment_voucher` | `Select an active payment voucher template.` |
+| `remittance_advice_template_id` | `facility_remittance` | `Select an active remittance advice template.` |
+
+Which template a document prints with follows the same order for all three settings (a payment voucher
+has no property, so for it only company-wide templates count). For one invoice:
 
 1. The template in `invoice_reminder_template_id`, when it is still active and usable by the invoice's
    property (company-wide, or its `facility_ids` include the property).
