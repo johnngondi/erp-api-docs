@@ -153,6 +153,7 @@ Create / update payload:
 | `accent_color` | string&#124;null | No | `null` | Hex colour of the printout footer's services strip (documents and report PDF exports); falls back to `COMPANY_ACCENT_COLOR` (`#ed1c24`) |
 | `text_color_on_accent_bg` | string&#124;null | No | `null` | Hex text colour printed on `accent_color`; falls back to `COMPANY_TEXT_COLOR_ON_ACCENT_BG` (`#ffffff`) |
 | `profile_photo_path` | string&#124;int&#124;null | No | `null` | Company logo: the upload `id` from `POST /settings/file-management/uploads` (stored as a string), or a storage path |
+| `light_logo_path` | string&#124;int&#124;null | No | `null` | Light logo drawn on `brand_color` in the header of every email; stored like `profile_photo_path`. Use a PNG or JPG: mail clients do not show SVG. Returned with its resolved `light_logo_url` |
 | `type_of_properties` | array&#124;null | No | `null` | Optional array |
 | `collection_contract` | boolean | No | `false` | Collection contract enabled flag |
 | `registration_type` | string&#124;null | No | `null` | `national_id` or `business_license` or `passport` |

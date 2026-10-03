@@ -9,6 +9,7 @@ Base route:
 - `POST /auth/login`
 - `POST /auth/register`
 - `GET /auth/portals`
+- `POST /auth/password/forgot` and `POST /auth/password/reset` (see [forgot-password.md](forgot-password.md))
 
 ## Protected Endpoints (`auth:sanctum`)
 

@@ -16,6 +16,7 @@ Authentication:
 ## Docs Index
 
 - `docs/frontend/api/v1/common/auth.md`
+- `docs/frontend/api/v1/common/forgot-password.md`
 - `docs/frontend/api/v1/common/listings-search.md`
 - `docs/frontend/api/v1/common/settings.md`
 

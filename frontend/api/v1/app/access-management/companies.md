@@ -68,6 +68,7 @@ Create payload table:
 | `accent_color` | string&#124;null | No | `null` | Hex colour of the printout footer's services strip (documents and report PDF exports); falls back to `COMPANY_ACCENT_COLOR` (`#ed1c24`) |
 | `text_color_on_accent_bg` | string&#124;null | No | `null` | Hex text colour printed on `accent_color`; falls back to `COMPANY_TEXT_COLOR_ON_ACCENT_BG` (`#ffffff`) |
 | `profile_photo_path` | string&#124;int&#124;null | No | `null` | Company logo: the upload `id` from the uploads endpoint, or a storage path. Stored as a string |
+| `light_logo_path` | string&#124;int&#124;null | No | `null` | Light logo, drawn on `brand_color` in the header of every email: the upload `id` from the uploads endpoint, or a storage path. Stored as a string. Use a PNG or JPG; mail clients do not show SVG |
 | `type_of_properties` | array&#124;null | No | `null` | Optional array |
 | `collection_contract` | boolean | No | `false` | Collection contract enabled flag |
 | `registration_type` | string&#124;null | No | `null` | `national_id` or `business_license` or `passport` |
@@ -90,6 +91,7 @@ Logo handling:
 - Upload the file through `POST /api/v1/settings/file-management/uploads`, then send the upload's `id` as `profile_photo_path` (a raw storage path is still accepted). An integer id is stored as its string form, e.g. `13016` → `"13016"`.
 - Send `null` to clear the logo.
 - Responses return both `profile_photo_path` and `profile_photo_url`. For an upload id, `profile_photo_url` is the upload's preview URL; for a path, it is the storage URL; with no logo, it is a generated avatar built from the company name. Document and report PDFs resolve the logo the same way.
+- `light_logo_path` is sent and stored the same way, and returned with its resolved `light_logo_url`. Emails draw it on the brand colour of their header. Without one they put `profile_photo_path` on a white chip, and when neither is a PNG, JPG or GIF they write the company name instead.
 
 ## Update Payload
 
@@ -127,6 +129,8 @@ Company object keys:
 | `text_color_on_accent_bg` | string&#124;null | Always present |
 | `profile_photo_path` | string&#124;null | Always present; `null` when no logo is set |
 | `profile_photo_url` | string | Always present. Resolved by the `HasProfilePhoto` concern: storage URL for `profile_photo_path`, or a generated avatar built from the company name when no logo is set |
+| `light_logo_path` | string&#124;null | Always present; `null` when no light logo is set |
+| `light_logo_url` | string&#124;null | Always present. The upload's preview URL or the storage URL for `light_logo_path`; `null` when none is set (no avatar fallback) |
 | `is_selected` | boolean | |
 | `type_of_properties` | array&#124;null | |
 | `collection_contract` | boolean | |
@@ -141,7 +145,7 @@ Company object keys:
 
 Key presence:
 
-- The profile keys (`postal_address`, `company_phone`, `company_email`, `company_website`, `company_tagline`, `twitter_handle`, `facebook_url`, `services`, `brand_color`, `text_color_on_brand_bg`, `accent_color`, `text_color_on_accent_bg`, `profile_photo_path`) are always returned, `null` when unset — except `services`, which is `[]`.
+- The profile keys (`postal_address`, `company_phone`, `company_email`, `company_website`, `company_tagline`, `twitter_handle`, `facebook_url`, `services`, `brand_color`, `text_color_on_brand_bg`, `accent_color`, `text_color_on_accent_bg`, `profile_photo_path`, `light_logo_path`, `light_logo_url`) are always returned, `null` when unset — except `services`, which is `[]`.
 - `profile_photo_url` is always returned and never `null` (avatar fallback).
 - Other scalar keys use `whenHas`, so they are omitted from the payload when the underlying value is `null`.
 
