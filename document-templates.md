@@ -623,6 +623,17 @@ facility apply. A foreign/missing id returns `422` keyed on `resource_id` with a
 type-specific message from the type's `label` (e.g. `Receipt not found for this
 company.`).
 
+**Statuses that cannot be printed.** Invoices, receipts, credit notes and LPOs
+cannot be printed while they are `pending`, `rejected` or `cancelled`. A render of
+one returns `422` keyed on `resource_id`, e.g. `Invoice #12 is cancelled and cannot
+be printed.` The rule sits on the model: each of the four implements
+`App\Contracts\PrintableDocument` through `App\Models\Concerns\RestrictsPrinting`
+and lists its `UNPRINTABLE_STATUSES`. Both the company render endpoint and the
+portal render endpoint call `DocumentRenderer::ensurePrintable()` before rendering.
+A `?preview=1` render uses sample data, so it is not affected. The public document
+pages are not affected either: they already hide pending and rejected documents
+with a `404`, and still show cancelled ones.
+
 > **Infra:** Browsershot needs Node + Puppeteer/Chrome on the host. Configure via
 > `DOCUMENT_TEMPLATES_NODE_BINARY`, `DOCUMENT_TEMPLATES_NPM_BINARY`,
 > `DOCUMENT_TEMPLATES_CHROME_PATH`, `DOCUMENT_TEMPLATES_PDF_TIMEOUT`.
@@ -756,6 +767,8 @@ and access is enforced by each portal's ownership query (**not** the permission-
   scope (tenant: `lease.user_id`; receipts also via `paying_user_id`; vendor:
   `vendor_id`). A foreign/unknown id returns `404`. The template must also belong to
   the document's company and apply to its facility, else `403`.
+- **Status** — an owned invoice, receipt, credit note or LPO that is `pending`,
+  `rejected` or `cancelled` returns `422` keyed on `resource_id` (see §8).
 - No `?preview=1` here — portals always render a real, owned document. Shared logic
   lives in `App\Http\Controllers\Api\V1\Concerns\PortalDocumentController`; each
   portal subclass only supplies its `scopes()` map.

@@ -773,6 +773,10 @@ POST …/document-templates/{id}/render
   error keyed on `resource_id` and a type-specific message (e.g. `Receipt not
   found for this company.`). The legacy `model_id` key is still accepted as a
   fallback.
+- An invoice, receipt, credit note or LPO that is `pending`, `rejected` or
+  `cancelled` cannot be printed. The render returns `422` keyed on `resource_id`,
+  e.g. `Invoice #12 is cancelled and cannot be printed.` Hide or disable the print
+  action for those statuses. `?preview=1` is not affected.
 - For a live designer preview, save (or use a transient render of) the current
   layout, then hit `?preview=1&format=html` and drop the HTML into an iframe.
   The preview's `sample.company` reflects the current company's real letterhead

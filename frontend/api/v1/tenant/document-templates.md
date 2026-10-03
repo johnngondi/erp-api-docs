@@ -91,6 +91,10 @@ document.
 - `403` — the template's `document_type` is not printable by the tenant portal,
   or the template does not belong to the document's company / facility.
 - `404` — the `resource_id` is not a document this tenant owns.
+- `422` — the invoice, receipt or credit note is `pending`, `rejected` or
+  `cancelled`, so it cannot be printed. The error is keyed on `resource_id`, e.g.
+  `{ "errors": { "resource_id": ["Invoice #12 is cancelled and cannot be printed."] } }`.
+  Hide or disable the print action for those statuses.
 
 ### Notes
 

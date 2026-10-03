@@ -87,6 +87,10 @@ There is no `?preview=1` here — the vendor always prints a real, owned documen
 - `403` — the template's `document_type` is not printable by the vendor portal,
   or the template does not belong to the LPO's company / facility.
 - `404` — the `resource_id` is not an LPO addressed to this vendor.
+- `422` — the LPO is `pending`, `rejected` or `cancelled`, so it cannot be printed.
+  The error is keyed on `resource_id`, e.g.
+  `{ "errors": { "resource_id": ["LPO #93 is cancelled and cannot be printed."] } }`.
+  Hide or disable the print action for those statuses.
 
 ### Notes
 
