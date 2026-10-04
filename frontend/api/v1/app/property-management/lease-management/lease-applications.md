@@ -197,7 +197,9 @@ from the selected `facility_id`. Documents are not part of this payload.
 
 Staff correct an application on the applicant's behalf with the same body as the
 applicant's update; the same rules apply to each field. `status` is never read from
-this payload. Use [Review Application](#review-application) to decide one.
+this payload. One difference: `residential_unit_types` is optional here for every
+application. Leaving it out keeps the recorded unit types and the space allocation as
+they are, which is what an application with allocated spaces but no unit types needs. Use [Review Application](#review-application) to decide one.
 
 **Who and when.** It needs `update-lease-application`, the application's property must
 be allocated to the caller, and the application must be **open** (`pending` or
