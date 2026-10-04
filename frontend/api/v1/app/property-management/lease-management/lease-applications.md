@@ -110,8 +110,8 @@ Request body:
 | `generator_required` | No | boolean | Defaults to `true` |
 | `occupants` | No | integer | `0`–`100` |
 | `space_size` | No | integer | `0`–`1,000,000` |
-| `residential_unit_types` | Yes | array | One or more requested unit types, each with a facility-level `FacilityResidentialUnit` `id` and a positive integer `quantity`. Each unit type must belong directly to `facility_id`. |
-| `applicant_postal_code` | No | string | The postal code that goes with `applicant_postal_address`. Printed by `{{tenant_postal_code}}`. |
+| `residential_unit_types` | Yes, except on a renewal | array | One or more requested unit types, each with a facility-level `FacilityResidentialUnit` `id` and a positive integer `quantity`. Each unit type must belong directly to `facility_id`. |
+| `applicant_postal_code` | No | string \| null | The postal code that goes with `applicant_postal_address`. Printed by `{{tenant_postal_code}}`. |
 | `is_renewal` | No | boolean | Defaults to `false`. `true` asks to renew an existing lease — see [Renewal applications](#renewal-applications). |
 | `lease_id` | Required when `is_renewal` is `true` | integer | The lease being renewed. Must exist, belong to the same company as `facility_id`, and be held by the applicant. Must be absent or `null` when `is_renewal` is `false`. |
 | `fit_out_period_months` | No | integer | `0`–`120`. Months the tenant has to fit out before rent starts. Feeds the fit-out tags on the offer. |
@@ -228,12 +228,17 @@ ordinary application with two extra fields:
 lease must be held by the applicant (`lease.user_id` = the application's `user_id`).
 Otherwise the request fails with `422` on `lease_id`.
 
+`residential_unit_types` is optional on a renewal: the units being renewed are the
+lease's, and the property may have nothing listed for application. A renewal sent
+without unit types gets no automatic space allocation; staff allocate its spaces. The
+staff edit may resend `is_renewal` and `lease_id` unchanged.
+
 A renewal is reviewed exactly like any other application. The Letter of Offer
 generated from it has `type` `renewal` rather than `new lease`, and is prepared from
 the application, so every applicant-side tag prints from the application as it does for
 a new lease.
 
-The response carries `is_renewal`, `lease_id`, and `lease` (`{ id, ... }`) when loaded.
+The response carries `is_renewal`, `lease_id`, and `lease` (`{ id, ... }`). `lease` is always loaded on `GET .../{application}` (both surfaces) and is opt-in on the list with `include=lease`.
 
 > **Not yet:** a signed renewal offer cannot be promoted. `POST .../loos/{loo}/promote`
 > still refuses anything but a `new lease` offer, so a renewal stops at `accepted`.
@@ -253,6 +258,8 @@ of these are optional, all are written on create and update, and all are returne
 | Previous landlord | `previous_landlord_name`, `_address`, `_city`, `_email`, `_phone`, `_contact_person` |
 | Referral | `referral_source`, `referrer_name`, `referrer_email`, `referral_notes` |
 | Tenancy | `fit_out_period_months`, `billing_cycle` |
+
+Every one of them accepts `null` on create and update, which clears it.
 
 `gender`, `marital_status`, `referral_source` and `billing_cycle` come back as
 `{ "value", "color" }`; `date_of_birth` as `raw` / `formatted` / `diff`.
@@ -546,8 +553,8 @@ itself via `include=guarantors`.
 | `id_upload_id` | No | integer | Guarantor's ID document. Must exist in `uploads.id` |
 | `tax_pin_upload_id` | No | integer | Guarantor's tax PIN certificate. Must exist in `uploads.id` |
 | `financial_statement_upload_id` | No | integer | Feeds the income-to-rent score. Must exist in `uploads.id` |
-| `postal_address` | No | string | The guarantor's postal address (P.O. Box) |
-| `city` | No | string | |
+| `postal_address` | No | string \| null | The guarantor's postal address (P.O. Box) |
+| `city` | No | string \| null | |
 
 ```json
 {
