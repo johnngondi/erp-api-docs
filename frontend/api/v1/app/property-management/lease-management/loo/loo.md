@@ -619,6 +619,10 @@ offer is issued and an agreement is executed. `format` is `pdf` (default) or
 `html`; both come off one renderer, so the preview pane and the tenant's copy
 cannot drift.
 
+The rendered document is the editor content and nothing else: no letterhead, title,
+reference line or footer is added around it. Write those into the template (the
+`{{our_ref}}` and `{{offer_date}}` tags are there for the reference line).
+
 Gated on the approval chain. A file, once produced, gets forwarded.
 
 The response is the file. `X-Loo-Unresolved-Tags` names any token the render left
