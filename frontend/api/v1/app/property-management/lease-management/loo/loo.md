@@ -647,6 +647,9 @@ notifies the tenant (database, plus mail where there is an address). An `email`
 overrides the address on file — an agent, a company secretary — and is recorded
 either way, so what happened is on the document rather than in someone's mailbox.
 
+The email carries the filed PDF as an attachment, the same file the tenant portal's
+download serves.
+
 Re-sending a `sent` offer is allowed; a lost email is a real thing. Once the
 tenant has answered it is refused, because a second copy arriving after an answer
 invites a second answer.

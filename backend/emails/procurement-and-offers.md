@@ -58,7 +58,13 @@ otherwise database, plus mail when the tenant has an address.
 Content: title `LETTER OF OFFER`; eyebrow (property name) over "Your Letter of Offer is ready";
 "{company} has issued a Letter of Offer for {property}", the sender's optional note, and "Sign in
 to your tenant portal to read it and record your acceptance"; a card with the reference
-(`our_ref`) and property; the button; a note that the offer is not attached.
+(`our_ref`) and property; the button; a closing note.
+
+The offer is **attached**: the PDF `SendLooAction` filed as the Loo's `document_upload_id` (the
+same file the tenant portal's download serves, never a fresh render), under its stored file name.
+Every recipient gets it, an on-demand one included. When that file cannot be read the email
+still goes without it, and the note sends the reader to the portal instead of saying it is
+attached.
 
 - An account holder's button is **Read and respond** → `tenant.loo` with the offer's id.
 - An on-demand recipient (`AnonymousNotifiable`: an applicant with no portal login, or a copy
