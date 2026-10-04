@@ -201,7 +201,9 @@ this payload. Use [Review Application](#review-application) to decide one.
 
 **Who and when.** It needs `update-lease-application`, the application's property must
 be allocated to the caller, and the application must be **open** (`pending` or
-`review`). An `approved` or `rejected` application returns `403`. It is the same window
+`review`). An `approved` or `rejected` application returns `403`. The application's
+`permissions.staffUpdate` flag says whether the caller may edit it right now; show
+the Edit action only when it is `true`. It is the same window
 [spaces](#when-the-allocation-may-be-changed) and [documents](#submit-a-document)
 already follow: the decision was made against what the application said.
 
