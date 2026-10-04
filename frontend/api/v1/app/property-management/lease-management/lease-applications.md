@@ -896,7 +896,8 @@ The applicant never gets the task.
 
 The setting's options list follows the scope: the reviewer setting offers
 `access-management/roles?filter[enforce_on_facility]=1`, and the LOO generation setting
-offers every app staff role.
+offers every app staff role (`access-management/roles?filter[user_group_id]={app group id}`).
+Saving a role outside those lists is refused with `422`.
 
 ## Delete Application
 
