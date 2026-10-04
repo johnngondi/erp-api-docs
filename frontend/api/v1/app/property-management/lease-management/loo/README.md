@@ -69,7 +69,7 @@ touching the clause it appears in. Rendering merges the two at request time.
 | `type` | Prepared from | Colour |
 |---|---|---|
 | `new lease` | a `LeaseApplication` | `success` |
-| `renewal` | the existing `Lease` | `info` |
+| `renewal` | the existing `Lease`, or a `LeaseApplication` with `is_renewal` | `info` |
 | `addendum` | the existing `Lease` | `secondary` |
 
 `status` — `App\Enums\LooStatus`. Serialised as `{ "value", "color" }` like every

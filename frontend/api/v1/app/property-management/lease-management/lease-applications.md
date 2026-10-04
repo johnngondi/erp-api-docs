@@ -23,6 +23,7 @@ Staff (this domain):
 
 - `GET /lease-applications`
 - `GET /lease-applications/{application}`
+- `PUT/PATCH /lease-applications/{application}` — staff edit, while the application is open (see [Staff edit](#staff-edit))
 - `DELETE /lease-applications/{application}`
 - `PATCH /lease-applications/{application}/review`
 - `GET /lease-applications/{application}/vetting-results` — staff-only vetting summary
@@ -68,8 +69,11 @@ Supported query params:
   - `filter[parking_required]`
   - `filter[generator_required]`
   - `filter[registration_type]`
+  - `filter[is_renewal]`
+  - `filter[lease_id]`
+  - `filter[referral_source]`
   - `filter[created_at]`
-- Includes: `include=guarantors`, `documents`, `documents.upload`, `facility`, `residentialUnitTypes`
+- Includes: `include=guarantors`, `documents`, `documents.upload`, `facility`, `residentialUnitTypes`, `lease`
 - Sort: `sort=id,created_at,application_submitted_at,proposed_start_date,reviewed_at`
 - Pagination: `per_page`, `page`
 
@@ -107,6 +111,31 @@ Request body:
 | `occupants` | No | integer | `0`–`100` |
 | `space_size` | No | integer | `0`–`1,000,000` |
 | `residential_unit_types` | Yes | array | One or more requested unit types, each with a facility-level `FacilityResidentialUnit` `id` and a positive integer `quantity`. Each unit type must belong directly to `facility_id`. |
+| `applicant_postal_code` | No | string | The postal code that goes with `applicant_postal_address`. Printed by `{{tenant_postal_code}}`. |
+| `is_renewal` | No | boolean | Defaults to `false`. `true` asks to renew an existing lease — see [Renewal applications](#renewal-applications). |
+| `lease_id` | Required when `is_renewal` is `true` | integer | The lease being renewed. Must exist, belong to the same company as `facility_id`, and be held by the applicant. Must be absent or `null` when `is_renewal` is `false`. |
+| `fit_out_period_months` | No | integer | `0`–`120`. Months the tenant has to fit out before rent starts. Feeds the fit-out tags on the offer. |
+| `nature_of_business` | No | string | What the applicant will use the premises for. Printed by `{{nature_of_business}}`. |
+| `billing_cycle` | No | string | `monthly`, `quarterly`, `biannual` or `annually`. How often the tenancy will be billed. Copied onto the lease when the offer is promoted. |
+| `industry` | No | string | The applicant's industry, as free text. |
+| `referral_source` | No | string | How the applicant heard of the property: `staff`, `agent`, `social_media`, `website`, `billboard` or `other` |
+| `referrer_name` | No | string | Who referred them, where there was a person |
+| `referrer_email` | No | email | |
+| `referral_notes` | No | string | |
+| `date_of_birth` | No | date (`YYYY-MM-DD`) | Personal applicants |
+| `gender` | No | string | `male`, `female` or `other` |
+| `marital_status` | No | string | `single`, `married`, `divorced`, `widowed` or `other` |
+| `children_count` | No | integer | `0`–`50` |
+| `occupation` | No | string | |
+| `position` | No | string | The applicant's position at work |
+| `citizenship` | No | string | |
+| `current_residence` | No | string | Where the applicant lives now |
+| `previous_landlord_name` | No | string | The applicant's current or most recent landlord |
+| `previous_landlord_address` | No | string | |
+| `previous_landlord_city` | No | string | |
+| `previous_landlord_email` | No | email | |
+| `previous_landlord_phone` | No | string | |
+| `previous_landlord_contact_person` | No | string | |
 | `status` | No | string | Defaults to `pending` |
 | `comments` | No | string | |
 | `application_submitted_at` | No | date | Defaults to now |
@@ -161,6 +190,84 @@ application first, then submit each document to
 Accepts the same body as create. `residential_unit_types` replaces the current
 unit-type requests as a full sync, and the application company is refreshed
 from the selected `facility_id`. Documents are not part of this payload.
+
+### Staff edit
+
+`PUT/PATCH /api/v1/app/{company}/property-management/lease-management/lease-applications/{application}`
+
+Staff correct an application on the applicant's behalf with the same body as the
+applicant's update; the same rules apply to each field. `status` is never read from
+this payload. Use [Review Application](#review-application) to decide one.
+
+**Who and when.** It needs `update-lease-application`, the application's property must
+be allocated to the caller, and the application must be **open** (`pending` or
+`review`). An `approved` or `rejected` application returns `403`. It is the same window
+[spaces](#when-the-allocation-may-be-changed) and [documents](#submit-a-document)
+already follow: the decision was made against what the application said.
+
+**Effect.** As with the applicant's own edit, saving sends the application back to
+`pending` for the reviewer to look at again. Any earlier review comment is cleared, and
+the review task is raised again for the reviewer role (see
+[Review Application](#review-application)). Every change is recorded in the activity log.
+
+Response `200`: `{ "message": "Lease Application updated successfully.", "data": { ...the application } }`
+
+## Renewal applications
+
+A renewal application asks to renew a lease the applicant already holds. It is an
+ordinary application with two extra fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `is_renewal` | boolean | `true` for a renewal |
+| `lease_id` | integer \| null | The lease being renewed. Required when `is_renewal` is `true` |
+
+`lease_id` must belong to the same company as the application's `facility_id`, and the
+lease must be held by the applicant (`lease.user_id` = the application's `user_id`).
+Otherwise the request fails with `422` on `lease_id`.
+
+A renewal is reviewed exactly like any other application. The Letter of Offer
+generated from it has `type` `renewal` rather than `new lease`, and is prepared from
+the application, so every applicant-side tag prints from the application as it does for
+a new lease.
+
+The response carries `is_renewal`, `lease_id`, and `lease` (`{ id, ... }`) when loaded.
+
+> **Not yet:** a signed renewal offer cannot be promoted. `POST .../loos/{loo}/promote`
+> still refuses anything but a `new lease` offer, so a renewal stops at `accepted`.
+> Promotion for renewals is a separate piece of work.
+
+## Applicant profile
+
+Besides the fields the offer prints, an application can carry the applicant's
+personal details, their current or previous landlord, and how they were referred. All
+of these are optional, all are written on create and update, and all are returned on
+**both** surfaces. Nothing in the workflow depends on them.
+
+| Group | Fields |
+|---|---|
+| Personal | `date_of_birth`, `gender`, `marital_status`, `children_count`, `occupation`, `position`, `citizenship`, `current_residence` |
+| Business | `nature_of_business`, `industry` |
+| Previous landlord | `previous_landlord_name`, `_address`, `_city`, `_email`, `_phone`, `_contact_person` |
+| Referral | `referral_source`, `referrer_name`, `referrer_email`, `referral_notes` |
+| Tenancy | `fit_out_period_months`, `billing_cycle` |
+
+`gender`, `marital_status`, `referral_source` and `billing_cycle` come back as
+`{ "value", "color" }`; `date_of_birth` as `raw` / `formatted` / `diff`.
+
+```json
+{
+  "nature_of_business": "Retail pharmacy",
+  "industry": "Healthcare",
+  "fit_out_period_months": 3,
+  "billing_cycle": { "value": "quarterly", "color": "info" },
+  "referral_source": { "value": "agent", "color": "info" },
+  "referrer_name": "Jane Agent",
+  "previous_landlord_name": "Acme Properties",
+  "date_of_birth": null,
+  "gender": null
+}
+```
 
 ## Proposed start date
 
@@ -437,6 +544,8 @@ itself via `include=guarantors`.
 | `id_upload_id` | No | integer | Guarantor's ID document. Must exist in `uploads.id` |
 | `tax_pin_upload_id` | No | integer | Guarantor's tax PIN certificate. Must exist in `uploads.id` |
 | `financial_statement_upload_id` | No | integer | Feeds the income-to-rent score. Must exist in `uploads.id` |
+| `postal_address` | No | string | The guarantor's postal address (P.O. Box) |
+| `city` | No | string | |
 
 ```json
 {
@@ -457,10 +566,12 @@ itself via `include=guarantors`.
 |---|---|---|
 | `id` | integer | |
 | `name` | string | |
-| `email_address` | string | |
+| `email_address` | string \| null | |
 | `phone_number` | string | |
-| `registration_type` | string | `national_id`, `business_license` or `passport` |
-| `registration_number` | string | |
+| `registration_type` | string \| null | `national_id`, `business_license` or `passport` |
+| `registration_number` | string \| null | |
+| `postal_address` | string \| null | |
+| `city` | string \| null | |
 | `registration_upload` | object \| null | `UploadResource` |
 | `id_upload` | object \| null | `UploadResource` |
 | `id_status` | object \| null | `{ "value", "color" }` — `pending` / `verified` / `failed` |
@@ -488,6 +599,11 @@ itself via `include=guarantors`.
   "financial_statement_upload": null
 }
 ```
+
+`email_address`, `registration_type`, `registration_number` and `registration_upload`
+can be `null` on a guarantor recorded before documents were collected for guarantors
+(for example, one carried over from the previous system). Writes still require them, so
+any edit through this endpoint has to supply them.
 
 `id_status`/`id_reason` and `tax_pin_status`/`tax_pin_reason` are **read-only** —
 they are written by the verification pipeline, not by the client, and are `null`
@@ -755,6 +871,31 @@ Staff-only. Request body:
 
 Approving or rejecting records the review outcome for the application.
 
+### Who is asked to act
+
+Each step raises a pending task for the people the company settings name:
+
+| Application status | Task | Goes to |
+|---|---|---|
+| `pending` | Review lease application | Holders of the **Lease Application Reviewer Role** (`lease_application_reviewer_role_id`) **on the application's property** |
+| `approved` | Generate Letter of Offer | Holders of the **Letter of Offer Generation Role** (`loo_generation_role_id`) |
+
+The two settings differ in scope:
+
+- **The reviewer role is a property role** (`enforce_on_facility` true). The task goes
+  only to whoever holds it on the property applied for.
+- **The LOO generation role can be any staff role.** A property role works as above. A
+  company-wide role (`enforce_on_facility` false) sends the task to every active member
+  of the company who holds it, whatever the property. **Agency**, the default, is
+  company-wide: agency staff work across every property.
+
+If nobody qualifies, the task falls back to everyone holding any role on the property.
+The applicant never gets the task.
+
+The setting's options list follows the scope: the reviewer setting offers
+`access-management/roles?filter[enforce_on_facility]=1`, and the LOO generation setting
+offers every app staff role.
+
 ## Delete Application
 
 `DELETE .../lease-applications/{application}`
@@ -776,6 +917,8 @@ Two different things are easy to confuse, so to state the split once:
 | `proposed_period_in_years`, `proposed_period_in_months` | Yes | Yes |
 | `escalations` (the schedule the offer is priced against) | Yes, read and write | Read only |
 | `bank_account_name`, `bank_account_number`, `bank_branch_id` | Yes | Yes |
+| `is_renewal`, `lease_id` | Yes | Yes |
+| [Applicant profile](#applicant-profile) fields | Yes | Yes |
 | Raw AI extraction and iTax cross-check output | **Never** | **Never** |
 
 **Vetting** is the server's assessment *of* the applicant — an affordability

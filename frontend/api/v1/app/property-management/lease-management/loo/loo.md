@@ -412,11 +412,14 @@ Base: `api/v1/app/{company}/property-management/lease-management`
 | `POST` | `leases/{lease}/loos` | `generate-loo` |
 
 Two entry points because the thing being offered against is genuinely different:
-an application yields a `new lease`, a lease a `renewal` or an `addendum`. This
+an application yields a `new lease` (a `renewal` when the application has
+`is_renewal`), a lease a `renewal` or an `addendum`. This
 is the **only** step that needs to know the source — everything after it is a
 `{loo}`. Body: `{ "loo_template_id": 4, "type": "renewal" }`, both optional
-(`type` is ignored on the application route, which can only produce a
-`new lease`).
+(`type` is ignored on the application route, which produces a `new lease`, or a
+`renewal` for a [renewal application](../lease-applications.md#renewal-applications)).
+A renewal prepared from an application reads its tags from the application, like a
+`new lease`.
 
 The response carries the offer, its resolved tags, and what the registry
 deliberately did not resolve:
