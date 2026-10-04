@@ -680,7 +680,8 @@ else does: `cost_per_space_unit` → `cost_per_sqft`, `amount` → `cost_per_mon
 both still net of tax.
 
 `billing_cycle` is asked for because a LOO prices a tenancy per period but no
-column on it says how often that is billed; it defaults to `monthly`. `start_at`
+column on it says how often that is billed. Left out, it defaults to the
+application's own `billing_cycle`, and to `monthly` when the application has none. `start_at`
 overrides the proposed start, for the ordinary case of a tenancy agreed in March
 and signed in April. `currency_id` defaults to the property's reporting currency,
 and is left null when the property records none rather than guessing one.
