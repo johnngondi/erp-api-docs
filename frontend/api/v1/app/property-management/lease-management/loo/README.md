@@ -100,9 +100,9 @@ document in [loo.md](./loo.md).
 ## The tag registry
 
 `loo_tags` is a **system-wide** catalogue (not per-company) of the tokens a
-template author can drag into clause text. 62 tags across nine categories.
+template author can drag into clause text. 82 tags across nine categories.
 
-> **Looking for a particular tag?** [loo-tags.md](./loo-tags.md) lists all 62 with
+> **Looking for a particular tag?** [loo-tags.md](./loo-tags.md) lists all 82 with
 > their names, descriptions and the exact source each one resolves from. This
 > section describes the registry's shape; that one is its contents.
 
@@ -134,13 +134,13 @@ Categories (`App\Enums\LooTagCategory`), with how many tags each holds:
 | `category` | Label | Tags |
 |---|---|---|
 | `header` | Header | 2 |
-| `parties` | Parties | 5 |
+| `parties` | Parties | 10 |
 | `property` | Property | 7 |
-| `lease_terms` | Lease Terms | 12 |
-| `financials` | Financials | 17 |
+| `lease_terms` | Lease Terms | 19 |
+| `financials` | Financials | 20 |
 | `legal` | Legal | 7 |
 | `execution` | Execution & Signatures | 5 |
-| `banking` | Banking | 3 |
+| `banking` | Banking | 8 |
 | `system` | System | 4 |
 
 `system` tags (`id`, `type`, `loo_preparation_type`, `loo_preparation_id`) are
@@ -150,8 +150,10 @@ used in real templates and can reasonably be hidden or collapsed in the sidebar.
 ### Two source paths per tag
 
 Most tags read the LOO itself or the facility and resolve identically whichever
-record the LOO came from — those carry `lease_maps_to: null`. Ten tags differ,
-because a renewal has no application to read:
+record the LOO came from — those carry `lease_maps_to: null`. Twelve tags differ,
+because a LOO prepared from a lease has no application to read. Which path applies is
+decided by what the LOO was **prepared from** (`loo_preparation_type`), not by its
+`type`: a `renewal` prepared from a renewal application reads `maps_to` like a new lease.
 
 | `key` | `maps_to` (new lease) | `lease_maps_to` (renewal / addendum) |
 |---|---|---|
@@ -165,6 +167,8 @@ because a renewal has no application to read:
 | `bank` | `lease_application.bankBranch` | `lease.user.leaseApplications.bankBranch` |
 | `bank_account_name` | `lease_application.bank_account_name` | `lease.user.leaseApplications.bank_account_name` |
 | `bank_account_number` | `lease_application.bank_account_number` | `lease.user.leaseApplications.bank_account_number` |
+| `tenant_email` | `lease_application.applicant_contact_email` | `lease.user.email` |
+| `billing_cycle` | `lease_application.billing_cycle` | `lease.billing_cycle` |
 
 The tenant of a renewal is **the user holding the lease**. Name and start date
 come straight off the lease and its user. Address, guarantors and bank details
@@ -197,7 +201,7 @@ data underneath a LOO moves.
 $service->resolve($loo);                       // read only
 $service->resolveAndStore($loo);               // generation
 $service->refreshSpaceDerived($loo);           // after a space is added or removed
-$service->pendingConfirmation($loo->type);     // what it will not resolve, and why
+$service->pendingConfirmation($loo);     // what it will not resolve, and why
 ```
 
 **Where a value comes from** is the LOO's `loo_preparation_type`. A `maps_to` is a
@@ -241,9 +245,7 @@ reviewer can fill by hand.
 
 | `key` | Unresolved on | Why |
 |---|---|---|
-| `rent_review` | both | The escalation *schedule* is recorded, but nothing records what the clause should say about the review basis |
-| `landlord_address` | both | Neither `users` nor `landlord_default_accounts` carries an address |
-| `tenant_address`, `guarantors`, `bank`, `bank_account_name`, `bank_account_number` | `renewal` / `addendum` | Their `lease_maps_to` routes back through the lease holder's own applications, and which application wins is undecided |
+| `tenant_address`, `guarantors`, `bank`, `bank_account_name`, `bank_account_number` | prepared from a lease | Their `lease_maps_to` routes back through the lease holder's own applications, and which application wins is undecided |
 
 The last row is matched against the registry rather than hard-coded, so the day a
 confirmed `lease_maps_to` is seeded those tags start resolving with no code change.
@@ -264,13 +266,6 @@ finished:
   the lease holder's own application. If a lease holder has more than one
   application, which one wins is undecided — and an address on `users` may be the
   better answer.
-- **`landlord_address`.** Mapped to `facility.landlord.address`, which has nothing
-  behind it — `users` has no address column and neither does
-  `landlord_default_accounts`. Left unresolved until a source is agreed.
-- **`rent_review`.** No column on a lease application or a lease records an
-  escalation or rent-review *basis* in prose. The schedule itself is now recorded
-  (`lease_application_escalations`), but what the clause should say about it is not,
-  so the tag is left unresolved and filled by hand.
 - **"Suggesting" mode and the "Agent" toolbar button** in the editor designs.
   Neither has any backend scoped, and Ticket 4 deliberately did not build one —
   storing suggested edits and an AI clause-drafting endpoint are both real
@@ -282,7 +277,7 @@ finished:
 
 ## Related
 
-- [Tag reference](./loo-tags.md) — all 62 tags, and how each resolves
+- [Tag reference](./loo-tags.md) — all 82 tags, and how each resolves
 - [LOO templates](./loo-templates.md) — the clause text a LOO is drafted from
 - [LOO document](./loo.md) — granted spaces, the rent schedule, and approval
 - [Lease Applications API](../lease-applications.md) — `proposed_start_date` and
