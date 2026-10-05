@@ -9,6 +9,11 @@ Base prefix:
 Utility meters are now a standalone resource (no longer nested under a specific
 facility). The owning facility is supplied in the payload via `facility_id`.
 
+A meter is linked to **leases**, not spaces. A meter can serve several leases (its
+consumption is then split between them by leased area during utility billing) and a lease
+can have several meters. Meters are never generated automatically: the facility flag
+`auto_generate_utility_meters` is ignored.
+
 ## Utility Meters
 
 Endpoints:
@@ -28,6 +33,9 @@ List query support:
   - `filter[search]` (Scout-backed search across meter number, serial number, name, and the related facility/utility names; supports CSV IDs)
   - `filter[meter_number]`, `filter[meter_serial_number]`, `filter[name]`
   - `filter[utility_id]`, `filter[facility_id]`, `filter[reading_unit_id]`, `filter[status]`, `filter[created_at]`
+  - `filter[lease_id]` — meters attached to that lease (used by the lease details **Meters** tab)
+- Includes:
+  - `include=leases` — each lease comes with its tenant (`leases[].user`)
 - Sort:
   - `sort=meter_number,meter_serial_number,name,utility_id,facility_id,reading_unit_id,status,created_at`
 
@@ -43,7 +51,7 @@ Create/Update payload (`UtilityMeterData`):
 | `utility_id` | Yes | integer | `lease_components.id` — populate the picker from lease components where `is_utility_charge = true`. |
 | `reading_unit_id` | Yes | integer | `stock_keeping_units.id` (SKU). |
 | `initial_reading` | Yes | number | Decimal, stored with 5 dp. Seeds `last_reading` on create. |
-| `space_ids` | No | integer[] | Nullable. Each must exist in `facility_spaces.id`. Synced as a many-to-many relationship; send the full desired set on update. |
+| `lease_ids` | No | integer[] | Nullable. Each must be a `leases.id` on the same `facility_id`. Synced as a many-to-many relationship; send the full desired set on update (omit the key to leave the leases untouched). |
 | `status` | No | string | `active`, `inactive` (defaults to `active`). |
 
 Example create payload:
@@ -55,7 +63,7 @@ Example create payload:
     "name": "Main Utility Meter",
     "description": "This is the main utility meter for the facility.",
     "facility_id": 1,
-    "space_ids": [1, 2],
+    "lease_ids": [4017, 4022],
     "utility_id": 1,
     "reading_unit_id": 2,
     "initial_reading": "5667788989.023"
@@ -65,7 +73,7 @@ Example create payload:
 Response (`data`):
 
 - `message`
-- `utility_meter` — includes `utility` (lease component), `facility`, `reading_unit` (SKU), `spaces`, `last_reading`, `last_reading_at`, `last_reading_image`, `reading_status`, `submitted_at`, `is_faulty`, `fault_reason`, and `permissions`.
+- `utility_meter` — includes `utility` (lease component), `facility`, `reading_unit` (SKU), `leases` (each with its tenant `user`), `last_reading`, `last_reading_at`, `last_reading_image`, `reading_status`, `submitted_at`, `is_faulty`, `fault_reason`, and `permissions`.
 
 `last_reading` tracks the latest recorded reading. It is set to `initial_reading`
 when the meter is created (with `last_reading_at` null, since no reading exists yet)
@@ -171,6 +179,25 @@ Each reading exposes `is_faulty` and `fault_reason` in its resource (so faults h
 history). The parent meter resource exposes `is_faulty` and `fault_reason` too
 (reflecting the latest reading); while `is_faulty` is `true`, billing should estimate
 the meter's consumption rather than trust the recorded reading.
+
+## Importing meters from a spreadsheet
+
+Meters can be loaded in bulk from an `.xlsx` with the console command:
+
+```
+php artisan utility-meters:import {file} {utility} {sku} [--dry-run]
+```
+
+- `utility` is a `lease_components.id` flagged `is_utility_charge` (e.g. Electricity), and
+  `sku` the `stock_keeping_units.id` of the reading unit (e.g. `KILOWATT_HOUR`).
+- The sheet's heading row must carry `Property`, `Tenant`, `Lease ID` and `Current Reading`.
+- Every row becomes one meter on the row's lease and that lease's facility. It is named after
+  the `Tenant` cell and numbered `{UTILITY}-{lease id}-{n}` (both `meter_number` and
+  `meter_serial_number`), `n` being the row's position among that lease's rows.
+- `Current Reading` becomes the meter's `initial_reading` (and so its `last_reading`); a blank
+  one becomes `0`. No reading row is created, so the first bill measures from that value.
+- A row with a missing or unknown lease is skipped and reported. A row whose meter number
+  already exists is skipped, so the command can be re-run safely. `--dry-run` writes nothing.
 
 ## Permissions
 

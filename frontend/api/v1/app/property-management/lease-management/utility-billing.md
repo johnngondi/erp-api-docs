@@ -186,20 +186,21 @@ Rows are **per lease**, never per meter — `summary.total_rows` counts leases.
   leases in that group), so the split is easy to read without hunting across the table.
   Leases with a meter of their own keep their natural position and get their own
   `meter_group` with an empty `shared_with_lease_ids`.
-- **`lease.spaces`** lists only the spaces a meter for the selected utility is attached to —
-  other spaces on the lease are omitted. Each entry carries the `meter_number` serving it.
+- **`lease.spaces`** lists the spaces the lease holds (from its lease items), and
+  **`lease.meters`** the lease's meters for the selected utility. Meters are attached to
+  leases, not spaces.
 - **Reading images** are trimmed to `{ title, type, source_url }`.
 
 ### How readings are resolved
 
-- For each active lease, the meter serving the lease's space(s) for the selected
-  utility is used.
+- For each active lease, the meters attached to the lease for the selected utility are used.
 - **Previous reading** = the meter's latest reading where `billed_at` is set. If the
   meter has never been billed, the meter's `initial_reading` is used as the baseline.
 - **Current reading** = the meter's most recent reading where `billed_at` is null.
 - **Consumption** = `current_reading − previous_reading`.
-- **Shared meters:** when one meter serves spaces belonging to multiple leases,
-  consumption is split proportionally by space `size`.
+- **Shared meters:** when one meter is attached to several active leases, consumption is
+  split proportionally by each lease's leased area (the summed `size` of the spaces on its
+  lease items; a space with no size counts as 1).
 - **Several meters on one lease:** each meter's consumption is computed on its own and the
   results are summed into the lease's single row (see [One row per lease](#one-row-per-lease)).
 - Amount formula: `consumption × charge_rate`; `tax = amount × v` for taxable leases and
@@ -210,7 +211,7 @@ Rows are **per lease**, never per meter — `summary.total_rows` counts leases.
 
 | Field | Type | Notes |
 |---|---|---|
-| `lease` | object | `{ id, user: { name }, spaces: [{ id, name, size, meter_number }] }` — **metered spaces only** |
+| `lease` | object | `{ id, user: { name }, spaces: [{ id, name, size }], meters: [{ id, name, meter_number }] }` — `spaces` is every space on the lease, `meters` the lease's meters for the utility |
 | `meter_group` | integer\|null | Groups leases that share a meter; rows of a group are returned consecutively. `null` on a no-meter row |
 | `shared_with_lease_ids` | integer[] | The other leases in this `meter_group` (empty when the lease has its meter to itself) |
 | `meter` | object\|null | The lease's meters merged into one block. `null` when the lease has no meter for the utility |
@@ -270,8 +271,12 @@ images collected, `meters[]` holding the detail). Lease 102 has no meter for the
         "id": 101,
         "user": { "name": "Jane Tenant" },
         "spaces": [
-          { "id": 12, "name": "Shop A", "size": 100, "meter_number": "WM-0012" },
-          { "id": 13, "name": "Store A", "size": 40, "meter_number": "WM-0031" }
+          { "id": 12, "name": "Shop A", "size": 100 },
+          { "id": 13, "name": "Store A", "size": 40 }
+        ],
+        "meters": [
+          { "id": 7, "name": "Shop A", "meter_number": "WM-0012" },
+          { "id": 9, "name": "Store A", "meter_number": "WM-0031" }
         ]
       },
       "meter": {
@@ -356,7 +361,7 @@ images collected, `meters[]` holding the detail). Lease 102 has no meter for the
     },
     {
       "lease_id": 102,
-      "lease": { "id": 102, "user": { "name": "Bob Tenant" }, "spaces": [] },
+      "lease": { "id": 102, "user": { "name": "Bob Tenant" }, "spaces": [{ "id": 14, "name": "Shop B", "size": 80 }], "meters": [] },
       "meter_group": null,
       "shared_with_lease_ids": [],
       "meter": null,

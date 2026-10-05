@@ -399,7 +399,7 @@ Create/update payload example:
   "physical_address": "Kilimani",
   "coordinates": null,
   "paybill_number": "888999", // optional, max 20; null or "" clears it
-  "auto_generate_utility_meters": true,
+  "auto_generate_utility_meters": true, // deprecated: accepted but ignored, meters are never generated for new spaces (they belong to leases, see utility-meters.md)
   "esd_type": "incotex", // incotex | tevin | novitas | etims | null
   "esd_config": {
     "url": "http://192.168.1.50:8086",
