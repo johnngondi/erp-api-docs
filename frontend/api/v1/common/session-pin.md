@@ -122,15 +122,17 @@ Sends a one-time PIN on every channel the person can be reached on.
   "resend_after": 60 }
 ```
 
-`channels` is what actually went out, so if one fails you can still say where it was sent. The
+`channels` lists where the PIN was queued. Sending happens on the `otp` queue just after the
+response, so a provider that refuses the message is logged by the worker, not reported here. The
 phone and email are masked — enough to recognise your own, not enough to learn someone else's.
 
 Asking again inside the cooldown is a `422` keyed `temporary_pin_resend`. That exists so the
 resend button cannot be used to spray someone's phone.
 
-**When no channel takes it**, the response is a `422` keyed `temporary_pin_send_failed` and no PIN
-is issued, so there is nothing to type. Surface the message rather than offering a retry — the
-reason is a missing or broken address, not a transient failure:
+**When no channel takes it** (the person has neither an email nor a phone, or the PIN could not
+be queued), the response is a `422` keyed `temporary_pin_send_failed` and no PIN is issued, so
+there is nothing to type. Surface the message rather than offering a retry: the usual reason is
+a missing address, not a transient failure:
 
 ```json
 { "message": "We could not send a temporary PIN. Check your phone number and email, or ask an administrator.",

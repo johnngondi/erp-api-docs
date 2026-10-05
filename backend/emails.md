@@ -189,8 +189,9 @@ while the lease is pending (see the lease deposits and opening balances API docs
 ## Adding an email type
 
 1. A notification implementing `SendsEmail` (and `HasNotificationCompany` for branding and the
-   company mailer), with `toMail()` built from `EmailMessage`. Queue it (`ShouldQueue`); add
-   `ShouldBeEncrypted` when it carries a secret.
+   company mailer), with `toMail()` built from `EmailMessage`. Queue it (`ShouldQueue` and the
+   `QueuesOutboundChannels` trait, see [Queues](messaging.md#queues)); add `ShouldBeEncrypted`
+   when it carries a secret.
 2. Send it with `OutboundEmail::send()` from the action where the event happens, never from a
    model observer, and stamp a column if it must go once.
 3. Links to the frontend come from `FrontendUrl` (below); links to a document from its
@@ -244,8 +245,9 @@ throws. `login()`'s `redirect` is the target's path, not an absolute URL. The ve
   `leases.tenant_notified_at`, `emailed_at` on the six document tables,
   `facility_invoices.last_reminded_at`), `user_password_reset_codes`, and the
   `invoice_reminders_enabled` setting backfill.
-- Run a real queue worker (`QUEUE_CONNECTION=database`). On `sync`, a document email renders
-  its PDF inside the request, which can take seconds.
+- Run a real queue worker (`QUEUE_CONNECTION=database`) that serves the `otp` and
+  `notifications` queues: `php artisan queue:work --queue=otp,notifications,default`. On `sync`,
+  a document email renders its PDF inside the request, which can take seconds.
 
 ## Email types
 

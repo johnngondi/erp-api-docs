@@ -48,6 +48,36 @@ Mail::mailer(app(EmailManager::class)->mailerFor($company))->send(...);
 
 `for(null)` means the platform account.
 
+## Queues
+
+Outbound messages run on named queues, so a backlog of emails cannot hold up a one-time code:
+
+| Queue | What runs on it |
+| --- | --- |
+| `otp` | `TemporaryPinNotification` and `PasswordResetCodeNotification`, on every channel |
+| `notifications` | The email, SMS and WhatsApp sends of every other notification |
+| `default` | The in-app (`database`) copy of a notification, and every other job |
+
+- A notification that sends email, SMS or WhatsApp implements `ShouldQueue` and uses
+  `App\Notifications\Concerns\QueuesOutboundChannels`. Its `viaQueues()` puts `'mail'`,
+  `SMSChannel` and `WhatsAppChannel` on `notifications`. The `database` channel stays on `default`.
+- The two OTP notifications call `onQueue(NotificationQueue::OTP)` in their constructor, and
+  implement `ShouldBeEncrypted` so the code cannot be read from the `jobs` table.
+- The names are constants on `App\Support\Messaging\NotificationQueue`.
+- `TestMessagingNotification` is the exception. `messaging:test` sends it with `notifyNow()` so
+  it can print each provider's answer.
+- `tests/Feature/Messaging/NotificationQueuesTest.php` fails when a notification that can send
+  email, SMS or WhatsApp is not queued this way.
+
+A worker only serves the queues it is told about. One started without `--queue` serves `default`
+alone, and no email, SMS or WhatsApp would leave. List them in priority order:
+
+```bash
+php artisan queue:work --queue=otp,notifications,default
+```
+
+or run a separate worker for `otp` so a code never waits behind anything else.
+
 ## Layout
 
 `app/Support/Messaging`:
