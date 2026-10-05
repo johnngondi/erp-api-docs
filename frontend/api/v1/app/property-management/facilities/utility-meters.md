@@ -34,8 +34,8 @@ List query support:
   - `filter[meter_number]`, `filter[meter_serial_number]`, `filter[name]`
   - `filter[utility_id]`, `filter[facility_id]`, `filter[reading_unit_id]`, `filter[status]`, `filter[created_at]`
   - `filter[lease_id]` — meters attached to that lease (used by the lease details **Meters** tab)
-- Includes:
-  - `include=leases` — each lease comes with its tenant (`leases[].user`)
+- Every meter in the list and on the detail endpoint carries `leases`, each with its tenant
+  (`leases[].user`) and `status`.
 - Sort:
   - `sort=meter_number,meter_serial_number,name,utility_id,facility_id,reading_unit_id,status,created_at`
 
