@@ -79,6 +79,14 @@ Example:
 | `has_preferred_vendor` | No | boolean | Default `false` |
 | `override` | No | boolean | Default `false` |
 
+### Who a step is addressed to
+
+A request step goes to the same people an approval step on the request's property would. The
+user named for the role on the property comes first, and allocated holders of the role are the
+fallback. A company-wide role goes to its holders allocated to the property. If nobody qualifies,
+creating the request, or moving it onto that step, returns **422** keyed on `steps`. The rule
+and the error are described in [Approval Steps → Who a step is addressed to](../access-management/approvals.md#who-a-step-is-addressed-to).
+
 ## LPOs
 
 Endpoints:

@@ -80,8 +80,41 @@ jumping past it to the next step or finishing.
 Authorization:
 
 - user must be allowed on the current pending step only
-- user must hold the step role
-- if `actors` is populated, user must be in `actors`
+- user must hold the step role, or be named for it on the document's property
+- user must be in the step's `actors`. A step whose `actors` is empty can be acted on by nobody
+  (this used to mean "anyone holding the role")
+
+## Who a step is addressed to
+
+Every approvable belongs to a property: invoices, credit notes and exit notices through their
+lease; leases, LOOs, receipts, remittances, contracts and LPOs directly. When a step is put in
+front of its people, its `actors` are worked out against that property. Each actor gets a pending
+task.
+
+| Step role | `actors` |
+| --- | --- |
+| Assigned per property (`enforce_on_facility`) | The user named for that role on the property (the property's `roles`). If nobody is named, every holder of the role who is allocated to the property |
+| Company-wide | Every holder of the role who is allocated to the property |
+
+Only active members of the company (or its owner) count. Being named on the property is the
+assignment, so the named user need not also hold the role. An allocated holder must hold it.
+
+If nobody qualifies, the step is refused with a **422** keyed on `steps`:
+
+```json
+{
+  "message": "No one is assigned to Senior Property Manager on Absa Towers, so this step cannot be actioned. Assign a holder, or allocate a member of that role to the property.",
+  "errors": { "steps": ["No one is assigned to Senior Property Manager on Absa Towers, ..."] }
+}
+```
+
+This comes back from whatever moved the chain onto that step. That is the create (or submit) of
+the document for the first step, and the `approve`/`review` call on this endpoint for the steps
+after it. Nothing is saved: the document is not created, or the step stays where it was. The fix
+is to name a holder for the role on the property, or allocate a holder of the role to it.
+
+A document with no property (none of today's approvables) falls back to every active holder of
+the role in the company.
 
 ## Step fields added by the edit grant
 
@@ -127,8 +160,10 @@ While it is returned:
 endpoint — by a returned-to user or anybody else allowed to edit it — sends the step back to
 `pending`, addressed to **the reviewer alone**: the step's `actors` becomes just the reviewer,
 who gets the pending task back ("Resubmitted after your review: {comment}"), and the
-submitters' tasks are removed. If the reviewer no longer holds the step's role, the step goes
-back to everyone who does. The chain carries on from there in the same attempt.
+submitters' tasks are removed. If the reviewer can no longer act on the step (they lost the role,
+or are no longer named for it on the property or allocated to it), the step is addressed afresh
+as described in [Who a step is addressed to](#who-a-step-is-addressed-to). The chain carries on
+from there in the same attempt.
 
 Step fields for this:
 

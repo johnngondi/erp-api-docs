@@ -91,6 +91,24 @@ dispatched to people with no connection to the property. Now:
 If a company sees that 422, the fix is to name a holder to that role on that property, or allocate
 someone who holds the role.
 
+**Approval steps follow the same rule (since 2026-10-07).** Approval-template steps (invoices,
+credit notes, receipts, remittances, LPOs, contracts, leases, exit notices, LOOs) used to go to
+every holder of the step's role in the company. They now go to the user named for the role on the
+document's property. If nobody is named, they go to the holders of the role allocated to the
+property, and if there are none, the step is refused with the same 422. Procurement steps gained
+the same fallback for per-property roles. Steps that are already open are fixed with:
+
+```bash
+php artisan approvals:reassign-open-steps --dry-run   # list what would change
+php artisan approvals:reassign-open-steps             # rewrite actors and pending tasks
+php artisan approvals:reassign-open-steps --company=3 # one company only
+```
+
+It recomputes `actors` on every current pending approval step and replaces that step's pending
+tasks to match. It does the same for `actors_ids` on current pending procurement request steps,
+which carry no pending tasks. A step nobody qualifies for is left as it is and listed, so it can
+be fixed by naming a holder on the property.
+
 **Reads return 403 with a distinct message.** A property the user is not allocated to answers
 `You are not assigned to this property.` rather than a generic permission error, so the frontend can
 tell the two apart.
