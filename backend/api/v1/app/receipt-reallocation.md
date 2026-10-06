@@ -59,10 +59,12 @@ so it never appears.
 `allocated_from_this_receipt` is in the allocation (lease) currency and is `0` for invoices
 the receipt has not been allocated to.
 
-`pending_receipt` (`{ id, transaction_number } | null`) names another receipt, still awaiting
-approval, that already holds the invoice (`FacilityInvoice::pendingReceipt()`). Such an invoice
-stays in the list so this receipt's money can be kept on it or moved off it, but no more may be
-added: `validateAllocations()` refuses any amount above what this receipt already has there.
+`held_amount`, `available_balance` and `pending_holds` describe what documents awaiting approval
+hold on the invoice (`FacilityInvoice::heldAmount()` / `pendingHolds()`, enforced through
+`App\Services\PropertyManagement\Billing\InvoiceHeldBalance`). When something is held,
+`validateAllocations()` refuses any increase over what this receipt already has there that is
+larger than `available_balance`. Keeping or removing money is always allowed, and with nothing
+held overpayment is unchanged.
 
 `collections_frozen` is `true` when the receipt has been remitted — see below.
 
@@ -89,7 +91,7 @@ Returns `{ "message": "Receipt reallocated successfully", "receipt": { ... } }`.
 | Receipt has been reversed | A reversed receipt cannot be reallocated. |
 | Receipt has allocations awaiting approval | This receipt has allocations awaiting approval and cannot be reallocated yet. |
 | Invoice fails the eligibility rules above | Invoice #N cannot be allocated to this receipt… |
-| More money added to an invoice another pending receipt holds | Invoice #N is already being paid in receipt #M (REF), which is awaiting approval. |
+| More added to a held invoice than its available balance | Invoice #N has X available; Y is held by documents awaiting approval (…). |
 | Same invoice listed twice | Invoice #N is listed more than once. |
 | An amount is `<= 0` | Allocation amount for invoice #N must be greater than zero. |
 | The split does not equal the receipt amount | The allocations must add up to the full receipt amount of X. |

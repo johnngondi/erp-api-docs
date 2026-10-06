@@ -70,6 +70,10 @@ it came across from another system. `etr_signed_at` sits beside it but is not th
 that we ran the step, while the number is the evidence KRA holds the document. Read `etr_status`
 rather than deriving the state from the timestamp.
 
+`emailed_at` — when the invoice was first emailed to the tenant, and `last_reminded_at` — when the
+latest payment reminder went. Each is `{ raw, formatted, diff }`, or `null` when it has not happened.
+A taxed invoice is only emailed once it is ETR signed.
+
 `filter[cu_validation_status]` — has KRA accepted that number? `pending | passed | failed |
 skipped`, with `cu_validation_failure_reason` carrying the text when it is `failed`.
 
@@ -138,32 +142,50 @@ Examples:
 - `GET /api/v1/app/12/property-management/lease-management/invoices?filter[lease_id]=101&sort=-due_at&per_page=10`
 - `GET /api/v1/app/12/property-management/lease-management/invoices?filter[status]=pending`
 
-### Invoices already being paid by a pending receipt
+### Amounts held by documents awaiting approval
 
-An invoice that sits on a receipt which is still **awaiting approval** (receipt status `pending`)
-is locked: it cannot be put on another receipt, credited by a new credit note, or have more
-money reallocated onto it until that receipt is confirmed, rejected or cancelled. It still
-reads `unpaid` / `partially paid` and **still appears** in the list, so a picker built from
-`filter[status]=unpaid,partially paid` keeps showing it. Both list rows and the show payload say
-which receipt holds it:
+A receipt or credit note that is still **awaiting approval** has posted nothing, so the
+invoice's `balance` does not move until it is approved. Its amount is **held** instead: other
+receipts and credit notes may use what is left, but not the held part. An invoice is never
+locked as a whole.
+
+```
+available_balance = balance - (pending allocations of pending receipts + pending credit notes)
+```
+
+List rows and the show payload carry:
 
 ```json
 {
   "id": 9001,
   "status": { "value": "unpaid", "color": "warning" },
-  "balance": "1102.00000",
-  "pending_receipt": { "id": 2500, "transaction_number": "RCPT-1004" },
-  "permissions": { "pay": false, "issueCreditNote": false }
+  "balance": "1000.00000",
+  "held_amount": 800,
+  "available_balance": 200,
+  "pending_holds": [
+    { "type": "receipt", "id": 2500, "reference": "RCPT-1004", "amount": 600 },
+    { "type": "credit_note", "id": 77, "reference": null, "amount": 200 }
+  ],
+  "permissions": { "pay": true, "issueCreditNote": true }
 }
 ```
 
-- `pending_receipt` is `null` when nothing locks the invoice. A rejected, cancelled or confirmed
-  receipt never locks.
-- `permissions.pay` and `permissions.issueCreditNote` are `false` while locked; the receipt and
-  credit-note endpoints refuse the invoice with a `422` naming the receipt (see those docs).
-- Show the invoice in pickers with a "being paid in receipt #2500" hint and do not let it be
-  selected; the receipt that holds it may still be edited to use it (its own allocations do not
-  lock it against itself).
+- `held_amount`, `available_balance` and each hold's `amount` are in the invoice (lease)
+  currency. A receipt paid in another currency is converted at its transaction date.
+- `pending_holds[].type` is `receipt` or `credit_note`. `reference` is the receipt's
+  `transaction_number`, or the credit note's CU invoice number (`null` until it is signed).
+- A hold ends when its document leaves `pending`: approval posts it into `balance`, and a
+  rejection or cancellation releases it. Nothing needs to be done by hand.
+- The invoice still reads `unpaid` / `partially paid` and still appears in
+  `filter[status]=unpaid,partially paid`.
+- A new receipt allocation, credit note or reallocation increase on a held invoice is refused
+  (`422`) only when it is more than `available_balance`. When nothing is held, the rules are
+  unchanged.
+- `permissions.pay` and `permissions.issueCreditNote` are `false` only when something is held
+  and nothing is available.
+- In pickers, show the available amount ("200.00 available, 800.00 held by pending
+  documents") and cap the input at it. A pending receipt being edited holds money of its own:
+  its cap on an invoice is `available_balance` plus what it already has there.
 
 ## CU number validation
 
@@ -291,7 +313,8 @@ inactive catalogue component answers 422 on its item.
 `GET /api/v1/app/{company}/property-management/lease-management/leases/{lease}/invoice-components`
 
 Feeds the component dropdown on the create screen. It returns every active catalogue component,
-sorted by name and not paginated, and works out the table above for this lease, so the screen can
+not paginated: every component that can be invoiced first, then every one that cannot, each in
+`sort_order` (see Lease Components in the settings doc), and works out the table above for this lease, so the screen can
 disable what the API would refuse.
 
 Requires permission to create invoices and to view the lease; otherwise `403`.
@@ -338,7 +361,10 @@ Requires permission to create invoices and to view the lease; otherwise `403`.
 
 - `lease_item_component_id`, `facility_space` and `amount` describe the lease line the item would
   be billed on. They are `null` when the lease does not carry the component yet.
-- `amount` is the line's monthly cost, so use it to prefill the item. A line added at `0` has
+- `amount` is that one line's monthly cost. A lease carrying the component on several spaces
+  still bills it as one item, so the create screen prefills the item with the sum of
+  `cost_per_month` over every line of the lease that carries the component (from the lease show
+  payload), and the quantity with the months in the lease's billing cycle. A line added at `0` has
   nothing to prefill, so leave the amount for the user.
 - `tax_id` is the line's tax when the lease carries the component, otherwise the catalogue's.
 - `selectable: false` comes with a `reason`. Show the option disabled with the reason as a hint.

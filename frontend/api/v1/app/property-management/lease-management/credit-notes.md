@@ -175,14 +175,14 @@ Example response:
 | Invoice does not exist | Invoice not found |
 | Invoice has no balance left | Invoice is already paid for fully |
 | Invoice is cancelled / rejected | Invoice is already cancelled / Invoice was rejected |
-| Invoice is on a receipt that is awaiting approval | Invoice #9001 is already being paid in receipt #2500 (RCPT-1004), which is awaiting approval. |
+| Total is more than the invoice's available balance while documents awaiting approval hold part of it | Invoice #9001 has 400.00 available; 600.00 is held by documents awaiting approval (receipt #2500 RCPT-1004). |
 | Items total more than the invoice balance | Credit note total exceeds invoice balance |
 
-The pending-receipt rule is the lock described under
-[Invoices → already being paid](./invoices.md#invoices-already-being-paid-by-a-pending-receipt).
-The invoice list still returns such an invoice (with `pending_receipt` set and
-`permissions.issueCreditNote: false`), so the picker should show it as unavailable rather than
-let the request fail. It applies to credit notes raised through this endpoint; credits the system
+The held-balance rule is described under
+[Invoices → Amounts held](./invoices.md#amounts-held-by-documents-awaiting-approval). Use the
+invoice's `available_balance` as the limit whenever its `held_amount` is above zero. A credit note
+raised here and awaiting approval is itself a hold on the invoice until it is approved, rejected
+or cancelled. The rule applies to credit notes raised through this endpoint. Credits the system
 raises itself (invoice reversal, opening balances, exit notices) are not held up by it.
 
 ## One invoice per credit note

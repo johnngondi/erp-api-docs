@@ -4,7 +4,8 @@ The platform sends a fixed list of emails. Each one is the same branded shell wi
 blocks in its body, built in PHP and sent through the notification system, so the per-company
 mailer and the delivery log (see [messaging.md](messaging.md)) apply to every one of them.
 
-Everything else a notification says is in-app (and SMS) only.
+Everything else a notification says is in-app only. SMS and WhatsApp are on by exception too:
+see [messaging.md](messaging.md#which-notifications-text).
 
 ## The shell
 
@@ -114,8 +115,8 @@ It brands the email with the notification's company when it implements
 
 Email is on by exception.
 
-- `DeliversOnDefaultChannels::defaultChannels()` returns `database` and, with a phone number,
-  SMS. Never `mail`.
+- `DeliversOnDefaultChannels::defaultChannels()` returns `database` only (`[]` for an
+  `AnonymousNotifiable`). Never `mail`, SMS or WhatsApp.
 - A notification emails only when it implements `App\Contracts\Notifications\SendsEmail`.
   It adds mail with `withEmail($this->defaultChannels($notifiable), $notifiable)`, which
   appends `mail` when the recipient has an address (an `AnonymousNotifiable` with a mail route

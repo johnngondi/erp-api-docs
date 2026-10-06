@@ -444,7 +444,7 @@ What happens:
 - The uploaded invoice file is deleted.
 - `invoice_rejected_at`, `invoice_rejected_by` and `invoice_rejection_reason` record the rejection.
 - The bill stays `pending`. No expense or vendor statement entry is written.
-- The vendor is notified in the app, by email, by SMS and by WhatsApp. The notification carries
+- The vendor is notified in the app and by email (not by SMS or WhatsApp). The notification carries
   the reason and links to the bill.
 
 New bill resource fields:

@@ -339,7 +339,8 @@ A `pending` LPO returns `404`.
 
 ### Notifications
 
-Suppliers are notified in the portal inbox (and by mail / SMS where they have an address / phone number):
+Suppliers are notified in the portal inbox. The LPO notification also goes by mail and SMS where they
+have an address / phone number; a rejected quote is in-app only:
 
 | Notification `type` | When | `resource_url` opens |
 |---|---|---|

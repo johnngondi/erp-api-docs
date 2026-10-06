@@ -312,10 +312,11 @@ creation (no chain) or on its final approval.
 | Who | Notification `type` | When | Channels |
 |---|---|---|---|
 | The LPO's supplier | `App\Notifications\PropertyManagement\Procurement\LpoIssuedNotification` | Every issued LPO | database, mail, SMS |
-| Every other supplier who quoted on the request | `App\Notifications\PropertyManagement\Procurement\BidRejectedNotification` | Workflow **work** LPOs only | database, mail, SMS |
-| The procurement request's creator | `App\Notifications\PropertyManagement\Procurement\LpoRaisedNotification` | Workflow LPOs only (a direct LPO's creator raised it themselves) | database, mail, SMS |
+| Every other supplier who quoted on the request | `App\Notifications\PropertyManagement\Procurement\BidRejectedNotification` | Workflow **work** LPOs only | database |
+| The procurement request's creator | `App\Notifications\PropertyManagement\Procurement\LpoRaisedNotification` | Workflow LPOs only (a direct LPO's creator raised it themselves) | database |
 
-Mail and SMS go only where the recipient has an address / phone number.
+Mail and SMS go only where the recipient has an address / phone number. The LPO is a document sent to the
+supplier, so it is the only one of the three that goes out by SMS; the other two are in-app only.
 
 When a workflow work LPO is generated, every other bid on the request that is not already `rejected` is set
 to `rejected`, with `rejection_reason` "Another quotation was selected for this request." The winning bid

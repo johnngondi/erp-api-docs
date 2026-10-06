@@ -109,7 +109,7 @@ Staff can reject a submitted invoice while the bill is `pending`. When they do:
 
 - the invoice number, date, CU number (`tax_invoice_number`) and document are cleared, and the
   document is deleted;
-- the vendor receives a notification with the reason, in the app and by email, SMS and WhatsApp.
+- the vendor receives a notification with the reason, in the app and by email.
 
 The bill then carries `invoice_rejected_at` (`{raw, formatted, diff}`) and
 `invoice_rejection_reason`. When `invoice_rejected_at` is set and the bill is still `pending`, show

@@ -38,6 +38,34 @@ null company, sends through the platform account.
   its company (`->from($company)`) or recipient (`->to($phone)`) explicitly.
 - Phone numbers are normalised with `format_country_phone_number()` and sent in E.164.
 
+## Which notifications text
+
+SMS and WhatsApp are on by exception, like email (see [emails.md](emails.md#which-notifications-email)).
+`App\Notifications\Concerns\DeliversOnDefaultChannels::defaultChannels()` returns `database` only
+(`[]` for an `AnonymousNotifiable`). A notification adds a text channel itself:
+
+- `withSms($channels, $notifiable)` appends `SMSChannel` when the recipient has a number
+  (`routeNotificationFor('sms')`, else `$notifiable->phone`);
+- `withWhatsapp($channels, $notifiable)` does the same for `WhatsAppChannel`. Meta delivers
+  free-form text only within 24 hours of the recipient writing to the business, so add it
+  alongside SMS, never instead of it.
+
+Text is allowed only for one-time codes, a document sent to a tenant or a supplier, an RFQ sent to a
+supplier, and reminders to a supplier. Today that is:
+
+| Purpose | Notification (under `App\Notifications`) | Channels |
+| --- | --- | --- |
+| One-time codes | `Auth\TemporaryPinNotification`, `Auth\PasswordResetCodeNotification` (one notification per channel, from `SessionPinService` / `PasswordResetCodeService`) | the channel asked for |
+| A document sent to a supplier | `PropertyManagement\Procurement\LpoIssuedNotification` | database, mail, SMS |
+| A reminder to a supplier | `PropertyManagement\Procurement\QuoteSubmissionReminderNotification` | database, mail, SMS, WhatsApp |
+| Provider check | `Messaging\TestMessagingNotification` (`messaging:test`) | the channel asked for |
+
+Everything else (approvals, changes requested, workflow steps, document changes, comments,
+responsibility transfers, rejections, staff and sensor alerts) is in-app only, plus email where it
+is on the email list. `tests/Feature/Notifications/SmsAllowListTest.php` holds this list and fails
+when any other notification defines `toSms()` / `toWhatsApp()` or returns a text channel. Adding
+to it is a product decision.
+
 Outside notifications:
 
 ```php

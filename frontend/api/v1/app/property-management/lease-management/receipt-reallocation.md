@@ -95,7 +95,9 @@ when it is `false` — do not render it disabled.
       "balance": "50000.00000",
       "currency": { "id": 1, "code": "KES", "name": "Kenyan Shilling" },
       "allocated_from_this_receipt": 0,
-      "pending_receipt": null
+      "held_amount": 0,
+      "available_balance": 50000,
+      "pending_holds": []
     }
   ],
   "collections_frozen": false
@@ -104,11 +106,11 @@ when it is `false` — do not render it disabled.
 
 Notes for rendering:
 
-- `pending_receipt` (`{ id, transaction_number } | null`) names another receipt, still
-  awaiting approval, that already holds this invoice. Money may be **kept on or moved off**
-  such a row, but not added to it: cap the input at `allocated_from_this_receipt` and show a
-  "Being paid in receipt #N" badge. The server refuses an increase with a `422` on
-  `allocations`.
+- `held_amount`, `available_balance` and `pending_holds` are the invoice's held balance (see
+  [Invoices → Amounts held](./invoices.md#amounts-held-by-documents-awaiting-approval)). When
+  `held_amount > 0`, cap the row at `allocated_from_this_receipt + available_balance` (converted
+  to the receipt currency) and show the holds. The server refuses an increase above that with a
+  `422` on `allocations`. With nothing held, overpaying a row is allowed as before.
 
 - `invoices` is already filtered to what this receipt may be allocated to — same property,
   same tenant, still open, or already carrying this receipt's money. **Do not filter further.**

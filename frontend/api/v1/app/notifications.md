@@ -8,8 +8,10 @@ A notification is an informational record of something that happened — a lease
 received, a document finished its approval chain, here are your alerts for the day. The actionable
 counterpart is a **pending task**; a notification never needs to be actioned, only read.
 
-These are Laravel's native database notifications. The same events are also delivered by email and
-SMS where the recipient has an address or a phone number; this API is the in-app copy.
+These are Laravel's native database notifications, and the in-app copy is the only one most events
+get. Email, SMS and WhatsApp are sent by exception: SMS and WhatsApp only for one-time codes, a
+document sent to a tenant or a supplier, an RFQ and reminders to a supplier, and only where the
+recipient has an address or a phone number. This API is the in-app copy.
 
 ## Endpoints
 

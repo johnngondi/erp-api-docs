@@ -58,8 +58,8 @@ whom to contact if a category is wrong.
 
 `App\Notifications\PropertyManagement\Finance\BillInvoiceRejectedNotification`, sent by
 `RejectBillInvoiceAction` when staff reject the invoice a supplier submitted against a pending
-bill. Its channels are unchanged: database, mail, SMS and WhatsApp (see
-`agent-memory/bill-invoice-rejection.md`).
+bill. Its channels are database and mail. It sent SMS and WhatsApp until 2026-10-06; a rejection
+is not one of the messages allowed out by text (see [messaging.md](../messaging.md#which-notifications-text)).
 
 The email:
 

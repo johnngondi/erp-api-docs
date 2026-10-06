@@ -112,13 +112,14 @@ Example response:
 | Key | Condition | Message |
 |---|---|---|
 | `allocations` | An invoice is not on a lease of `facility_id` | Some of the allocated invoices do not belong to leases in the selected property. |
-| `allocations` | An invoice is already on another receipt that is awaiting approval | Invoice #9001 is already being paid in receipt #2500 (RCPT-1004), which is awaiting approval. |
+| `allocations` | An allocation is more than the invoice's available balance while documents awaiting approval hold part of it | Invoice #9001 has 400.00 available; 600.00 is held by documents awaiting approval (receipt #2500 RCPT-1004). |
 | `invoice` | An invoice has no balance left | Invoice with invoice_id 9001 is already paid for fully |
 
-The second rule is the pending-receipt lock described under
-[Invoices → already being paid](./invoices.md#invoices-already-being-paid-by-a-pending-receipt):
-the invoice list still returns the invoice, with `pending_receipt` naming the receipt, so the
-picker can show it as unavailable instead of letting the request fail.
+The second rule is the held balance described under
+[Invoices → Amounts held](./invoices.md#amounts-held-by-documents-awaiting-approval). Amounts are
+compared in the invoice currency. The invoice list carries `available_balance` and
+`pending_holds`, so the picker can cap the input instead of letting the request fail. When
+nothing holds the invoice, this rule does not apply.
 
 ## Update Receipt
 
@@ -136,12 +137,19 @@ full with the **same body as Create**: `facility_id`, `transaction_number`,
 **Proof of payment** below for what sending them means).
 
 The same `422` rules as Create apply, with one difference: the receipt's own pending allocations
-never lock an invoice against itself, so an invoice already on this receipt may be kept. An
-invoice held by a *different* pending receipt is refused with the lock message.
+never count against it. On each invoice it may use the available balance plus what it already
+holds there. Only what *other* pending documents hold is protected.
 
-Who may do it: anyone with `update-facility-receipt`, or the person who submitted the receipt
-for approval while it is returned to them for changes (see
-[Approvals → Returned for changes](../../access-management/approvals.md)).
+Who may do it: anyone with `update-facility-receipt`, or, while the receipt is returned for
+changes, its creator and the person who submitted it for approval.
+
+#### Approval returned for changes
+
+When the first approval step answers `review`, the receipt comes back to its creator and
+submitter with a "Changes requested" task, and their `permissions.update` turns `true`. They fix
+it through this endpoint (full body, `pop_*` omitted to keep the proof). That save
+**resubmits** it: the step goes back to the reviewer alone. There is no separate resubmit call.
+See [Approvals → Returned for changes](../../access-management/approvals.md#returned-for-changes).
 
 ### Editing a confirmed receipt
 
@@ -325,6 +333,15 @@ removes everything it left behind:
 Invoice and invoice item balances are not touched again, because the cancellation already
 reversed them. A remitted receipt that was reversed stays `confirmed` with `is_reversed: true`,
 and its records, including the mirror receipt, are kept because the remittance depends on them.
+
+**Which receipts may be deleted.** `permissions.delete` is `true` only on a `pending`, `cancelled`
+or `rejected` receipt, for holders of `delete-facility-receipt` or the receipt's creator. A
+confirmed receipt has to be cancelled first, through the cancel endpoint.
+
+A **pending** receipt (awaiting approval) has posted nothing, so deleting it is like deleting a
+pending invoice: the receipt goes together with its pending allocations, its approval chain and
+the approvers' pending tasks. No invoice balance moves. The amounts it held on invoices are
+released at once (see [Invoices → Amounts held](./invoices.md#amounts-held-by-documents-awaiting-approval)).
 
 ## Dispute Receipt
 

@@ -54,7 +54,7 @@ Create payload table:
 Behavior by `status`:
 
 - `approve`: marks current step as approved and moves to next pending step; on the last step, marks the approvable with the model's `FINAL_STATUS_ON_APPROVAL` and fires the template's post-approval event.
-- `review`: marks current step as review, sends flow back to previous step, and resets previous step to pending.
+- `review`: marks the current step as `review` with the comment and sends the document back. When an earlier step exists, that step is reset to `pending` and re-prompted. On the **first** step of the chain there is no earlier step, so the document is **returned to its submitter** — see [Returned for changes](#returned-for-changes).
 - `reject`: marks the current step as rejected and **terminates the entire workflow** — every remaining pending step for the approvable is also marked rejected (so no later step can be actioned), and the approvable is marked with the model's `FINAL_STATUS_ON_REJECTION`, which is `rejected` on every approvable.
 
 `rejected` is terminal. A rejected resource can be viewed and deleted, and nothing else: it
@@ -72,6 +72,10 @@ expenses it had claimed, so the next remittance for that period can pick them up
 [Remittances → What a rejection releases](../property-management/finance/remittance.md#what-a-rejection-releases).
 
 The applied statuses come from constants declared on each approvable model (`INITIAL_STATUS_ON_CREATE`, `FINAL_STATUS_ON_APPROVAL`, `FINAL_STATUS_ON_REJECTION`), not from the approval template.
+
+A step left in `review` is never skipped. When the step before it is approved again, the
+`review` step is reset to `pending` and its actors are prompted again, rather than the chain
+jumping past it to the next step or finishing.
 
 Authorization:
 
@@ -101,6 +105,38 @@ When `can_edit` is `true`, the resource's normal update endpoint accepts your
 changes even without its update permission. Fields outside `editable_fields` are
 refused with **403** naming them, and the request is rejected whole — nothing is
 half-saved.
+
+## Returned for changes
+
+A `review` on the first step returns the document to the people who raised it: its creator
+(`created_by`) and the person who submitted it for approval (`initiated_by` on the steps). The
+document keeps its pending status and nothing is posted.
+
+While it is returned:
+
+- the step stays `review`, with the reviewer in `acted_by` and the request in `comment`;
+- the step carries `is_returned: true` and `is_current: true`, and `can_act` is `false` for
+  everybody — there is no pending step to act on;
+- each person in `returned_to` gets a pending task titled "Changes requested: {resource}" with the
+  reviewer's comment, and a notification (in-app only);
+- those people may edit the document through its normal update endpoint even without its update
+  permission, so the resource's `permissions.update` is `true` for them;
+- the chain still counts as open, so the document cannot be submitted for approval a second time.
+
+**Resubmission is implicit.** The first successful update of the document through its update
+endpoint — by a returned-to user or anybody else allowed to edit it — sends the step back to
+`pending`, addressed to **the reviewer alone**: the step's `actors` becomes just the reviewer,
+who gets the pending task back ("Resubmitted after your review: {comment}"), and the
+submitters' tasks are removed. If the reviewer no longer holds the step's role, the step goes
+back to everyone who does. The chain carries on from there in the same attempt.
+
+Step fields for this:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `is_returned` | boolean | The step sent the document back to its submitter and is waiting on an edit |
+| `returned_to` | array[`{id, name}`] | Who may edit and resubmit it; empty when the step is not returned |
+| `initiated_by` | object \| null | The user who submitted the document for approval |
 
 ## Attempts and re-submission
 
