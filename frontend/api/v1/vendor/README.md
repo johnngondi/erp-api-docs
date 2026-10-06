@@ -11,6 +11,7 @@ Authentication:
 
 ## Docs Index
 
+- `docs/frontend/api/v1/vendor/dashboard.md`
 - `docs/frontend/api/v1/vendor/procurement.md`
 - `docs/frontend/api/v1/vendor/finance.md`
 - `docs/frontend/api/v1/vendor/facilities.md`
