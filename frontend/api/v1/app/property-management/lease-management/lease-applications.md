@@ -732,8 +732,7 @@ is a facility space id — the space being priced, before it is attached.
     "components": [
       { "lease_component_id": 1, "name": "Rent",           "cost_per_space_unit": 100, "amount": 1000, "tax_id": 2 },
       { "lease_component_id": 2, "name": "Service Charge", "cost_per_space_unit": 20,  "amount": 200,  "tax_id": 2 },
-      { "lease_component_id": 6, "name": "Electricity",    "cost_per_space_unit": null, "amount": null, "tax_id": null },
-      { "lease_component_id": 7, "name": "Water",          "cost_per_space_unit": null, "amount": null, "tax_id": null }
+      { "lease_component_id": 10, "name": "Promotion Fee", "cost_per_space_unit": null, "amount": null, "tax_id": 2 }
     ]
   }
 }
@@ -743,23 +742,21 @@ is a facility space id — the space being priced, before it is attached.
 returned so the frontend can recompute a total live as staff edit a rate instead of
 round-tripping for it.
 
-**Which components are offered** — `active` components, narrowed by what kind of space it is:
+**Which components are offered** — only components that are `active` **and** flagged
+`is_autobilled`, narrowed by what kind of space it is:
 
 | Space | Components offered |
 |---|---|
 | `is_parking` | the parking fee |
 | `is_signage` | the signage fee |
-| `space_type` = `leasable` | rent, service charge, **and every utility component** |
+| `space_type` = `leasable` | **every** autobilled component except the parking and signage fees — rent, service charge, and any other the company bills each cycle (a promotion fee, say) |
 | `space_type` = `landlord` or `common` | none — `is_lettable` is `false` and the space cannot be attached |
 
-Rent, service charge, parking and signage must also be flagged `is_autobilled`. **Utilities are
-the exception**: they are deliberately *not* autobilled, because consumption is metered and billed
-from readings, and they are offered anyway so a tenancy can carry an electricity or water deposit.
-Before this they were filtered out entirely, which is why a utility deposit was impossible — with
-no component on the lease there was no `lease_item_component_id` to raise one against.
-
-Utilities are offered on lettable spaces only. A parking bay or a signage position is not metered
-for water.
+An application allocates what the tenant will be billed automatically, and nothing else.
+The rows are stored by `lease_component_id` and carried through the LOO onto the lease, so
+whatever is offered here is what the lease is generated with. A component that is not
+autobilled — water and electricity, which are billed from meter readings — is never offered,
+and submitting one is a `422`.
 
 **Where the suggested cost comes from.** All of these are net of tax.
 
@@ -769,7 +766,7 @@ for water.
 | Service charge | `indicative_service_charge_per_unit`, else the facility's `indicative_service_charge_rate_per_space_unit` |
 | Parking fee | the facility's open or closed lot fee, chosen by the space's `parking_type` |
 | Signage fee | **none exists** — `cost_per_space_unit` and `amount` come back `null` and staff enter the figure |
-| Utility | **none, by design** — `cost_per_space_unit` and `amount` come back `null`. A utility is billed from meter readings, so pricing it here would charge the tenant for the same electricity twice. Allocate it to carry a deposit, and leave the cost empty |
+| Any other autobilled component | **none exists** — `cost_per_space_unit` and `amount` come back `null` and staff enter the figure. Auto-allocation on submission stores it at `0`, a visible prompt to price it |
 
 A residential unit type quotes a rate for the whole unit, not per space unit, so it is
 divided by `size` on the way out — multiplying it back by `size` returns the figure the
