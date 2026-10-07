@@ -72,12 +72,63 @@ Example:
 | `status` | Yes | string | `approved`, `review`, `rejected` |
 | `comment` | Conditional | string | Required in many non-approve flows |
 | `preferred_vendor_id` | Conditional | integer | Required if `has_preferred_vendor=true` |
-| `selected_option` | Conditional | integer | Required for specific quote-step states |
+| `selected_option` | Conditional | integer | The quote (work) or price option (purchase) the procurement step picks. Optional on the first pass, where leaving it out keeps the system's recommendation, and required when a later step sent the request back. It must belong to this request. See [Overriding the recommendation](#overriding-the-recommendation) |
 | `expense_category_id` | Conditional | integer | Required if current step has `select_expense_category=true` and `status=approved` |
 | `vendors` | Conditional | array | Required if `override=true` |
 | `deadline` | No | string/date | Optional |
 | `has_preferred_vendor` | No | boolean | Default `false` |
 | `override` | No | boolean | Default `false` |
+
+`comment` is required when the status is `review` or `rejected`, when `has_preferred_vendor` or
+`override` is set, and when `selected_option` is not the system's recommendation.
+
+### Overriding the recommendation
+
+The step with `handle_procurement=true` may replace the system's pick with another one when it
+approves:
+
+| Request type | When the step can choose | What the system recommends |
+|---|---|---|
+| `work` | Step status `quotes-review` (quotes are in), or `pending` after a later step sent it back | The lowest quote, with ties going to the supplier with the fewest awards |
+| `purchase` | Step status `pending` | The cheapest price option, with ties going to the supplier with the fewest purchase LPOs |
+
+`GET /requests/{procurementRequest}/steps/{step}` tells the form what it may do:
+
+- `meta.can_change_option` is `true` when the caller can pick, so show the choice.
+- Each quote in `meta.quotes` carries `is_computer_recommended` and `is_selected`.
+  `is_computer_recommended` marks the system's pick. The system sets it once, and nothing a
+  person does changes it, not even an override. `is_selected` marks the current pick, which is
+  the system's until someone overrides it. Preselect `is_selected`.
+- Each option in `meta.options` carries `is_computer_recommended`, which is set when the step is
+  first opened and is just as permanent, and `is_selected`, which is set once the step approves.
+  Before then, preselect `is_computer_recommended`.
+
+Send the chosen id as `selected_option` with `status=approved`. If you leave it out on the first
+pass, the system's pick stands. If you pick anything other than the system's pick, you must send a
+`comment` giving the reason, or the request returns **422** keyed on `comment`. An id from another
+request returns **422** keyed on `selected_option`.
+
+### Pending tasks on a request
+
+Each step, and each return to the creator, puts a [pending task](../pending-tasks.md) in front of
+whoever has to act next. The `taskable` is the request (`App\Models\FacilityProcurementRequest`), so
+the task links to the request page.
+
+| Request state | Who holds a task | Title |
+|---|---|---|
+| Current step `pending` | Each of the step's `actors` | `Review procurement request: {title}` |
+| Current step `pending`, sent back by a later step | Each of the step's `actors` | `Procurement request returned for review: {title}`. The description quotes the comment from the step that sent it back |
+| Current step `quotes-review` | Each of the step's `actors` | `Select a quote for {title}` |
+| Current step `waiting-quotes` | Nobody, because the request is waiting on suppliers | - |
+| First step sent back to the creator | The request's creator | `Make changes to procurement request: {title}` |
+| Rejected, LPO raised, or request deleted | Nobody | - |
+
+The tasks are cleared and raised again every time the request moves, so each person holds at most
+one task per request.
+
+Open steps that were dispatched before these tasks existed have no task. Run
+`php artisan procurement:sync-step-tasks` once (add `--company={id}` to limit it to one company) to
+raise them. Running it again changes nothing.
 
 ### Who a step is addressed to
 

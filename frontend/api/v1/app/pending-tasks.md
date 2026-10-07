@@ -116,4 +116,12 @@ Tasks are **never** written over HTTP. There is no create, update or delete endp
   resolved. Nothing clears a direct task on a timer. A feature that raises one without clearing it
   leaves a permanent phantom entry in someone's list.
 
+Direct tasks raised today:
+
+| Feature | Taskable | Who | Raised and cleared by |
+|---|---|---|---|
+| Procurement request steps | `FacilityProcurementRequest` | The current step's actors, or the creator when the first step sends it back | `SyncProcurementRequestTasksAction`, every time the request moves. See [Procurement → Pending tasks on a request](property-management/procurement.md#pending-tasks-on-a-request) |
+| Lease applications | `LeaseApplication` | The reviewers, then the Letter of Offer role | `SyncLeaseApplicationTasksAction` |
+| LPO jobcard (supplier portal) | `FacilityProcurementLpo` | The supplier | `IssueLpoToVendorService`, cleared by `SubmitLpoDocumentController` |
+
 This mirrors the alert contract documented in `docs/frontend/api/v1/app/alerts.md`.
