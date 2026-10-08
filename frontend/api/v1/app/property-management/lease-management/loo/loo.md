@@ -869,7 +869,9 @@ layout: square and tight kinds float left (right for `squareRight`), `topAndBott
 line, `inFront` / `behind` sit over or under their paragraph, and a **page-anchored image is placed
 on the page box itself**, whatever its wrap kind. The PDF prints with no printer margins (the
 margins are padding on the page), so a page-anchored image at `0,0` with the page's width runs
-edge to edge above the text, as a printed letterhead does. Every other image is capped at the
+edge to edge above the text, as a printed letterhead does, and the text starts just below it: any
+page-anchored image whose top lies within the top margin is treated as a letterhead and the page's
+top padding becomes that image's bottom plus a small gap. Every other image is capped at the
 text width and keeps its shape. The editor sets these attributes; nothing on the API side reads
 them beyond writing the offset as an inline position.
 
