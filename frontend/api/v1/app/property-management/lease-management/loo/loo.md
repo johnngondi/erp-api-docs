@@ -862,10 +862,16 @@ would bold every cell.
 (what the editor produces; the API stores the content as sent, `longtext`). How the image sits
 against the text is carried on the element as `data-loo-wrap` (one of the editor's wrap kinds:
 `inline`, `square`, `squareLeft`, `squareRight`, `tight`, `through`, `topAndBottom`, `behind`,
-`inFront`; omitted means inline) and, for an anchored image, `data-loo-x` / `data-loo-y` as an
-offset in points. The PDF approximates that layout: square and tight kinds float left (right for
-`squareRight`), `topAndBottom` breaks the line, `inFront` / `behind` sit over or under their
-paragraph. The editor sets these attributes; nothing on the API side reads them.
+`inFront`; omitted means inline), for an anchored image `data-loo-x` / `data-loo-y` as an
+offset in points, and `data-loo-rel-h` / `data-loo-rel-v` naming the frame the offset is measured
+from when it is not the paragraph/column (`page` for a letterhead). The PDF approximates that
+layout: square and tight kinds float left (right for `squareRight`), `topAndBottom` breaks the
+line, `inFront` / `behind` sit over or under their paragraph, and a **page-anchored image is placed
+on the page box itself**, whatever its wrap kind. The PDF prints with no printer margins (the
+margins are padding on the page), so a page-anchored image at `0,0` with the page's width runs
+edge to edge above the text, as a printed letterhead does. Every other image is capped at the
+text width and keeps its shape. The editor sets these attributes; nothing on the API side reads
+them beyond writing the offset as an inline position.
 
 ### Send
 
