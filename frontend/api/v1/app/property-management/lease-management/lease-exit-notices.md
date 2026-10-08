@@ -58,10 +58,18 @@ Request body:
 | `reason_for_exit` | Yes | string | Exit reason |
 | `supporting_upload_id` | No | integer | Must exist in `uploads.id` |
 | `auto_credit_arrears` | No | boolean | Defaults to `false`. See "Auto-credit arrears" below |
+| `repair_damages_cost` | No | number | Min `0`. Repair or damage cost deducted from the refund |
+| `repairs_cost_quote_upload_id` | No | integer | Must exist in `uploads.id`. The quote backing the repair cost |
 
 Notes:
 
-- `deposit_held` and `arrears` are computed automatically.
+- `deposit_held` and `arrears` are computed automatically. They are the lease's
+  `total_deposit_amount` and `current_arrears` at the moment of initiation, so a form can preview
+  them from `GET leases/{lease}` before submitting.
+- The app shows amount to refund as `deposit_held` - `arrears` - `repair_damages_cost`, floored
+  at `0`. Processing does not yet refund that figure: the refund bill is the deposit less only the
+  arrears credited when `auto_credit_arrears` is `true`, and `repair_damages_cost` is not deducted.
+- The tenant portal does not accept the repair fields on create. Staff set them.
 - Anyone who can view the lease can initiate its exit notice: the `view-lease` permission plus an
   allocation to the lease's property. `update-lease` is not required. A lease on a property the
   user is not allocated to returns `403` with `You are not assigned to this property.`
