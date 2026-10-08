@@ -682,6 +682,13 @@ untrue. Two exceptions, both because the field edited is an *input* to the figur
   see [Deposits](#deposits)) and refreshes the deposit tags that were not hand-corrected —
   *unless* the same request also carried the deposit column in question.
 
+**Every save re-resolves the tags.** After the columns and corrections are written, the
+whole registry is resolved again against the offer as it now stands and stored, so a figure
+edited on the data tab prints in the preview and the document at once. Hand corrections
+(`is_overridden`), including the ones in the same request, are left alone. The `PATCH`
+response carries the refreshed `tags_content` and `loo.tag_values`, so a client re-reads
+them from the response rather than fetching again.
+
 A `tag_values` correction for a tag whose format is `html` (today `rent_breakdown`) is
 sanitised before it is stored: only `table`, `thead`, `tbody`, `tr`, `th`, `td`, `p`,
 `span`, `br`, `strong` and `em` survive, with `class`, `colspan` and a `style` limited to
