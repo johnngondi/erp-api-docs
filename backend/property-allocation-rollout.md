@@ -109,6 +109,23 @@ tasks to match. It does the same for `actors_ids` on current pending procurement
 which carry no pending tasks. A step nobody qualifies for is left as it is and listed, so it can
 be fixed by naming a holder on the property.
 
+**All open work at once.** `workflow:reassign-open-work` runs the command above and then puts every
+pending task back in front of the people who hold the work today: the tasks behind each open
+approval step are made to match the step's actors (and dropped once the step is acted on), the
+review / generate-offer tasks on lease applications are re-raised for the people the role
+settings resolve to on the application's property (an approved application with a live offer
+keeps none), the tasks on procurement requests are re-raised for the current step's actors or the
+creator the request went back to, and a task whose record is gone or whose holder left the
+company is deleted. Tasks that would go to the same people keep their rows. `--dry-run` writes
+nothing and lists what would move; `--company=` limits it. It runs nightly at 02:40 and is safe
+to run by hand after a role or allocation change:
+
+```bash
+php artisan workflow:reassign-open-work --dry-run
+php artisan workflow:reassign-open-work
+```
+
+
 **Reads return 403 with a distinct message.** A property the user is not allocated to answers
 `You are not assigned to this property.` rather than a generic permission error, so the frontend can
 tell the two apart.
