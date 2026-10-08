@@ -381,7 +381,8 @@ bank_accounts[]:{ component, bank_name, branch, account_name, account_number }  
                 # also carries paybill_number (the bank's paybill, or null)
 mobile_money[]: { component, bank_name, paybill_number, account_number }  # invoice —
                 # the property has its own `facilities.paybill_number` → one row:
-                # that paybill, account_number = invoice number (INV0481),
+                # that paybill, account_number = `facilities.paybill_account_number`
+                # when set, else the invoice number (INV0481),
                 # component "All charges", bank_name null. Who holds the
                 # collection account plays no part.
                 # Otherwise → one row per bank_accounts[] row whose bank has a

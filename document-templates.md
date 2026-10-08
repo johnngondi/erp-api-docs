@@ -182,7 +182,7 @@ Each block declares:
 | `payments` | invoice | table | `payments.type`, `.number`, `.date`, `.method`, `.reference`, `.amount` — receipt + credit-note allocations against this invoice |
 | `invoice_ageing` | invoice | table | `ageing.label`, `.amount` — Current/1-30/31-60/61-90/90+ buckets |
 | `payment_details` | invoice | table | The facility's **collection** `facility_bank_accounts`, one row per lease component: `bank_accounts.component`, `.bank_name`, `.branch`, `.account_name`, `.account_number`, `.paybill_number` |
-| `mobile_money` | invoice | table | M-Pesa paybill rows: `mobile_money.paybill_number`, `.account_number`, `.bank_name`, `.component`. The property's own `facilities.paybill_number` against the invoice number; when blank, each pay-to account's `banks.paybill_number` against its account number. `hidesWhenEmpty` |
+| `mobile_money` | invoice | table | M-Pesa paybill rows: `mobile_money.paybill_number`, `.account_number`, `.bank_name`, `.component`. The property's own `facilities.paybill_number` against `facilities.paybill_account_number` (the invoice number when that is blank); when blank, each pay-to account's `banks.paybill_number` against its account number. `hidesWhenEmpty` |
 | `bank_account_details` | receipt | fields | Where the receipt's money landed: `payment_account.bank_name`, `.branch`, `.account_name`, `.account_number` |
 | `payment_transactions` | receipt | table | `transactions.transaction_date`, `.transaction_number`, `.method`, `.amount` |
 | `invoice_allocations` | credit note, receipt | table | Invoices this document cleared: `allocations.invoice_number`, `.invoice_date`, `.invoice_total`, `.allocated`, `.balance` |
@@ -231,7 +231,8 @@ items[]:        { description, notes, quantity, unit_price, amount, tax, tax_rat
                 # invoice/cn — lines sharing component + quantity + notes print as ONE row
                 # (GroupsLineItems): unit_price, amount, tax, total are summed; tax_rate is
                 # null when the lines differ. Utility-bill lines never merge. tax_summary
-                # still reads the raw lines
+                # still reads the raw lines. Rows print in lease_components.sort_order (ties and
+                # lines with no component keep billed order; no-component lines print last)
 totals:         { amount, tax, total, paid, balance }
 tax_summary[]:  { name, rate, taxable, tax }
 payments[]:     { type, number, date, method, reference, amount }      # invoice
@@ -240,7 +241,8 @@ ageing:         { as_at, buckets: [ { label, amount } ] }              # invoice
 bank_accounts[]:{ component, bank_name, branch, account_name, account_number, paybill_number }  # invoice
 mobile_money[]: { component, bank_name, paybill_number, account_number }  # invoice —
                 # the property has its own `facilities.paybill_number` → one row:
-                # that paybill, account_number = invoice number (INV0481),
+                # that paybill, account_number = `facilities.paybill_account_number`
+                # when set, else the invoice number (INV0481),
                 # component "All charges", bank_name null. Who holds the
                 # collection account plays no part.
                 # Otherwise → one row per bank_accounts[] row whose bank has a

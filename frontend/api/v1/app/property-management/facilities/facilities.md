@@ -399,6 +399,7 @@ Create/update payload example:
   "physical_address": "Kilimani",
   "coordinates": null,
   "paybill_number": "888999", // optional, max 20; null or "" clears it
+  "paybill_account_number": "WESTLANDS", // optional, max 50; null or "" clears it
   "auto_generate_utility_meters": true, // deprecated: accepted but ignored, meters are never generated for new spaces (they belong to leases, see utility-meters.md)
   "esd_type": "incotex", // incotex | tevin | novitas | etims | null
   "esd_config": {
@@ -501,11 +502,16 @@ Rules:
 - On update, leave `auth_key` out to keep the stored key. Send `"auth_key": null` to clear it. Send `"esd_config": null` to clear the whole config.
 - With sectioned payloads (`basic` / `location` / `structure`), send `esd_type` and `esd_config` inside `basic` or at the top level.
 
-`paybill_number` is the M-Pesa paybill tenants of this property pay into. When it is
-set, invoices print it with the invoice number (e.g. `INV0481`) as the account. When it
-is blank, invoices print each collection account's bank paybill with that bank account's
-number as the account. On the create/edit property page the field sits on the Basic
-Details step.
+`paybill_number` is the M-Pesa paybill tenants of this property pay into, and
+`paybill_account_number` is the account they enter on it. Invoices pick the M-Pesa
+details like this:
+
+- both set: the property's paybill with `paybill_account_number` as the account;
+- only `paybill_number` set: the property's paybill with the invoice number (e.g. `INV0481`) as the account;
+- `paybill_number` blank: each collection account's bank paybill with that bank account's
+  number as the account. `paybill_account_number` is ignored without a paybill.
+
+On the create/edit property page both fields sit on the Basic Details step.
 
 Backend-required baseline fields in DTO:
 - `facility_type_id`
@@ -553,6 +559,7 @@ Facility response example:
   "physical_address": "Westlands, Nairobi",
   "coordinates": "-1.2641,36.8106",
   "paybill_number": "888999",
+  "paybill_account_number": "WESTLANDS",
   "space_unit": "SqFt",
   "status": {
     "value": "active",
