@@ -62,6 +62,9 @@ Request body:
 Notes:
 
 - `deposit_held` and `arrears` are computed automatically.
+- Anyone who can view the lease can initiate its exit notice: the `view-lease` permission plus an
+  allocation to the lease's property. `update-lease` is not required. A lease on a property the
+  user is not allocated to returns `403` with `You are not assigned to this property.`
 
 ### Auto-credit arrears
 
