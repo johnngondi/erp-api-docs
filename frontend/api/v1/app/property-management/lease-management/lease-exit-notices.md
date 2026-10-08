@@ -67,8 +67,10 @@ Notes:
   `total_deposit_amount` and `current_arrears` at the moment of initiation, so a form can preview
   them from `GET leases/{lease}` before submitting.
 - The app shows amount to refund as `deposit_held` - `arrears` - `repair_damages_cost`, floored
-  at `0`. Processing does not yet refund that figure: the refund bill is the deposit less only the
-  arrears credited when `auto_credit_arrears` is `true`, and `repair_damages_cost` is not deducted.
+  at `0`. That is the tenant's share, which management pays out manually (by cheque). Processing
+  posts the whole deposit not offset against arrears (the deposit less any arrears credited when
+  `auto_credit_arrears` is `true`) to landlord expenses as one deposit refund bill. Repairs are part
+  of that expense, so `repair_damages_cost` is not deducted from the bill.
 - The tenant portal does not accept the repair fields on create. Staff set them.
 - Anyone who can view the lease can initiate its exit notice: the `view-lease` permission plus an
   allocation to the lease's property. `update-lease` is not required. A lease on a property the
