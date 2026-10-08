@@ -123,29 +123,40 @@ the period label, then one row per component (across all granted spaces together
 per space) with the component's figure per month, per quarter (×3) and per annum (×12),
 tax included, escalated as the period states, and a **Total** row from the period's own
 `monthly` / `quarterly` / `annual`. A hand-corrected period that carries no `components`
-prints only its Total row. The markup is:
+prints only its Total row.
+
+**The markup is the editor's own table shape**, the same as the bank-account table the
+imported templates carry: no `th`, every cell a paragraph holding a span that names the
+typeface, bold and alignment inline, so the editor reads it back as a real table in the
+document's font and the PDF prints it like the bank table. The `rent-breakdown`, `period`
+and `total` classes ride along only for the PDF stylesheet.
 
 ```html
-<table class="rent-breakdown">
-  <thead><tr><th>Component</th><th>Per month</th><th>Per quarter</th><th>Per annum</th></tr></thead>
-  <tbody>
-    <tr class="period"><th colspan="4">Year 1 (1st October 2026 - 30th September 2027)</th></tr>
-    <tr><td>Rent</td><td>KES 348,000.00</td><td>KES 1,044,000.00</td><td>KES 4,176,000.00</td></tr>
-    <tr><td>Service Charge</td><td>KES 60,000.00</td><td>KES 180,000.00</td><td>KES 720,000.00</td></tr>
-    <tr class="total"><td>Total</td><td>KES 408,000.00</td><td>KES 1,224,000.00</td><td>KES 4,896,000.00</td></tr>
-    <tr class="period"><th colspan="4">Year 2 (…)</th></tr>
-    ...
-  </tbody>
-</table>
+<table class="rent-breakdown"><tbody>
+  <tr>
+    <td><p style="margin-bottom:0pt;line-height:1.08"><span style="font-family:&quot;Calibri&quot;, Carlito, Helvetica, Arial, sans-serif;font-size:11pt;font-weight:bold">Component</span></p></td>
+    <td><p style="margin-bottom:0pt;line-height:1.08;text-align:right"><span style="…;font-weight:bold">Per month</span></p></td>
+    <td>…Per quarter…</td><td>…Per annum…</td>
+  </tr>
+  <tr class="period"><td colspan="4"><p style="…"><span style="…;font-weight:bold">Year 1 (1st October 2026 - 30th September 2027)</span></p></td></tr>
+  <tr><td>…Rent…</td><td>…KES 348,000.00…</td><td>…KES 1,044,000.00…</td><td>…KES 4,176,000.00…</td></tr>
+  <tr><td>…Service Charge…</td><td>…KES 60,000.00…</td><td>…KES 180,000.00…</td><td>…KES 720,000.00…</td></tr>
+  <tr class="total"><td>…Total…</td><td>…KES 408,000.00…</td><td>…KES 1,224,000.00…</td><td>…KES 4,896,000.00…</td></tr>
+  <tr class="period"><td colspan="4">…Year 2 (…)…</td></tr>
+  ...
+</tbody></table>
 ```
 
+(`…` stands for the same `<p style><span style>` wrapping as the first row; figure cells
+carry `text-align:right`, label/total/period cells `font-weight:bold`.)
+
 The tag's `default_format` is `html` (see the formats table in the [README](README.md)):
-the editor inserts its `resolved_value` as markup, and the PDF styles `table.rent-breakdown`
-(collapsed borders, right-aligned figures, bold period and total rows). A reviewer who
-corrects a figure sends the table back through `tag_values`; it is sanitised to table,
-paragraph and emphasis elements and the `class`/`colspan` attributes, so a script or a link
-pasted into it never reaches the document. `rent_breakdown_monthly` is unchanged and still
-prints prose.
+the editor inserts its `resolved_value` as markup. A reviewer who corrects a figure sends the
+table back through `tag_values`; it is sanitised to `table`, `thead`, `tbody`, `tr`, `td`/`th`
+(`colspan`, `class`, `style`), `p`/`span` (`style`), `br`, `strong`, `em`, and the only styles
+kept are `font-family`, `font-size`, `font-weight`, `text-align`, `margin-bottom`,
+`line-height` and `vertical-align`, so a script, a link or a positioned element pasted into it
+never reaches the document. `rent_breakdown_monthly` is unchanged and still prints prose.
 `service_charge` is unchanged and still means something different: service-charge
 components only, net of tax, live off `loo_space_components`.
 
@@ -673,8 +684,9 @@ untrue. Two exceptions, both because the field edited is an *input* to the figur
 
 A `tag_values` correction for a tag whose format is `html` (today `rent_breakdown`) is
 sanitised before it is stored: only `table`, `thead`, `tbody`, `tr`, `th`, `td`, `p`,
-`br`, `strong` and `em`, with `class` and `colspan`, survive. Every other tag's value is
-stored as sent and escaped when the document is rendered.
+`span`, `br`, `strong` and `em` survive, with `class`, `colspan` and a `style` limited to
+font, weight, alignment and spacing (see [the rent tags](#the-rent-tags)). Every other
+tag's value is stored as sent and escaped when the document is rendered.
 
 `legal_fee_updated_at` and `legal_fee_recorder_id` are stamped by the server
 whenever a fee moves, and are not accepted in the payload.
@@ -834,9 +846,19 @@ Resolved values are HTML-escaped on the way in. The clause text around them is
 markup a template author wrote and passes through; a value read out of an
 application is data and does not. The one exception is a tag whose registry format is
 `html` (`rent_breakdown`): its value is markup the resolver built, and it is inserted as
-such after passing the same sanitiser a reviewer's correction goes through. A `<p>` that
-holds nothing but such a token is unwrapped first, since a table cannot sit inside a
-paragraph.
+such after passing the same sanitiser a reviewer's correction goes through. A `<p>`, `<b>`,
+`<strong>`, `<span>`, `<em>`, `<i>` or `<u>` that holds nothing but such a token is unwrapped
+first (nested ones in turn), since a table cannot sit inside a paragraph and a bold wrapper
+would bold every cell.
+
+**Images.** The clause text may carry `<img>` elements with a `data:image/…;base64` source
+(what the editor produces; the API stores the content as sent, `longtext`). How the image sits
+against the text is carried on the element as `data-loo-wrap` (one of the editor's wrap kinds:
+`inline`, `square`, `squareLeft`, `squareRight`, `tight`, `through`, `topAndBottom`, `behind`,
+`inFront`; omitted means inline) and, for an anchored image, `data-loo-x` / `data-loo-y` as an
+offset in points. The PDF approximates that layout: square and tight kinds float left (right for
+`squareRight`), `topAndBottom` breaks the line, `inFront` / `behind` sit over or under their
+paragraph. The editor sets these attributes; nothing on the API side reads them.
 
 ### Send
 

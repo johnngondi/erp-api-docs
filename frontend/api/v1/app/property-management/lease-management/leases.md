@@ -231,7 +231,14 @@ with its spaces, guarantors and `lease` loaded.
 
 Errors: `403` carrying the reason when the lease is not renewable or the caller is not
 allocated to its property; `422` keyed `lease` if another renewal was started in the
-meantime.
+meantime, or if the property (and, failing that, the tenant) has no city or country on
+record, since an application cannot be written without them.
+
+The refusal reasons, word for word: *Only an active lease can be renewed.* · *This lease
+has no end date to renew from.* · *A lease can be renewed only within 12 months of its end
+date.* · *This lease already has a renewal application in progress.* · *This lease already
+has an offer in progress.* The zero-term `422` reads *A renewal needs a term of at least one
+month.*
 
 ### Renewal state on the lease
 
