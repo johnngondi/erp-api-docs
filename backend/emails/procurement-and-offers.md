@@ -1,7 +1,7 @@
 # Procurement and offer emails
 
-Three emails built on the shared shell in [emails.md](../emails.md): the RFQ invitation, the
-quote reminder and the Letter of Offer. All three are notifications marked `SendsEmail` and
+Five emails built on the shared shell in [emails.md](../emails.md): the RFQ invitation, the
+quote reminder, the Letter of Offer, the returned lease application and the invitation to apply. All five are notifications marked `SendsEmail` and
 `HasNotificationCompany`, so they carry the company's branding and go through its mailer.
 
 | Email | Class | Recipient | Sent when | Button |
@@ -9,6 +9,8 @@ quote reminder and the Letter of Offer. All three are notifications marked `Send
 | Request for quotation | `RfqInvitationNotification` | each invited, active supplier | the procurement step of a work request is approved and the request opens for quotes | "Submit quote" → `vendor.bid` |
 | Quote reminder | `QuoteSubmissionReminderNotification` | each invited supplier who has not quoted | once per working day, by `RemindPendingQuotesService`, until they quote or the deadline passes | "Submit quote" → `vendor.bid` |
 | Letter of Offer | `LooSentNotification` | the tenant or applicant, or the address the sender typed | `SendLooAction` sends the offer | "Read and respond" → `tenant.loo`, or "Sign in" → `login` |
+| Lease application returned | `LeaseApplicationReturnedNotification` | the staff member who approved the application, else the reviewer-role holders | `ReturnLeaseApplicationAction` sends an approved application back for review, directly or through a LOO rebase | "Review application" → `app.lease_application` |
+| Invitation to apply | `LeaseApplicantInvitationNotification` | a prospective tenant, on demand (no account yet) | staff send it from the lease applications list (`InviteLeaseApplicantAction`) | "Start application" → `register` with `apply=lease` and the applicant's details |
 
 ## Request for quotation
 
@@ -74,6 +76,24 @@ attached.
 There is no PDF attachment and no public link: the offer lives behind the authenticated tenant
 portal, where `Loo::visibleToTenant()` still applies.
 
+## Lease application returned
+
+Staff, not tenants: the person asked to review an approved application again because it is not
+fit for a Letter of Offer yet. Sent through `OutboundEmail::send()` after the return commits, to
+the same people who get the "Re-review returned lease application" pending task
+(`LeaseApplicationResponsibleUsers::returnedReviewers()`).
+
+- **Channels:** database, mail when the reviewer has an address, and SMS when they have a phone
+  number. Queued on `notifications`. This is one of the few staff messages allowed out by text;
+  the user asked for it on 7 October 2026 (see [messaging.md](../messaging.md)).
+- **Content:** title `APPLICATION RETURNED`; "{returner} returned the lease application from
+  {applicant} for {property}. It is not ready for a Letter of Offer yet."; the reason in a
+  callout; a card with the applicant, property and returned date; the button.
+- **SMS:** one line with the applicant, property and reason.
+
+Database payload: `title`, `message`, `lease_application_id`, `return_reason`, plus the
+`resource_*` keys from `ResolvesRecipientResource`.
+
 ## Links
 
 | Key | Path |
@@ -81,6 +101,7 @@ portal, where `Loo::visibleToTenant()` still applies.
 | `vendor.bid` | `/vendor/procurement/rfq-quotes/create?job={job}`; `job` is the procurement request id |
 | `vendor.rfq` | `/vendor/procurement/open-jobs/{id}`; linked from the invitation's button note |
 | `tenant.loo` | `/tenant/lease-management/loos/{id}` |
+| `app.lease_application` | `/app/property-management/lease-management/lease-applications/{id}` |
 | `login` | `/auth/login` |
 
 ## Previews

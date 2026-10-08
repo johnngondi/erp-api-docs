@@ -95,6 +95,27 @@ marked default — which clauses a tenant is asked to sign is not a coin toss. A
 explicit id that is not eligible for the property and space type is refused too,
 so a template scoped elsewhere cannot be reached by id.
 
+## Repairing imported text
+
+Templates imported from EPMAS, and the offers generated from them, can print `yearÔÇÖs` for
+`year’s`, `ÔÇ£`/`ÔÇØ` for curly quotes and `ÔÇó` for a bullet. That is UTF-8 punctuation read as
+code page 850 and saved again. It is a data problem, not a rendering one, so it is repaired in the
+data:
+
+```bash
+php artisan loos:repair-text-encoding --dry-run   # counts per table, changes nothing
+php artisan loos:repair-text-encoding
+```
+
+It repairs `loo_templates` (offer and agreement), every offer's own copy in `loos`, and the stored
+`loo_tag_values`. Only complete damaged sequences change, so genuine accented text (`café`,
+`Müller`) is left alone, and a second run finds nothing. `updated_at` and the activity log are not
+touched. A sent offer's filed PDF is not re-rendered; the next export or send prints the repaired
+text.
+
+A doubled currency such as `KES KES 2,840.00` is a different thing: the template writes `KES` in
+front of a tag that already prints its currency. Remove the literal `KES` from the template.
+
 ## Related
 
 - [Tag reference](./loo-tags.md) — every tag that can be dragged into this text, and how each resolves

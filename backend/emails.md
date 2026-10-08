@@ -126,8 +126,8 @@ Email is on by exception.
 
 Marked today: `TemporaryPinNotification`, `LooSentNotification`, `TestMessagingNotification`,
 `LpoIssuedNotification`, `QuoteSubmissionReminderNotification`,
-`BillInvoiceRejectedNotification`, `DocumentIssuedNotification`, and the new email types
-below.
+`BillInvoiceRejectedNotification`, `DocumentIssuedNotification`,
+`LeaseApplicationReturnedNotification`, and the new email types below.
 
 ## Sending
 
@@ -259,4 +259,4 @@ throws. `login()`'s `redirect` is the target's path, not an absolute URL. The ve
 - [Codes: PIN reset and forgot password](emails/codes.md)
 - [Tenant documents and invoice reminders](emails/tenant-documents.md)
 - [Payables documents: LPO, payment advice, remittance advice](emails/payables-documents.md)
-- [Procurement and offers: RFQ invitation, quote reminder, Letter of Offer](emails/procurement-and-offers.md)
+- [Procurement and offers: RFQ invitation, quote reminder, Letter of Offer, lease application returned](emails/procurement-and-offers.md)

@@ -192,7 +192,8 @@ List query support:
   - `filter[is_autobilled]`, `filter[is_a_charge]`, `filter[is_land_fee_charge]`, `filter[is_utility_charge]`
   - `filter[is_legal_fees_deposit]`, `filter[is_deposit]`
 - Sort:
-  - `sort=tax_id,hs_code,name,status`
+  - `sort=tax_id,hs_code,name,status,sort_order,id`
+  - Default: `sort_order`, then `id` - the order every component list is offered in
 - Pagination:
   - `per_page` (defaults to `config('app.query.default_per_page')`)
 
@@ -207,6 +208,7 @@ Create/Update payload (`LeaseComponentData`):
 | `is_autobilled` | No | boolean | Defaults to `true` |
 | `is_legal_fees_deposit` | No | boolean | Marks the component legal fees are billed against. Omit it and the stored value is left alone. |
 | `is_deposit` | No | boolean | Marks the component as a deposit. Omit it and the stored value is left alone. |
+| `sort_order` | No | integer | Position in component lists, minimum `1`. Omitted on create, the component goes last; omitted on update, the stored value is left alone. |
 
 Response item shape (`LeaseComponentResource`):
 
@@ -226,6 +228,7 @@ Response item shape (`LeaseComponentResource`):
 | `is_a_charge` | boolean | Billed as a charge rather than a rate |
 | `is_land_fee_charge` | boolean | Land rate / land rent |
 | `is_utility_charge` | boolean | Metered utility |
+| `sort_order` | integer | Position in component lists |
 | `status` | object | `{ value, color }` |
 
 #### `is_legal_fees_deposit` and `is_deposit`
@@ -246,6 +249,15 @@ returned by the resource.
   components added later.
 
 The settings screen should expose both as checkboxes alongside the existing type flags.
+
+#### `sort_order`
+
+The order components are offered in: this list by default, and the manual invoice component
+dropdown (`leases/{lease}/invoice-components`). Ties fall back to `id`. Existing components were
+numbered by migration in the order the old system listed them (Rent, Service Charge, Promotion
+Fee, Deposit, Parking, Signage, Water, Electricity, Excess Service Charge), then every other
+component by id.
+There is no reorder screen yet; send `sort_order` on update to move a component.
 
 ### Lease Component Payment Priorities
 

@@ -537,16 +537,29 @@ ETR fields on the invoice resource:
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}`
 
-One endpoint, three outcomes, decided by the invoice.
+One endpoint, four outcomes, decided by the invoice.
 
 | Invoice | Outcome |
 |---|---|
 | **Payments allocated** | Refused. `permissions.delete` is `false`, so hide the action; a direct call returns **403**. The money is reallocated to another invoice first |
 | **Issued and carrying a CU number** | **Reversed**, not deleted. A credit note for the full value is raised and signed to ETR. The invoice survives |
-| **Pending, or no CU number** | Cancelled and removed, along with its tenant statement entries and lease billings |
+| **Live and unfiled** (unpaid, partially paid) | Refused — **cancel it first**. `permissions.delete` is `false`; a direct call returns **403** with `"Cancel this invoice before deleting it."` |
+| **Cancelled, pending or rejected** | Removed, along with its tenant statement entries and lease billings |
 
-A **pending** invoice is always removed outright, even if it carries a CU number: it is a draft the
-tenant never received, so there is nothing filed to reverse.
+### Cancel before delete
+
+Deleting is not a stronger cancelling. **Cancel** keeps the invoice and posts an offsetting line to
+the tenant statement; **Delete** removes the invoice *and* those entries, so an invoice the tenant
+has already had would leave nothing behind saying it existed.
+
+So an invoice that reached the tenant has to be cancelled first — the cancellation is that record.
+In practice deleting is now a two-step action for most invoices, and the Delete button simply will
+not appear on a live one.
+
+A **pending** invoice is still removed outright, even if it carries a CU number, and so is a
+**rejected** one: neither reached the tenant, so there is nothing to withdraw. Cancelling is
+refused on both — a rejected invoice *"can only be deleted"*, and cancelling a pending one deletes
+it — so requiring cancellation first would leave them undeletable for good.
 
 Response:
 

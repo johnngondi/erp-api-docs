@@ -63,6 +63,19 @@ Example:
 | `purchase_item_id` | Yes | integer | Must exist in `purchase_items.id` |
 | `quantity` | Yes | integer | Minimum `1` |
 
+### Suppliers asked to quote
+
+`GET /requests/{procurementRequest}` returns `suppliers`: every supplier asked to quote on the request. Those who have quoted come first, in the order they quoted, then the rest by name. The list and create/update responses leave it out.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | The invitation |
+| `vendor` | object | `{ id, name, email, phone, profile_photo_url }` |
+| `is_default`, `is_preferred` | boolean | - |
+| `has_quoted` | boolean | Whether the supplier has sent a quote |
+| `quote` | object or null | `{ id, status: { value, color }, submitted: { raw, formatted, diff } }`. No amounts: those stay on `quotes` and the bids list |
+| `invited` | object | `{ raw, formatted, diff }` |
+
 ### Review step payload
 
 `PUT/PATCH /requests/{procurementRequest}/steps/{step}`

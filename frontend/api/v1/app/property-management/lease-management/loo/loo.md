@@ -69,6 +69,12 @@ parking and signage alike, since all four reach a LOO the same way. Tax is the r
 own `tax_id`: an explicit `NULL` means the space was priced tax-free on purpose, and
 inheriting the component default would quietly overrule that.
 
+A tax's `value` is a **fraction**, as everywhere else in billing: `0.16` is 16%. A
+component's monthly tax is `amount × value`. Until 7 October 2026 the schedule divided by
+100 again and charged 16% VAT as 0.16%. Offers drafted before then carry the
+under-taxed schedule until they are recomputed (any edit to a draft or pending offer
+does it, or `php artisan loos:recompute-rent-schedules`) or, once sent, [rebased](#rebase).
+
 Escalation is **compounding** — 10% twice is ×1.21, not ×1.2 — matching what
 `ProcessLeaseEscalationJob` does to a live lease. Where two components escalate on
 different cycles the term is cut on the **union** of their dates, so a period boundary
@@ -145,6 +151,59 @@ three letters (`Britam` → `BRI`).
 Because the reference is stamped onto the record when the LOO is issued, and the
 LOO holds its own `facility_id`, a later rename or a re-pointed application
 cannot change a reference already in a tenant's hands.
+
+## An offer needs something to cover
+
+Generation is refused with `422` and a `spaces` key when the record it is drafted from
+covers no units:
+
+```json
+{ "errors": { "spaces": ["An offer can only be drafted once spaces have been allocated."] } }
+```
+
+`permissions.generateLoo` carries the same rule, so the action disappears rather than
+failing when pressed. It is now `generate-loo` **and** an approved application **and** a
+non-empty allocation.
+
+**Expect this on applications approved before the rule existed.** Approval now requires an
+allocation, so only older records can reach it — and an approved application cannot be
+reopened, so Generate LOO stays unavailable on them for good. That is the rule working,
+not a fault. Show the message as it comes; there is no action the user can take.
+
+A renewal is checked against the items on the lease being renewed, since that is what it
+copies.
+
+## Who an offer is for, and what it was generated from
+
+Two fields on the **staff** list and the staff single offer, for the columns beside the
+reference:
+
+```json
+"loo_template": { "id": 4, "name": "Standard Retail Offer" },
+"prepared_for": { "type": "lease_application", "id": 24, "name": "Safaricom PLC" }
+```
+
+`loo_template` is the template the offer was generated from. Deliberately a link rather
+than the full template — that resource carries `offer_content` and `agreement_content`,
+so a page of 25 offers would ship 25 copies of two clause documents to print one line.
+Call the templates endpoint when somebody opens one.
+
+`prepared_for` is the counterparty, read off whatever the offer was prepared from:
+
+| `type` | Taken from | Who that is |
+|---|---|---|
+| `lease_application` | the application's `applicant_name` | the applicant |
+| `lease` | the lease's tenant | the tenant |
+
+**A `new lease` offer has no tenant**, which is why a column reading only tenants comes up
+empty on most of the list. The counterparty is still an applicant until the lease is
+raised. `type` is sent so the column can be labelled per row rather than guessed, and `id`
+gives you something to link to.
+
+`name` falls back to the linked user when an application carries no name of its own.
+
+**Neither field appears on the tenant portal**, which serves the same resource. The
+template an offer was built from is internal.
 
 ## LOO fields
 
@@ -258,10 +317,11 @@ comment threads stay readable. A rejected offer is spent, like a declined or
 expired one, so it does not block generating a fresh LOO for the same source; the
 corrected offer is that new LOO, with its own chain.
 
-Export, send, and everything the tenant portal is allowed to see are gated on
+Send, and everything the tenant portal is allowed to see, are gated on
 `approvalChainCleared()`, which reads the **status** rather than the steps — a LOO
 approved because no step applied to it has no chain at all, and is no less
-approved for that.
+approved for that. [Export](#export) is not: a draft or an offer in its chain can be
+downloaded too, marked DRAFT.
 
 ## Comments
 
@@ -394,6 +454,9 @@ signature.
 | `signature_upload_id` | signature | The signed copy, on an acceptance only |
 | `decline_reason` | signature | On a decline only |
 | `promoted_lease_id`, `promoted_at` | promotion | What the offer became |
+| `can_promote` | promotion | Whether this offer can be onboarded right now — drives the button |
+| `can_withdraw` | withdrawal | Whether this offer can be taken back right now — drives the button |
+| `withdrawn_at`, `withdrawal_reason`, `withdrawn_by` | withdrawal | Set when an offer is withdrawn |
 
 `document_upload_id` is the copy that went out, not one that could be
 re-rendered. Re-rendering reads the LOO as it stands *now*; what a tenant signed
@@ -420,6 +483,29 @@ is the **only** step that needs to know the source — everything after it is a
 `renewal` for a [renewal application](../lease-applications.md#renewal-applications)).
 A renewal prepared from an application reads its tags from the application, like a
 `new lease`.
+
+**Choosing a template.** Left out, the server resolves it: the default for this property and space
+type, or the only eligible one. Where several are eligible and none is default, it refuses with a
+`422` keyed `loo_template_id` — **and returns the choices alongside it**, so a picker needs no
+second call:
+
+```json
+{ "errors": {
+    "loo_template_id": ["Several templates cover this property and space type. Choose one, or mark a default."],
+    "eligible_templates": [
+      { "id": 4,  "name": "Standard Commercial Offer", "is_default": false },
+      { "id": 14, "name": "Warehouse Offer",           "is_default": false }
+    ]
+} }
+```
+
+Resend with `loo_template_id` set to one of those ids. A template that is not eligible is refused
+separately with *"That template is not available for this property and space type."*
+
+If you would rather list them up front, the eligible set is
+`GET .../settings/loo-templates?filter[facility_id]=…&filter[facility_type_id]=…&filter[is_active]=1`
+— **all three filters**, since eligibility is active **and** property **and** type. Omitting
+`is_active` offers templates the server will reject.
 
 The response carries the offer, its resolved tags, and what the registry
 deliberately did not resolve:
@@ -623,7 +709,16 @@ The rendered document is the editor content and nothing else: no letterhead, tit
 reference line or footer is added around it. Write those into the template (the
 `{{our_ref}}` and `{{offer_date}}` tags are there for the reference line).
 
-Gated on the approval chain. A file, once produced, gets forwarded.
+Allowed on a `draft` and a `pending_approval` offer as well as an approved one
+(`approved`, `sent`, `accepted`), so staff can read and circulate the document before it is
+approved. Refused (`403`) on a closed offer: `declined`, `expired`, `withdrawn` or `rejected`.
+
+**An offer that has not cleared approval is watermarked.** A large, translucent red "DRAFT"
+runs diagonally across every page of the PDF and the HTML. An approved offer carries no mark.
+
+Only an approved offer can be [sent](#send): the file Send attaches and files against the
+offer is still refused for anything short of a cleared chain, so a draft never reaches the
+tenant.
 
 The response is the file. `X-Loo-Unresolved-Tags` names any token the render left
 standing or blank — reported rather than refused, since a blank is often correct
@@ -698,8 +793,57 @@ the signed copy as its `signed_agreement_upload_id`. The application's *status*
 does not move — it already sits at `approved`, since an offer cannot be drafted
 against one that does not.
 
-Refused when the offer is not `accepted`, when it has already been promoted, and
-when it grants no spaces.
+**An offer may be onboarded from `sent` as well as `accepted`** — as soon as it has gone to the
+tenant, without waiting for their answer. Anything earlier is refused: a `draft`, one awaiting
+approval, or one `approved` but not yet sent has not reached the tenant, so a lease raised from it
+would belong to an offer nobody has read.
+
+**An onboarded offer can no longer be declined.** Recording a decline against one that has already
+become a lease is refused with a `422` keyed `loo`. Without that, a decline left the lease active -
+billing, holding its space, on the reports - with a declined offer still pointing at it.
+
+**Accepting after onboarding is still allowed, and is the normal path.** It is how the signed offer
+is captured, and the lease's Documents tab reads that signature straight off the offer, so a tenant
+signing after the lease exists is exactly what should happen.
+
+Refused when the offer has not been sent, when it has already been promoted, and when it grants no
+spaces.
+
+**Read `can_promote` to decide whether to offer the button.** It is the same rule the endpoint
+enforces — sent or accepted, right type, not already promoted. Do **not** use
+`permissions.promote` for this: that checks the caller's permission only, so it is `true` on a
+draft and on an offer already turned into a lease.
+
+### Withdraw
+
+`POST /api/v1/app/{company}/property-management/lease-management/loos/{loo}/withdraw`
+
+Takes back an offer that should not have gone out — wrong figures, wrong recipient. Optional body:
+
+```json
+{ "reason": "Wrong service charge rate" }
+```
+
+Allowed from **`approved`** and **`sent`** only. A `draft` or one awaiting approval can simply be
+deleted, so withdraw adds nothing there; an `accepted` offer is an agreement the tenant has given,
+which is a different conversation from retracting a mistake.
+
+**Refused on an offer already onboarded into a lease.** The lease is live and nothing here unwinds
+it — allowing it would reopen the hole the decline guard closes.
+
+A withdrawn offer is **spent**, so the application is free for a replacement immediately. That is
+the point of it: until now the error raised when drafting a replacement said *"Withdraw or delete
+it"*, while delete stops working the moment an offer is sent — leaving a decline the tenant never
+gave as the only way out.
+
+**Read `can_withdraw` to decide whether to offer the button.** It is the same rule the endpoint
+enforces. `permissions.withdraw` is not a substitute: it checks the caller's permission only, so it
+is true on a draft and on an offer already withdrawn.
+
+Withdrawal is recorded separately from a decline — `withdrawn_at`, `withdrawn_by`,
+`withdrawal_reason` — because one is the landlord's decision and the other the tenant's. Writing a
+withdrawal into the decline columns would make the record say the tenant answered when they never
+did.
 
 #### Renewals and addenda
 
@@ -714,6 +858,69 @@ Everything above that point is preparation-agnostic: the route is `{loo}`, the
 controller does not know the source, and the action branches on
 `type->preparesFromApplication()`. Wiring the update path in later is a branch
 inside one method with nothing above it to restructure.
+
+### Rebase
+
+`POST /api/v1/app/{company}/property-management/lease-management/loos/{loo}/rebase`
+
+Throws the offer away and puts its application back where it was before the offer was drafted.
+Use it when the offer has to be redone from scratch: the application changed, the figures were
+wrong, or the application itself needs another review.
+
+```json
+{ "return_to": "approved" }
+```
+
+```json
+{ "return_to": "reviewer", "reason": "Service charge rate on the application is outdated." }
+```
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `return_to` | Yes | string | `approved` \| `reviewer` |
+| `reason` | When `return_to` is `reviewer` | string | Max 1000 characters. Optional for `approved` |
+
+What happens, in one transaction:
+
+1. The offer is **deleted** (soft-deleted, like `DELETE loos/{loo}`). Its pending tasks,
+   approval-step tasks and notifications go with it, and the tenant portal stops showing it.
+2. Then, by `return_to`:
+   - **`approved`**: the application stays `approved`, and the **Generate Letter of Offer**
+     task is raised again for the LOO generation role. The next offer is drafted with
+     [`POST lease-applications/{application}/loos`](#generating), from the application as it
+     stands now.
+   - **`reviewer`**: the application is
+     [returned to its reviewer](../lease-applications.md#return-an-approved-application):
+     it goes back to `pending`, the approver gets a task, and an in-app, email and SMS
+     notification with the reason.
+
+The response is the application, not the offer, which no longer exists:
+
+```json
+{
+  "message": "Offer rebased. The application is waiting for a new offer.",
+  "application": { "id": 12, "status": { "value": "approved", "color": "success" }, "...": "..." }
+}
+```
+
+Refused with `422` (key `loo`) when the offer:
+
+- was prepared from a **lease** (a renewal or addendum). There is no application to return to.
+  Delete or withdraw it instead;
+- has been **onboarded into a lease**. The lease is live and nothing here unwinds it;
+- is already **spent** (`declined`, `expired`, `rejected`, `withdrawn`). It no longer blocks a
+  new offer, so there is nothing to rebase. To send the application back to its reviewer, use
+  [`PATCH lease-applications/{application}/return`](../lease-applications.md#return-an-approved-application).
+
+Any other status can be rebased: `draft`, `pending_approval`, `approved`, `sent`, and `accepted`
+(an acceptance that has not been onboarded).
+
+**Who may rebase:** `rebase-loo` for `return_to: approved`. `return_to: reviewer` also needs
+`return-lease-application`, the permission behind returning an application directly.
+
+**Read `can_rebase` to decide whether to offer the button.** It applies the same status rules as
+the endpoint. For the caller's rights, read `permissions.rebase` (may rebase at all) and
+`permissions.rebaseToReviewer` (may also choose the reviewer option).
 
 ## The tenant portal
 
@@ -764,7 +971,9 @@ offer is drafted from a source record rather than posted into existence.
 | `generate-loo` | app | Drafting one from a source record |
 | `update-loo` | app | Editing clauses, fields and resolved tags; **granting, withdrawing and re-pricing spaces**; submitting for approval |
 | `delete-loo` | app | Deleting a draft, a pending or a rejected offer |
-| `export-loo` | app | Rendering **either document** — offer or agreement — to PDF or HTML |
+| `rebase-loo` | app | [Rebasing](#rebase) an offer: deleting it and putting its application back to `approved` |
+| `return-lease-application` | app | With `rebase-loo`, rebasing to the reviewer. On its own, [returning an approved application](../lease-applications.md#return-an-approved-application) |
+| `export-loo` | app | Rendering **either document** — offer or agreement — to PDF or HTML, a draft included (watermarked) |
 | `send-loo` | app | Delivering to the tenant |
 | `sign-loo` | **app + tenant** | Answering an offer: the tenant in the portal, or staff recording one that came back on paper |
 | `view-loo-template` | app | Reading templates and the tag registry |

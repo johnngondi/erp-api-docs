@@ -11,7 +11,7 @@ Each is a `DocumentEmail` definition in `App\Support\Mail\Documents`, sent by
 
 | Document | Definition | Recipient | Sent when |
 |---|---|---|---|
-| Invoice | `InvoiceEmail` | the lease tenant | `ProcessInvoiceAction` finalises it (status `unpaid`, or `paid` / `partially paid` when an overpayment or open credit settles it at once) |
+| Invoice | `InvoiceEmail` | the lease tenant | `ProcessInvoiceAction` finalises it (status `unpaid`, or `paid` / `partially paid` when an overpayment or open credit settles it at once). An invoice that carries tax waits for its ETR signature: it is emailed from `SignEtrDocumentAction` the moment it is signed |
 | Credit note | `CreditNoteEmail` | the lease tenant | `ProcessCreditNoteAction` processes it for the first time |
 | Receipt | `ReceiptEmail` | the payer (`paying_user_id`) | it is first confirmed: `ReceiptService::createReceipt()` when no approval applies, `ProcessReceiptAction` on the approval and bypass paths |
 
@@ -21,6 +21,10 @@ Each is a `DocumentEmail` definition in `App\Support\Mail\Documents`, sent by
 - **After commit.** Each hook registers the send with `DB::afterCommit()`, so a rolled-back
   request sends and stamps nothing. It is also why the hook can see links that a caller writes
   after processing the document (the opening balance row, the reversal link).
+- **A taxed invoice goes signed.** An invoice with tax is not emailed until it has a CU number.
+  Signed is enough: a failed KRA verification of the number (`cu_validation_status = failed`)
+  does not hold it back. An invoice signed while still pending is emailed when it is processed.
+  An invoice with no tax is emailed at processing, signed or not.
 - **Not while suppressed.** Nothing is sent inside `OutboundEmail::suppress()` (the EPMAS
   importer).
 - **No address, no email.** A tenant or payer with no email address gets nothing, and the
@@ -42,9 +46,10 @@ the figures match the public page to the cent.
 - **Receipt:** the amount received with the date, method and reference, what it was applied
   to, anything held on account, and "View receipt".
 
-The PDF is attached when the company has a usable template: the invoice through
-`InvoiceReminderSettings::templateFor()`, the credit note and receipt through
-`PublicDocumentTemplates::templateFor()`. With no template, or a render that fails, the email
+The PDF is attached when the company has a usable template, chosen by
+`PublicDocumentTemplates::templateFor()`: the company's default template for the document type
+and property, else its newest active one. A new invoice uses the default invoice template; the
+"Invoice Reminder Template" setting is for payment reminders only. With no template, or a render that fails, the email
 goes with the link alone.
 
 ### Exclusions
@@ -57,6 +62,28 @@ goes with the link alone.
 | An invoice re-issued for a cancelled ETR-signed credit note | `facility_invoices.reissued_from_credit_note_id` is set |
 | A credit note that reverses an ETR-signed invoice | an invoice names it in `reversal_credit_note_id` |
 | The negative mirror receipt that cancels a remitted receipt | its amount is negative (it is also written directly, never through the hooks) |
+
+### Sending invoices that were never sent
+
+`invoices:send-issued` emails ETR-signed invoices that have not been sent yet (`emailed_at`
+empty), as the "new invoice" email with the default template, not a reminder.
+
+```bash
+php artisan invoices:send-issued --from=2026-10-01 --dry-run   # list, send nothing
+php artisan invoices:send-issued --from=2026-10-01 --company=1
+```
+
+| Option | Meaning |
+|---|---|
+| `--from=` | Required. Earliest issue date (the backdated `transaction_at`, else the day it was raised). Imported EPMAS invoices carry CU numbers too, so there is no default |
+| `--to=` | Latest issue date |
+| `--company=` | Only this company |
+| `--limit=` | Send at most this many |
+| `--without-etr` | Also send taxed invoices that are not ETR signed yet, for when the ETR device is down. They go without a CU number, and signing them later does not send them again |
+| `--dry-run` | Print, per company, what would be sent |
+
+It applies the same checks as the automatic email (status, opening balance, re-issue, a tenant
+with an address) and stamps `emailed_at`, so running it twice sends nothing new.
 
 Everything else that reaches the hooks is a real charge or credit to the tenant and is
 emailed: the monthly invoice run and "generate next period", manual invoices and credit
@@ -79,7 +106,11 @@ In each company with reminders on, an invoice that is
 - `unpaid` or `partially paid`,
 - with a `balance` above zero,
 - past its `due_at`,
-- and not an opening balance (no `lease_opening_balances` row names it).
+- not an opening balance (no `lease_opening_balances` row names it),
+- and, when it carries tax, ETR signed (it has a CU number).
+
+`emailed_at` records when the invoice was first sent; `last_reminded_at` when the latest reminder
+went. Both are returned on the invoice resource.
 
 ### Cadence
 

@@ -55,6 +55,24 @@ Two further rules:
 Shared implementation: `app/QueryFilters/Concerns/MatchesIdsBeforeSearch.php`, used by the invoice,
 bill, credit note, receipt, lease, remittance, payment voucher, procurement request and LPO filters.
 
+### People searches require every word
+
+The tenant, landlord and supplier lists share `app/QueryFilters/UserFilter.php`, and it asks
+Meilisearch for `matchingStrategy: all`. The engine's default is `last`, which drops trailing words
+until something matches - so "Clean Air" returned every supplier containing "Clean", six rows where
+two were Clean Air.
+
+The option is applied **only** when the configured driver is Meilisearch. Scout hands the callback
+to whichever engine is in use and the signatures differ: the collection and database engines pass
+an Eloquent builder rather than a Meilisearch index, so applying it unconditionally breaks local
+development and the test suite.
+
+Typo tolerance is the other half of the same complaint - "Davis" reaching "Division Three Enter.
+Ltd" - and cannot be set per query. It is an index setting in `config/scout.php`, raising the word
+length at which a typo is forgiven so short, deliberately typed terms match literally while long
+company names stay forgiving. It takes effect only once **`php artisan scout:sync-index-settings`**
+has run, which belongs in the deploy.
+
 ## Default ordering
 
 A list with no `sort` parameter is returned in a stable order, so pages never overlap or skip rows:

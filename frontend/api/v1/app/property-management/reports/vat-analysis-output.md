@@ -77,7 +77,7 @@ from `cu_invoice_number` and `etr_error`:
 |---|---|---|---|
 | present | any | `signed` | `success` |
 | null or empty | present | `failed` | `danger` |
-| null or empty | null or empty | `not signed` | `warning` |
+| null or empty | null or empty | `not signed` | `secondary` |
 
 It is a **status string**, not a number or money — `format: string`, centred. The raw value sits
 beside it in its own `cu_invoice_no` column, so you can show both without deriving anything on the
@@ -154,7 +154,7 @@ sums.
   { "type": "normal", "invoice_date": { "value": "03 Jul, 2026" }, "tenant": { "value": "Njiru Hardware" },
     "invoice_no": { "value": 9912 }, "cu_invoice_no": { "value": null },
     "pin_no": { "value": "P054445556B" }, "description": { "value": "Rent — July 2026" },
-    "etr_status": { "value": "not signed", "color": "warning" },
+    "etr_status": { "value": "not signed", "color": "secondary" },
     "taxable_value": { "value": 150000.00 }, "vat": { "value": 24000.00 }, "total": { "value": 174000.00 } },
 
   { "type": "normal", "invoice_date": { "value": "10 Jul, 2026" }, "tenant": { "value": "Acme Traders Ltd" },

@@ -11,6 +11,46 @@ talked out of.
 The PIN is stored hashed and is never returned in any form. The only thing a client ever learns is
 `has_pin`.
 
+## Where the lock's settings come from
+
+The server owns every number the lock screen needs. Three endpoints return them, in one shape, so a
+client holds no defaults of its own:
+
+| Endpoint | Returns |
+| --- | --- |
+| `POST /auth/login` | `session` — settings only |
+| `GET /profile` | `session` — settings only |
+| `GET /app/{company}/inbox/summary` | `session` — settings **plus** the live state |
+
+```json
+{ "session": { "idle_minutes": 15, "max_attempts": 3, "lockout_minutes": 15 } }
+```
+
+and on the summary, the same plus:
+
+```json
+{ "locked": false, "locks_in_seconds": 842 }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `idle_minutes` | How long a session may sit idle before it locks |
+| `max_attempts` | Wrong PINs allowed before a lockout — show this on the lock screen rather than waiting to learn it from a failure |
+| `lockout_minutes` | How long a lockout lasts |
+| `locked` | Whether this session is locked **now** |
+| `locks_in_seconds` | Seconds left, or `null` when the server will never lock this session |
+
+**Settings are on login and profile; live state is not.** At login there is no session to be idle
+yet, and on a profile read a countdown is stale the moment it is read. Poll the summary for state.
+
+**Tie your keep-alive interval to `idle_minutes`.** The floor is one minute, so a fixed two-minute
+poll would lock a working user if the window were ever set below that. Half the window is a safe
+rule.
+
+**`retry_after` is always present on a `429`.** The status is chosen from the value itself, so a
+lockout always carries it and a response without it is a `422` — an ordinary wrong PIN, not a
+lockout. There is no need to assume a lockout length.
+
 ## Endpoints
 
 | Method | Path | What it does |

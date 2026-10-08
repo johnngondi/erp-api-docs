@@ -77,9 +77,9 @@ other status in the API.
 
 | `status` | Meaning | Colour | Editable | Tenant may see |
 |---|---|---|---|---|
-| `draft` | being written | `secondary` | Yes | No |
-| `pending_approval` | in the approval chain | `warning` | Yes | No |
-| `approved` | chain cleared, may be exported | `info` | No | Yes |
+| `draft` | being written; exports watermarked DRAFT | `secondary` | Yes | No |
+| `pending_approval` | in the approval chain; exports watermarked DRAFT | `warning` | Yes | No |
+| `approved` | chain cleared, may be sent | `info` | No | Yes |
 | `sent` | delivered to the tenant | `primary` | No | Yes |
 | `accepted` | signed by the tenant | `success` | No | Yes |
 | `declined` | tenant declined | `danger` | No | No |

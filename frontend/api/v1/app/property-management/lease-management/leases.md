@@ -27,6 +27,8 @@ Base route:
 Supported query params:
 
 - Filters:
+  - `filter[facility_id]` — **exact**; comma-separated ids match any. Lease pickers narrow to one
+    property with it
   - `filter[user_id]`
   - `filter[status]`
   - `filter[created_at]`

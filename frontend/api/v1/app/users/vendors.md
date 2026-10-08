@@ -47,6 +47,14 @@ Supported query params:
 - Pagination:
   - `per_page`, `page`
 
+
+**Searching by name.** `filter[search]` requires **every word** to match — "Clean Air" returns only
+suppliers whose record contains both words, not everything containing "Clean". Near-miss spellings
+are forgiven on long words but not on short ones, so a five-letter term matches literally.
+
+For an exact substring match on the name alone, `filter[name]` is the narrower option: it ignores
+email, phone and tax pin and matches the name as typed.
+
 ## Create/Elevate Vendor
 
 `POST /api/v1/app/{company}/users/vendors`

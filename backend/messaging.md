@@ -51,13 +51,16 @@ SMS and WhatsApp are on by exception, like email (see [emails.md](emails.md#whic
   alongside SMS, never instead of it.
 
 Text is allowed only for one-time codes, a document sent to a tenant or a supplier, an RFQ sent to a
-supplier, and reminders to a supplier. Today that is:
+supplier, reminders to a supplier, a lease application returned to its reviewer, and the link to
+apply for a lease sent to a prospective tenant. Today that is:
 
 | Purpose | Notification (under `App\Notifications`) | Channels |
 | --- | --- | --- |
 | One-time codes | `Auth\TemporaryPinNotification`, `Auth\PasswordResetCodeNotification` (one notification per channel, from `SessionPinService` / `PasswordResetCodeService`) | the channel asked for |
 | A document sent to a supplier | `PropertyManagement\Procurement\LpoIssuedNotification` | database, mail, SMS |
 | A reminder to a supplier | `PropertyManagement\Procurement\QuoteSubmissionReminderNotification` | database, mail, SMS, WhatsApp |
+| An approved lease application sent back to its reviewer (product decision, 7 October 2026) | `PropertyManagement\LeaseApplicationReturnedNotification` | database, mail, SMS |
+| The link to register and apply, sent to a prospective tenant (product decision, 8 October 2026) | `PropertyManagement\LeaseApplicantInvitationNotification` (on demand) | mail, SMS, WhatsApp |
 | Provider check | `Messaging\TestMessagingNotification` (`messaging:test`) | the channel asked for |
 
 Everything else (approvals, changes requested, workflow steps, document changes, comments,

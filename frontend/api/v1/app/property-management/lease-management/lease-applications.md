@@ -22,6 +22,7 @@ Staff (this domain):
 `/api/v1/app/{company}/property-management/lease-management/lease-applications`
 
 - `GET /lease-applications`
+- `POST /lease-applications/invite` — send a prospective tenant the link to register and apply (see [Invite an applicant](#invite-an-applicant))
 - `GET /lease-applications/{application}`
 - `PUT/PATCH /lease-applications/{application}` — staff edit, while the application is open (see [Staff edit](#staff-edit))
 - `DELETE /lease-applications/{application}`
@@ -76,6 +77,48 @@ Supported query params:
 - Includes: `include=guarantors`, `documents`, `documents.upload`, `facility`, `residentialUnitTypes`, `lease`
 - Sort: `sort=id,created_at,application_submitted_at,proposed_start_date,reviewed_at`
 - Pagination: `per_page`, `page`
+
+## Invite an applicant
+
+`POST .../lease-applications/invite`
+
+Sends a prospective tenant the link to register and start an application. Staff-only;
+requires `view-lease-application`. Nothing is created: the applicant has no account
+until they register through the link.
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `first_name` | Yes | string | Max 100 characters |
+| `last_name` | Yes | string | Max 100 characters |
+| `email` | Yes | string | A valid email address, max 191 characters |
+| `phone` | No | string \| null | International format, e.g. `+254712345678` (6–15 digits, optional leading `+`) |
+
+```json
+{ "first_name": "Amina", "last_name": "Otieno", "email": "amina@example.com", "phone": "+254712345678" }
+```
+
+Response `200`:
+
+```json
+{ "data": { "message": "Application link sent to amina@example.com." } }
+```
+
+What happens:
+
+- The link goes out by **email**, and by **SMS** and **WhatsApp** when a `phone` is
+  given. Mail is sent through the company's mailer.
+- The link is the register page with the applicant's details pre-filled:
+  `{FRONTEND_URL}/auth/register?apply=lease&first_name=…&last_name=…&email=…&phone=…`.
+  The frontend uses `apply=lease` to preselect the tenant portal and, when someone who
+  is already signed in opens it, to tell them to use a private window or log out first.
+- The email lists the steps: register, start the application and upload the documents,
+  and that the financial document must be a monthly or annual income statement, not
+  just a balance sheet or a bank statement.
+
+Refused with `403` without `view-lease-application`. Missing or invalid fields are a `422`.
+
+The same link without the applicant's details (`/auth/register?apply=lease`) can be
+shared by hand; it needs no endpoint.
 
 ## Create Application
 
@@ -139,6 +182,17 @@ Request body:
 | `status` | No | string | Defaults to `pending` |
 | `comments` | No | string | |
 | `application_submitted_at` | No | date | Defaults to now |
+
+`created_at` is returned on the show and list responses in the usual
+`{ raw, formatted, diff }` shape — when the record was made, as against
+`application_submitted_at`, which is when the applicant submitted it.
+
+`reviewed_at` comes back in the same shape, beside `reviewed_by` — when the decision
+was taken. **Null on anything decided before 6 Oct 2026:** the column has existed as
+long as the table but only the EPMAS import ever wrote it, so applications reviewed
+through the app recorded the reviewer and not the moment. Nothing can recover it for
+those, so keep the date hidden when it is null rather than falling back to
+`updated_at`, which moves whenever anything touches the row.
 
 Example:
 
@@ -316,6 +370,39 @@ copies them into its own `lease_term_years`/`lease_term_months` at generation, a
 staff may then move the offered term off the request — the LOO's value wins wherever
 it is set. Together with the escalation schedule below, this is what closes the LOO's
 rent breakdown: without an end date there is no last period to escalate to.
+
+## Proposed end date
+
+`proposed_end_date` is read-only and **computed**, not stored and not accepted. It is the
+proposed start plus the proposed term, less a day:
+
+```json
+"proposed_end_date": {
+  "raw": "2028-02-29",
+  "formatted": "29 Feb, 2028",
+  "diff": "1 year from now"
+}
+```
+
+A one-year tenancy from 1 Mar 2027 ends on 29 Feb 2028, not 1 Mar — so the next term
+begins the following day rather than overlapping this one. This is the same rule a lease
+uses for its own `end_at`, shared in code, so the date shown while an application is being
+approved is the date the raised lease carries.
+
+`null` until both halves are answered: no `proposed_start_date`, or no term at all
+(`proposed_period_in_years` and `proposed_period_in_months` both unset or zero).
+
+Three things worth knowing if you offer an end-date field that works out the term:
+
+- The term is **years and months only**. An end date that is not a whole number of months
+  from the start cannot be stored, so it will move to one that is.
+- Month ends **overflow rather than clamp**. One month from 31 Jan is 3 Mar, not 28 Feb,
+  because 31 Feb does not exist and the surplus days run on — so a one-month term from
+  31 Jan 2026 ends 2 Mar 2026.
+- Years are added before months, which matters at those same month ends.
+
+Posting an end date does nothing: on a lease, `end_at` is overwritten by the computed
+value; on an application there is no such field.
 
 ## Escalations
 
@@ -663,6 +750,76 @@ own the application and it must still be open to them, and the guarantor named
 in the path must belong to that application — pairing your own application with
 someone else's guarantor is rejected.
 
+## The offers on an application
+
+Every row of the staff list, and the single application, carries the offers prepared from
+it under `loos` — enough to link to each one and show where it stands:
+
+```json
+"loos": [
+  { "id": 31, "our_ref": "LOO/2026/002", "status": { "value": "sent", "color": "info" } },
+  { "id": 28, "our_ref": "LOO/2026/001", "status": { "value": "declined", "color": "danger" } }
+]
+```
+
+**Newest first**, and `[]` when none have been prepared. Always loaded — no `?include`
+needed, so a list page costs one request rather than one per row.
+
+It is a list because an application can hold several: a declined or withdrawn offer stays
+on the record and another is prepared beside it. Which one counts as current is yours to
+decide — the API does not pick, so changing your mind is not an API change.
+
+Three keys and no more, on purpose. A page holds 25 rows, each able to hold several
+offers, and the full offer resource carries clause text, tag values and spaces. Fetch
+`loos/{loo}` when the user opens one.
+
+Whether to show the action at all is the plain `view-loo` permission, read once from
+`/me/permissions`. There is no per-offer flag and none is needed: reading an offer needs
+`view-loo` **and** allocation to its property, an offer takes its property from the
+application it was prepared from, and this list only ever returns applications on
+properties you are allocated to. So for any row you can see, the allocation half is
+already satisfied.
+
+**Staff only.** The field is absent from the applicant surface entirely, whatever an
+offer's status — an applicant may read an offer only once it has cleared approval, and
+anything short of that is internal drafting.
+
+## Documents and guarantors, from the staff side
+
+Both were reachable only through the applicant's own portal, behind tenant-account
+middleware, so staff were refused before any permission was read. The staff routes mirror
+them one for one:
+
+```
+PUT    …/lease-applications/{application}/documents/{document_type}        { upload_id }
+GET    …/lease-applications/{application}/guarantors
+POST   …/lease-applications/{application}/guarantors
+PUT    …/lease-applications/{application}/guarantors/{guarantor}
+DELETE …/lease-applications/{application}/guarantors/{guarantor}
+PUT    …/lease-applications/{application}/guarantors/{guarantor}/documents/{document_type}
+```
+
+Responses are the tenant shapes — `data.document` and `data.guarantor` — so a page can
+refresh from the answer.
+
+**When:** while the application is **pending or under review**. Approved and rejected close
+both, the same window as spaces. Read `permissions.submitDocument` and
+`permissions.manageGuarantors`; both mean *update permission, application still open*.
+
+**A staff upload is the same act as the applicant's**, because it runs the same code: the
+document resets to `pending`, the previous result and reason are cleared, verification is
+re-queued, a financial statement rescores instead of re-verifying, and the reviewers are
+notified. Re-sending an upload the document already has is a no-op, so a verified document
+is not reset for nothing.
+
+**It does not send the application back to pending.** Only a staff *edit* of the
+application itself does that. The reviewers are notified of the change, which is the part
+that matters.
+
+**The applicant is notified in-app** when somebody other than them attaches a document or
+adds, changes or removes a guarantor. Keyed on who acted, not which route was used, so the
+applicant doing it themselves triggers nothing.
+
 ## Application Spaces
 
 Staff only. `/api/v1/app/{company}/property-management/lease-management/lease-applications/{application}/spaces`
@@ -701,6 +858,21 @@ Only spaces mapped to a requested unit type
 (`facility_spaces.facility_residential_unit_id`) are allocated automatically.
 Commercial space-let applications, parking and signage are allocated by hand.
 
+### An application cannot be approved without one
+
+Approval is refused with `422` and a `spaces` key while nothing is allocated:
+
+```json
+{ "errors": { "spaces": ["Allocate at least one space before approving this application."] } }
+```
+
+Approval closes the allocation for good, and the offer drafted from the application grants
+exactly the units allocated to it — so an application approved with none produces an offer
+covering no premises, with no rent to schedule and nothing for a lease to bill.
+
+Rejecting and sending back for review are unaffected. An application nobody allocated
+anything to is often precisely the one being rejected.
+
 ### When the allocation may be changed
 
 Only while the application is **open** — `pending` or `review`. Once it is `approved`
@@ -715,6 +887,19 @@ Writes need `update-lease-application`; reads need `view-lease-application`. Unl
 `view`, there is no ownership fallback — which units an applicant gets and what they
 pay is a letting decision, not something the applicant fills in about themselves.
 The `spaces` key is never serialised on the tenant surface.
+
+`permissions.manageSpaces` on the application says whether the caller may write here
+right now. It is `false` for either reason — the application is decided, **or** the
+caller's role does not hold `update-lease-application` — and the flag does not say
+which. So don't word a disabled allocation as "this application has been decided":
+read `status` for that, and keep the permission copy about what the user can do.
+
+> **Note:** `update-lease-application` was seeded as a tenant-only permission on
+> installs created before 6 Oct 2026, so it never appeared on the staff permission
+> list and no staff role held it. `manageSpaces` was therefore `false` for every
+> staff user on every application, whatever its status. The same permission gates
+> `manageEscalations` and `staffUpdate`, so those were refused too. The catalogue is
+> fixed; existing installs need it granted in access management.
 
 ### Component options (prefill)
 
@@ -886,6 +1071,7 @@ Each step raises a pending task for the people the company settings name:
 | Application status | Task | Goes to |
 |---|---|---|
 | `pending` | Review lease application | Holders of the **Lease Application Reviewer Role** (`lease_application_reviewer_role_id`) **on the application's property** |
+| `pending`, [returned](#return-an-approved-application) | Re-review returned lease application | The person who approved it (`reviewed_by`), else the reviewer-role holders as above |
 | `approved` | Generate Letter of Offer | Holders of the **Letter of Offer Generation Role** (`loo_generation_role_id`) |
 
 The two settings differ in scope:
@@ -904,6 +1090,67 @@ The setting's options list follows the scope: the reviewer setting offers
 `access-management/roles?filter[enforce_on_facility]=1`, and the LOO generation setting
 offers every app staff role (`access-management/roles?filter[user_group_id]={app group id}`).
 Saving a role outside those lists is refused with `422`.
+
+## Return an approved application
+
+`PATCH .../lease-applications/{application}/return`
+
+Sends an approved application back to its reviewer when it is not fit for a Letter of
+Offer yet, for example because a document is wrong or the pricing needs another look.
+Staff-only. Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `reason` | Yes | string | Max 1000 characters. Shown to the reviewer in the task, the email and the SMS |
+
+```json
+{ "reason": "The KRA PIN certificate is for a different company. Please confirm before we draft the offer." }
+```
+
+What happens:
+
+- The application goes back to **`pending`**. It is open again, so staff can edit it,
+  re-allocate spaces and replace documents, and its spaces show as under consideration
+  again.
+- `returned_at`, `returned_by` and `return_reason` are recorded on the application.
+- The **Generate Letter of Offer** task is cleared. The person who approved the
+  application (`reviewed_by`) gets a **Re-review returned lease application** task.
+  If nobody is recorded as the approver (for example on an imported application), the
+  reviewer-role holders get it instead, as for a new application.
+- The same people get a notification in-app, by **email**, and by **SMS** when they
+  have a phone number. Each one states the reason and links to the application.
+
+The reviewer then reviews it again with [`PATCH .../review`](#review-application):
+approve it, send it to the applicant (`review`), or reject it.
+
+Refused with `403`, and a message saying why, when:
+
+- the caller lacks `return-lease-application`, or the application's property is not
+  allocated to them;
+- the application is not `approved`;
+- it has an offer in progress (any offer that is not declined, expired, rejected or
+  withdrawn). [Rebase the offer](loo/loo.md#rebase) with `return_to: reviewer`
+  instead: that deletes the offer and returns the application in one step.
+
+A missing `reason` is a `422`.
+
+Read `permissions.returnToReviewer` on the application to decide whether to offer the
+button. It is the same check the endpoint runs, so it is `false` in every case above.
+
+### Reading a returned application
+
+The application resource carries:
+
+| Field | Type | Notes |
+|---|---|---|
+| `is_returned` | boolean | `true` while the application is `pending` because it was returned and has not been reviewed since |
+| `return_reason` | string \| null | The reason given on the last return |
+| `returned_at` | `{raw, formatted, diff}` \| null | When it was last returned |
+| `returned_by` | User \| absent | Who returned it. Loaded on `show` |
+
+The three `return*` fields keep the last return after the application is reviewed again,
+so the history stays readable. Use `is_returned` to decide whether to show a "returned"
+banner.
 
 ## Delete Application
 
