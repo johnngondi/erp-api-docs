@@ -16,6 +16,8 @@ Base route:
 - `PATCH /leases/{lease}/activate`
 - `PATCH /leases/{lease}/suspend`
 - `PATCH /leases/{lease}/terminate`
+- `POST /leases/{lease}/renew`: start a renewal of a lease that is ending. See
+  [Renew a lease](#renew-a-lease)
 - `POST /leases/{lease}/generate-invoice-for-next-period`
 - `GET /leases/{lease}/invoice-components`: what a manual invoice on the lease can bill. See
   [Invoices](invoices.md#components-a-manual-invoice-can-bill)
@@ -159,6 +161,103 @@ Response shape:
   }
 }
 ```
+
+## Renew a lease
+
+`POST /api/v1/app/{company}/property-management/lease-management/leases/{lease}/renew`
+
+Starts a renewal of a lease that is ending. It creates a **renewal lease application**
+(`is_renewal: true`, `lease_id`) on the tenant's behalf and puts it in front of the
+reviewer, exactly as if the tenant had applied from their portal. From there the ordinary
+application flow applies: review → approve → generate the `renewal` offer → send → sign.
+Promoting a signed renewal offer into the extended lease is still not built.
+
+**Who.** Anyone who can view the lease: `view-lease` on an allocated property. There is no
+separate renew permission.
+
+**When.** The lease must be `active` with an `end_at` no more than 12 months away. A lease
+whose `end_at` has already passed but is still `active` qualifies. Refused while the lease
+already has a renewal in progress: a renewal application in `pending` or `review`, an
+`approved` one whose offer has not been spent, or a live offer drafted straight off the
+lease through `POST leases/{lease}/loos`.
+
+Request body. Every field is optional:
+
+| Field | Type | Default |
+|---|---|---|
+| `proposed_start_date` | date | the day after `end_at` |
+| `proposed_period_in_years` | integer `0`–`99` | the lease's `period_in_years` |
+| `proposed_period_in_months` | integer `0`–`11` | the lease's `period_in_months` |
+
+A term of zero years and zero months is refused with `422` on `proposed_period_in_years`.
+
+What the application is pre-filled with:
+
+- **From the lease:** the tenant (`user_id`), the property and its type, the proposed start
+  and term above, and `billing_cycle` where the lease's cycle is one an application accepts.
+- **Spaces:** every lease item becomes an allocated application space with its priced
+  components (`cost_per_space_unit`, `amount`, `tax_id`) copied across. Staff may reprice or
+  change them while the application is open, as on any application.
+- **Applicant profile and guarantors:** copied from the tenant's *source application*. That
+  is the application whose offer was promoted into this lease, else the tenant's latest
+  application on this property, else their latest application anywhere. Guarantor documents
+  and verification results are not copied. With no application on record at all, the profile
+  falls back to the tenant's account (name, email, phone, address, postal address, tax PIN)
+  and the property's city and country; anything still unknown is written blank and is left
+  for staff to complete through the [staff edit](lease-applications.md#staff-edit).
+- **Not copied:** lease escalations (add them on the application), documents and vetting.
+
+The tenant is told the application was received, the same notification they get when they
+apply themselves, so they can read and complete it from their portal.
+
+Response `201`:
+
+```json
+{ "data": {
+  "message": "Renewal application created successfully.",
+  "application": {
+    "id": 913,
+    "is_renewal": true,
+    "lease_id": 101,
+    "status": { "value": "pending", "color": "secondary" },
+    "...": "..."
+  }
+} }
+```
+
+`application` is the full staff application resource, the same shape as
+`GET lease-applications/{application}` (see [Lease Applications](lease-applications.md)),
+with its spaces, guarantors and `lease` loaded.
+
+Errors: `403` carrying the reason when the lease is not renewable or the caller is not
+allocated to its property; `422` keyed `lease` if another renewal was started in the
+meantime.
+
+### Renewal state on the lease
+
+`GET leases/{lease}` carries:
+
+```json
+{
+  "permissions": {
+    "view": true, "update": true, "delete": false,
+    "activate": false, "terminate": true, "suspend": true,
+    "renew": false
+  },
+  "open_renewal_application": { "id": 913, "status": "pending" }
+}
+```
+
+- `permissions.renew` is `true` only when the call above would succeed: the caller may view
+  the lease, it is active and ending within 12 months, and nothing is renewing it already.
+  Show the **Renew** button on it, and nothing else.
+- `open_renewal_application` is the renewal application in progress (`{ id, status }`), or
+  `null`. When `renew` is `false` because of it, link to that application instead. It is on
+  the detail only, not on the list.
+
+The other `permissions` keys are the lease's own abilities (`view`, `update`, `delete`,
+`activate`, `terminate`, `suspend`) and were always there; they are listed here because this
+is the first place the key is documented.
 
 ## Generate Invoice For Next Period
 

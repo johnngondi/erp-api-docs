@@ -296,6 +296,22 @@ a new lease.
 
 The response carries `is_renewal`, `lease_id`, and `lease` (`{ id, ... }`). `lease` is always loaded on `GET .../{application}` (both surfaces) and is opt-in on the list with `include=lease`.
 
+### Started by staff
+
+Staff start a renewal from the lease itself: `POST leases/{lease}/renew` (see
+[Renew a lease](leases.md#renew-a-lease)). That creates the same kind of application as
+the portal does, pre-filled from the lease (tenant, property, spaces and their pricing,
+start the day after the lease ends, the lease's term) and from the tenant's most recent
+application (profile and guarantors). It lands `pending` with the review task raised, and
+everything on this page then applies to it unchanged: the staff edit, spaces, escalations,
+guarantors, documents, review, the offer. A profile copied from nothing (a tenant with no
+application on record) carries blank strings in the required fields, which the staff edit
+is the place to fill.
+
+On the offer generated from a renewal application, `deposit_held` is prefilled from the
+lease being renewed and the offer response carries that lease's deposits as
+`renewed_lease`. See [the LOO document](loo/loo.md#deposits).
+
 > **Not yet:** a signed renewal offer cannot be promoted. `POST .../loos/{loo}/promote`
 > still refuses anything but a `new lease` offer, so a renewal stops at `accepted`.
 > Promotion for renewals is a separate piece of work.

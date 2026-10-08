@@ -210,7 +210,7 @@ dot path read against four roots — `loo.`, `facility.`, `lease_application.` a
 path rooted at the source the LOO was *not* prepared from resolves to `null`
 rather than erroring.
 
-**Formats.** Four names are reserved; anything else is read as a PHP date format,
+**Formats.** Five names are reserved; anything else is read as a PHP date format,
 which is what lets the editor's FORMAT picker offer `jS F Y`, `d/m/Y` and the rest
 without a fixed list. A per-request override (`['start_date' => 'd/m/Y']`) beats
 the tag's `default_format`.
@@ -221,6 +221,7 @@ the tag's `default_format`.
 | `yes_no` | `Yes` / `No` |
 | `list` | prose, not bullets: `A, B and C` |
 | `raw` / `null` | the value as it stands; whole floats lose their decimals, integers never gain separators |
+| `html` | a block of trusted markup the resolver built (today only `rent_breakdown`, a table). The **editor must insert it as HTML**, not as text: a `tags_content` row whose `tag.default_format` is `html` holds markup. The renderer does the same and escapes every other tag's value |
 | anything else | a PHP date format |
 
 **The premises tags read `loo_spaces`.** `floor_unit` (`Ground Floor - Shop 4`),

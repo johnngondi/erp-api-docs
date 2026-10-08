@@ -83,8 +83,9 @@ exists wherever any figure changes.
 ### Stored shape
 
 `loos.rent_breakdown`, one entry per period. Each row carries a `label`/`amount` pair
-as well as its structured figures — that pair is what `{{rent_breakdown}}` renders as
-prose, so the list needs no special casing.
+as well as its structured figures. `{{rent_breakdown}}` prints the `components` of every
+row as a table (see [the rent tags](#the-rent-tags)); the shape itself is unchanged and is
+what the editor shows for hand corrections.
 
 ```json
 [{
@@ -113,9 +114,38 @@ All five read the stored schedule. The four first-period figures come off row 1.
 | `rent_first_period_monthly` | the same, per month |
 | `rent_first_period_quarterly` | per quarter |
 | `rent_first_period_annual` | per annum |
-| `rent_breakdown` | every period, as prose |
+| `rent_breakdown` | every period, as an HTML table: one row per component, per month / per quarter / per annum |
 
 All are tax-inclusive and cover rent, service charge, parking and signage together.
+
+**`rent_breakdown` is a table, not prose.** For each period it prints a header row with
+the period label, then one row per component (across all granted spaces together, never
+per space) with the component's figure per month, per quarter (×3) and per annum (×12),
+tax included, escalated as the period states, and a **Total** row from the period's own
+`monthly` / `quarterly` / `annual`. A hand-corrected period that carries no `components`
+prints only its Total row. The markup is:
+
+```html
+<table class="rent-breakdown">
+  <thead><tr><th>Component</th><th>Per month</th><th>Per quarter</th><th>Per annum</th></tr></thead>
+  <tbody>
+    <tr class="period"><th colspan="4">Year 1 (1st October 2026 - 30th September 2027)</th></tr>
+    <tr><td>Rent</td><td>KES 348,000.00</td><td>KES 1,044,000.00</td><td>KES 4,176,000.00</td></tr>
+    <tr><td>Service Charge</td><td>KES 60,000.00</td><td>KES 180,000.00</td><td>KES 720,000.00</td></tr>
+    <tr class="total"><td>Total</td><td>KES 408,000.00</td><td>KES 1,224,000.00</td><td>KES 4,896,000.00</td></tr>
+    <tr class="period"><th colspan="4">Year 2 (…)</th></tr>
+    ...
+  </tbody>
+</table>
+```
+
+The tag's `default_format` is `html` (see the formats table in the [README](README.md)):
+the editor inserts its `resolved_value` as markup, and the PDF styles `table.rent-breakdown`
+(collapsed borders, right-aligned figures, bold period and total rows). A reviewer who
+corrects a figure sends the table back through `tag_values`; it is sanitised to table,
+paragraph and emphasis elements and the `class`/`colspan` attributes, so a script or a link
+pasted into it never reaches the document. `rent_breakdown_monthly` is unchanged and still
+prints prose.
 `service_charge` is unchanged and still means something different: service-charge
 components only, net of tax, live off `loo_space_components`.
 
@@ -131,6 +161,36 @@ granted through `loo_spaces` — the scalars restated that in a second place tha
 disagree with it. Both tags survive, recomputed: the count is how many granted spaces
 are parking, and the per-slot cost is the parking-fee total over that count.
 `parking_security_deposit_months` stays, because it is a term rather than a price.
+
+## Deposits
+
+Three figures, all **net of tax**, all re-derived whenever the granted spaces change:
+
+- **`rent_deposit_months`** starts as the property's `deposit_months` (the facility setting,
+  default 3), copied at generation. A reviewer may change it on the offer, and the two
+  deposits follow (see [Editing](#editing)).
+- **`rent_security_deposit`** is `rent_deposit_months` × the rent per month of the **final
+  period** of the rent schedule: the escalated figure in the last row of `rent_breakdown`,
+  summed over the rent components across every granted space. The deposit covers the
+  tenancy at the rent it ends on, not the rent it starts on.
+- **`service_charge_security_deposit`** is the same months × the final period's service
+  charge per month.
+
+When the schedule cannot be built yet (no term or no start date) both fall back to the
+first-period component totals. `utility_security_deposit` is never derived: utilities are
+not priced through `loo_spaces`.
+
+**`deposit_held`**, on a `renewal` offer, is prefilled with what the landlord already holds
+on the lease being renewed: the sum of that lease's deposits that have not been refunded
+(`total_deposit_amount` on the lease, the same figure the lease page shows), billed or not.
+It is re-read whenever the spaces change, so a hand edit to it is replaced then, like every
+other derived deposit figure. On a `new lease` or an `addendum` the column is left as staff
+enter it. The lease it was read from, with its deposit rows, is on the offer response as
+[`renewed_lease`](#renewed-lease).
+
+**`{{deposit_to_pay}}`** is the top-up: `rent_security_deposit` +
+`service_charge_security_deposit` + `utility_security_deposit` − `deposit_held`, floored at
+zero. A renewal whose held deposit already covers the new figures prints `KES 0.00`.
 
 ## `our_ref`
 
@@ -225,7 +285,8 @@ default `0`); `rent_breakdown` (json, the stored rent schedule);
 **Lease terms** — `quarterly_rent_due_dates` (default
 `1st January, 1st April, 1st July and 1st October`), `rent_due_day_of_month`
 (`5th`), `late_payment_grace_days` (`14`), `redecoration_notice_days` (`7`),
-`rent_deposit_months` (`1`), `pet_license_revocation_notice_days` (`30`),
+`rent_deposit_months` (the property's `deposit_months` at generation; see
+[Deposits](#deposits)), `pet_license_revocation_notice_days` (`30`),
 `termination_notice_months` (`3`), `termination_notice_rent_in_lieu_months` (`3`).
 
 The first three are strings, not numbers: the clause prints them verbatim.
@@ -549,6 +610,36 @@ offers on one application or one lease.
 lease, and reaching it through an offer should not be a way around the permission
 governing that everywhere else.
 
+#### Renewed lease
+
+A `renewal` offer's detail (`GET loos/{loo}`, the `PATCH` response and the generate
+response) carries the lease being renewed and the deposits the landlord holds on it, so
+whoever prepares the offer sees what [`deposit_held`](#deposits) was read from and can
+check it against the figures:
+
+```json
+"renewed_lease": {
+  "id": 101,
+  "status": { "value": "active", "color": "success" },
+  "start_at": "2024-01-01T00:00:00.000000Z",
+  "end_at": "2026-12-31T00:00:00.000000Z",
+  "period_in_years": 3,
+  "period_in_months": 0,
+  "total_deposit_amount": 315000,
+  "deposits": [
+    { "id": 55, "component": { "id": 1, "name": "Rent" }, "amount": 240000, "billed": true, "invoice_id": 9012, "refunded_at": null },
+    { "id": 56, "component": { "id": 2, "name": "Service Charge" }, "amount": 60000, "billed": true, "invoice_id": 9012, "refunded_at": null },
+    { "id": 57, "component": { "id": 7, "name": "Utility Deposit" }, "amount": 15000, "billed": false, "invoice_id": null, "refunded_at": null }
+  ]
+}
+```
+
+`total_deposit_amount` counts the rows with no `refunded_at`. Every row is listed,
+refunded ones included, so the panel can show why a figure was left out. The key is
+absent (not `null`) on a `new lease` or `addendum` offer, on the list, and on the tenant
+portal. The lease itself is the preparation on an offer drafted from the lease, or the
+renewal application's `lease` on one drafted from an application.
+
 ### Editing
 
 `PATCH loos/{loo}` covers all three editable surfaces in one request, because
@@ -570,9 +661,20 @@ putting the computed value back.
 
 **It writes what it was sent and recomputes nothing.** An update that quietly
 re-derived a figure over the one just typed would make "every field is editable"
-untrue. One exception: moving `lease_term_years`/`lease_term_months` rebuilds the
-rent schedule — a schedule has no meaning without an end date — *unless* the same
-request also carried `rent_breakdown`, in which case yours stands.
+untrue. Two exceptions, both because the field edited is an *input* to the figure:
+
+- moving `lease_term_years`/`lease_term_months` rebuilds the rent schedule — a schedule
+  has no meaning without an end date — *unless* the same request also carried
+  `rent_breakdown`, in which case yours stands;
+- moving `rent_deposit_months` re-derives `rent_security_deposit` and
+  `service_charge_security_deposit` (months × the final period's rent and service charge,
+  see [Deposits](#deposits)) and refreshes the deposit tags that were not hand-corrected —
+  *unless* the same request also carried the deposit column in question.
+
+A `tag_values` correction for a tag whose format is `html` (today `rent_breakdown`) is
+sanitised before it is stored: only `table`, `thead`, `tbody`, `tr`, `th`, `td`, `p`,
+`br`, `strong` and `em`, with `class` and `colspan`, survive. Every other tag's value is
+stored as sent and escaped when the document is rendered.
 
 `legal_fee_updated_at` and `legal_fee_recorder_id` are stamped by the server
 whenever a fee moves, and are not accepted in the payload.
@@ -614,10 +716,12 @@ the whole `loo` alongside the space, because your copy of those figures is stale
 A hand-adjusted figure **is** replaced, deliberately: the spaces it was typed
 against have moved.
 
-Two columns are never recomputed, because nothing on the offer can derive them:
-`utility_security_deposit` (utilities are not priced through `loo_spaces` at all)
-and `deposit_held` (what a tenant has actually paid — a receipt's answer, not a
-rate card's).
+The two deposits are months × the **final period's** rent and service charge, and the
+schedule is rebuilt first so they read the escalated figure — see [Deposits](#deposits).
+On a `renewal`, `deposit_held` is re-read from the lease being renewed at the same time.
+Only `utility_security_deposit` is never recomputed: utilities are not priced through
+`loo_spaces` at all. On a `new lease` or `addendum`, `deposit_held` is not derived
+either.
 
 > **Net of tax.** The recomputed service-charge and deposit columns are net,
 > matching the components they come from. The rent *schedule* is tax-inclusive,
@@ -728,7 +832,11 @@ visible as `{{token}}`; a tag that resolved to nothing renders as empty.
 
 Resolved values are HTML-escaped on the way in. The clause text around them is
 markup a template author wrote and passes through; a value read out of an
-application is data and does not.
+application is data and does not. The one exception is a tag whose registry format is
+`html` (`rent_breakdown`): its value is markup the resolver built, and it is inserted as
+such after passing the same sanitiser a reviewer's correction goes through. A `<p>` that
+holds nothing but such a token is unwrapped first, since a table cannot sit inside a
+paragraph.
 
 ### Send
 

@@ -64,6 +64,9 @@ Request fields:
 | `phone`                  | Conditional | string         | Required when creating a brand-new user               |
 | `has_vat`                | No          | boolean        | Optional                                              |
 | `tax_pin`                | Conditional | string         | Required if `has_vat=true`; unique in `users.tax_pin` |
+| `address`                | No          | string \| null | Physical address, max 191. Printed by the offer's `{{landlord_address}}` |
+| `postal_address`         | No          | string \| null | The P.O. Box number, max 191, e.g. `12345`. Printed as `P.O. Box 12345-00100` |
+| `postal_code`            | No          | string \| null | The postal code that goes with the box, max 191 |
 | `withholds`              | No          | array          | Optional - Get from list of withholding taxes                                              |
 | `contracts`              | No          | array          | Optional - Add facilities and management contracts. Each item supports `property` and `contract`.                                             |
 | `accounts`              | No          | array          | Optional - Add bank accounts as shown in the payload below.                                             |
@@ -241,6 +244,9 @@ Example response:
   "has_vat": true,
   "withholds": [],
   "tax_pin": "P051234567X",
+  "address": "Westlands Road, Nairobi",
+  "postal_address": "12345",
+  "postal_code": "00100",
   "profile_photo_url": "https://example.com/profile.jpg",
   "created_at": {
     "raw": "2026-03-03T09:42:11.000000Z",
@@ -338,6 +344,9 @@ Send only what changed. Every field is optional, and an omitted field keeps its 
 | `phone` | string | Unique. Sending its own back is fine |
 | `has_vat` | boolean | See the tax PIN rule below |
 | `tax_pin` | string \| null | Unique |
+| `address` | string \| null | Physical address, max 191 |
+| `postal_address` | string \| null | P.O. Box number, max 191 |
+| `postal_code` | string \| null | Postal code, max 191 |
 | `withholds` | array of integer | Withholding tax ids. Replaces the stored list |
 | `other_docs` | array of integer | Upload ids to attach. **Adds, never removes** |
 | `pin_certificate_upload_id` | integer | Upload id |
