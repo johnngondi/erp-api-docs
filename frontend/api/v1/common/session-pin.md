@@ -225,6 +225,25 @@ The lock screen has to draw itself and the person has to get back in:
 - `POST /auth/pin`, `/auth/pin/verify`, `/auth/pin/temporary`, `/auth/pin/temporary/verify`
 - `POST /auth/logout`, `/auth/logout-all` — someone who cannot unlock must still be able to leave
 
+### The meter reading app
+
+The meter reading app has no lock screen, so the routes it calls are outside the lock altogether:
+they answer whether or not the session is idle, and they **do not count as activity** either, so
+using the meter app never keeps an idle main-app session open.
+
+| Method | Path |
+|---|---|
+| `GET` | `/app/{company}/property-management/facilities/utility-meters` and `/{meter}` |
+| `GET` | `/app/{company}/property-management/facilities/{facility}/utilities` and `/{utility}` |
+| `GET` | `/app/{company}/facility-management/settings/utility-management/utilities` and `/{utility}` |
+| `POST` | `/settings/file-management/uploads` — the meter photo |
+| `POST` | `/app/{company}/property-management/facilities/utility-meters/{meter}/extract-reading` |
+| `GET`, `POST` | `/app/{company}/property-management/facilities/utility-meters/{meter}/readings` and `GET /{reading}` |
+| `POST` | `/app/{company}/property-management/facilities/utility-meters/submit-readings` |
+
+Only those. Creating, editing, deleting or (de)activating a meter, editing or deleting a reading,
+and listing, viewing, editing or deleting uploads are still refused with a `423` while locked.
+
 ### What counts as activity
 
 Everything **except** the lock screen's own reads and background polling. So ordinary work keeps

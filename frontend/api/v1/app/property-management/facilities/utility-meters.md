@@ -135,6 +135,25 @@ Authorized by `update-utility-meter`. Every meter's `submitted_at` is cleared ba
 `utility-meters:reset-submissions` scheduled command, reopening meters for the new
 billing period.
 
+**Who hears about it.** The company's receivables staff — the `default_account_receivables_staff`
+setting (Settings → Finance → Receivables) — gets an in-app notification and an SMS, one per
+property and utility among the meters submitted, however many meters that is:
+
+> Electricity meter readings for Jumuia Place are ready for billing.
+
+The in-app payload carries `facility_id`, `facility_name`, `utility_id`, `utility_name`,
+`meter_count` and the usual `resource_type` / `resource_id` / `resource_url`, pointing at the
+property's utility when it has one and at the property otherwise. When the setting is empty
+nobody is notified and the submission still succeeds.
+
+### The idle session lock
+
+The meter reading app has no lock screen, so the routes it uses answer even when the session
+is idle: listing and viewing meters, a property's utilities and the utilities catalogue,
+uploading the photo, `extract-reading`, listing, viewing and creating readings, and
+`submit-readings`. They do not count as activity either. Everything else on this page is
+refused with a `423` while locked — see [session-pin.md](../../../common/session-pin.md).
+
 ## Utility Meter Readings
 
 Readings are nested under a meter.
