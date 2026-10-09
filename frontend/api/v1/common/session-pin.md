@@ -233,16 +233,22 @@ using the meter app never keeps an idle main-app session open.
 
 | Method | Path |
 |---|---|
+| `POST` | `/auth/login` (unauthenticated, so never locked) |
+| `GET` | `/app/{company}/property-management/facilities` (index only) |
+| `GET` | `/settings/lease-management/lease-components` (index only) |
+| `GET` | `/settings/skus` (index only) |
 | `GET` | `/app/{company}/property-management/facilities/utility-meters` and `/{meter}` |
-| `GET` | `/app/{company}/property-management/facilities/{facility}/utilities` and `/{utility}` |
-| `GET` | `/app/{company}/facility-management/settings/utility-management/utilities` and `/{utility}` |
 | `POST` | `/settings/file-management/uploads` — the meter photo |
 | `POST` | `/app/{company}/property-management/facilities/utility-meters/{meter}/extract-reading` |
-| `GET`, `POST` | `/app/{company}/property-management/facilities/utility-meters/{meter}/readings` and `GET /{reading}` |
+| `GET`, `POST` | `/app/{company}/property-management/facilities/utility-meters/{meter}/readings` |
 | `POST` | `/app/{company}/property-management/facilities/utility-meters/submit-readings` |
 
-Only those. Creating, editing, deleting or (de)activating a meter, editing or deleting a reading,
-and listing, viewing, editing or deleting uploads are still refused with a `423` while locked.
+Only those. Viewing one property, creating, editing, deleting or (de)activating a meter, viewing,
+editing or deleting a reading, writing lease components or units, and listing, viewing, editing or
+deleting uploads are still refused with a `423` while locked.
+
+The app needs one permission for all of it: `submit-meter-readings` (see
+[utility-meters.md](../app/property-management/facilities/utility-meters.md#permissions)).
 
 ### What counts as activity
 

@@ -149,10 +149,10 @@ nobody is notified and the submission still succeeds.
 ### The idle session lock
 
 The meter reading app has no lock screen, so the routes it uses answer even when the session
-is idle: listing and viewing meters, a property's utilities and the utilities catalogue,
-uploading the photo, `extract-reading`, listing, viewing and creating readings, and
-`submit-readings`. They do not count as activity either. Everything else on this page is
-refused with a `423` while locked — see [session-pin.md](../../../common/session-pin.md).
+is idle: listing properties, lease components and units, listing and viewing meters,
+uploading the photo, `extract-reading`, listing and creating readings, and `submit-readings`.
+They do not count as activity either. Everything else on this page is refused with a `423`
+while locked — see [session-pin.md](../../../common/session-pin.md).
 
 ## Utility Meter Readings
 
@@ -222,15 +222,23 @@ php artisan utility-meters:import {file} {utility} {sku} [--dry-run]
 
 | Action | Permission |
 |---|---|
-| List / view meter | `view-utility-meter` |
+| List / view meter | `view-utility-meter` or `submit-meter-readings` |
 | Create meter | `create-utility-meter` |
 | Update meter | `update-utility-meter` (or meter creator) |
 | Delete meter | `delete-utility-meter` (or meter creator) |
 | Activate / deactivate | `activate-utility-meter` / `deactivate-utility-meter` |
-| Submit readings for billing | `update-utility-meter` |
-| View reading | `view-utility-meter-reading` |
-| Create / update reading | `update-utility-meter-reading` (or reading creator) |
+| Submit readings for billing | `update-utility-meter` or `submit-meter-readings` |
+| List readings | `view-utility-meter-reading` or `submit-meter-readings` |
+| View one reading | `view-utility-meter-reading` |
+| Create reading, extract a reading from a photo | `update-utility-meter-reading` or `submit-meter-readings` |
+| Update reading | `update-utility-meter-reading` (or reading creator) |
 | Delete reading | `delete-utility-meter-reading` (or reading creator) |
+
+**`submit-meter-readings` is the meter reading app's single permission.** On its own it lists
+properties (`GET /facilities`, allocation-scoped), lease components and units, lists and views
+meters, lists and records readings, extracts a reading from a photo and submits readings. It
+cannot create, edit, delete or (de)activate a meter, or edit or delete a reading. Meters and
+properties still only appear for properties the user is allocated to.
 
 ## Errors
 
