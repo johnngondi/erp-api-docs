@@ -302,7 +302,9 @@ GET …/settings/documents/templates/facility_invoice/payload-schema
       "document.issued_at": "date",
       "items": "array",
       "items.notes": "string",
-      "items.amount": "money",
+      "items.rate": "money",        // the monthly figure for everything under the component
+      "items.tax_label": "string",  // the tax's name, e.g. "16% S"; items.tax is the money
+      "items.amount": "money",      // rate x quantity, as billed
       "totals.total": "money",
       "tax_summary": "array",
       "payments": "array",
