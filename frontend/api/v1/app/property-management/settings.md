@@ -67,7 +67,9 @@ Seeded Procurement General settings:
 
 | Key | Default Value | Type | Options | Dependency | Description |
 |---|---|---|---|---|---|
-| `rfq_default_deadline_days` | `3` | `number` | `null` | none | Number of days added to RFQ issue date to compute default deadline. |
+| `rfq_default_deadline_days` | `3` | `number` | `null` | none | Working days (Mon-Fri, no holiday calendar) from now to the quote deadline, at 17:00. Used when the procurement step opens a request without a deadline, for every round after a rebase and for each "request more quotes" extension. Whole number, at least 1, else **422**. |
+| `min_quotes_for_evaluation` | `3` | `number` | `null` | none | Quotes a work request needs by its deadline before they open for evaluation. With fewer, the request is held and the procurement officer chooses to request more quotes or evaluate anyway. Whole number, at least 1, else **422**. |
+| `rfq_vendor_batch_size` | `10` | `number` | `null` | none | Suppliers asked per round (first round, after a rebase, and per "request more quotes"), in round-robin order: the supplier asked the fewest times goes first. Whole number, at least 1, else **422**. |
 | `emergency_rfq_auto_send_enabled` | `no` | `select` | static: `yes/no` | none | Whether emergency RFQs should be auto-sent when default vendor does not respond. |
 | `emergency_rfq_send_after_hours` | `24` | `number` | `null` | `emergency_rfq_auto_send_enabled=yes` | Hours to wait before sending emergency RFQs when default vendor has not submitted a bid. |
 | `rfq_prioritize_default_vendor` | `yes` | `select` | static: `yes/no` | none | Whether default vendor gets first chance to bid before RFQ is sent to other vendors. |

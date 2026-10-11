@@ -22,6 +22,9 @@ Endpoints:
 - `DELETE /requests/{procurementRequest}/items/{item}`
 - `GET /requests/{procurementRequest}/steps/{step}`
 - `PUT/PATCH /requests/{procurementRequest}/steps/{step}`
+- `POST /requests/{procurementRequest}/rebase`
+- `POST /requests/{procurementRequest}/request-more-quotes`
+- `POST /requests/{procurementRequest}/evaluate-anyway`
 
 ### List query support
 
@@ -65,16 +68,23 @@ Example:
 
 ### Suppliers asked to quote
 
-`GET /requests/{procurementRequest}` returns `suppliers`: every supplier asked to quote on the request. Those who have quoted come first, in the order they quoted, then the rest by name. The list and create/update responses leave it out.
+`GET /requests/{procurementRequest}` returns `suppliers`: every supplier asked to quote on the request, in any round, cancelled invitations included. Those who have quoted come first, in the order they quoted, then the rest by name. The list and create/update responses leave it out. A supplier's live quote is shown over one a rebase shelved.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | integer | The invitation |
 | `vendor` | object | `{ id, name, email, phone, profile_photo_url }` |
 | `is_default`, `is_preferred` | boolean | - |
-| `has_quoted` | boolean | Whether the supplier has sent a quote |
-| `quote` | object or null | `{ id, status: { value, color }, submitted: { raw, formatted, diff } }`. No amounts: those stay on `quotes` and the bids list |
-| `invited` | object | `{ raw, formatted, diff }` |
+| `has_quoted` | boolean | Whether the supplier has sent a quote: a quote exists or `quoted_at` is set |
+| `quote` | object or null | `{ id, status: { value, color }, submitted: { raw, formatted, diff } }`. No amounts: those stay on `quotes` and the bids list. `status.value` may be `shelved` |
+| `invited` | object | `{ raw, formatted, diff }`: when the supplier was (last) asked (`invited_at`) |
+| `round` | integer | The quote round the supplier was (last) asked in |
+| `is_carried_over` | boolean | A bidder of the round a rebase cancelled, asked again |
+| `cancelled` | boolean | The invitation was cancelled by a rebase |
+| `cancelled_at` | object or null | `{ raw, formatted }` |
+| `quoted_at` | object or null | `{ raw, formatted }`: when the supplier's quote came in. Kept when the quote is shelved |
+| `reminder_count` | integer | Daily quote reminders sent to the supplier for this request |
+| `last_reminded_at` | object or null | `{ raw, formatted }` |
 
 ### Review step payload
 
@@ -133,6 +143,7 @@ the task links to the request page.
 | Current step `pending`, sent back by a later step | Each of the step's `actors` | `Procurement request returned for review: {title}`. The description quotes the comment from the step that sent it back |
 | Current step `quotes-review` | Each of the step's `actors` | `Select a quote for {title}` |
 | Current step `waiting-quotes` | Nobody, because the request is waiting on suppliers | - |
+| Current step `waiting-quotes`, deadline passed with too few quotes | Each of the step's `actors` | `Only {received} of {required} quotes received for {title}`. Cleared by request more quotes, evaluate anyway or a rebase |
 | First step sent back to the creator | The request's creator | `Make changes to procurement request: {title}` |
 | Rejected, LPO raised, or request deleted | Nobody | - |
 
@@ -143,6 +154,172 @@ Open steps that were dispatched before these tasks existed have no task. Run
 `php artisan procurement:sync-step-tasks` once (add `--company={id}` to limit it to one company) to
 raise them. Running it again changes nothing.
 
+### Who is invited (round-robin)
+
+A work request's suppliers are picked in rotation, so the same few are not asked every time. The
+pool is the **active** suppliers prequalified for the request's category (`expense_sub_type_id`) on
+its property (or on every property). They are ordered by:
+
+1. **The supplier asked the fewest times goes first**: the number of invitations
+   (`procurement_request_vendors` rows) the supplier holds on the company's requests in the same
+   category, every round, cancelled invitations included.
+2. Then the **least recently asked** (`MAX(invited_at)`), never asked first.
+3. Then by supplier id.
+
+Each round asks `rfq_vendor_batch_size` suppliers (default 10; see [Settings](settings.md)). The
+first round of a request leaves the request's own invitations out of the history, so approving the
+procurement step a second time asks the same suppliers. A later round never asks a supplier already
+asked on the request. A preferred or default supplier set on the request is still invited on the
+first round as before.
+
+`procurement_request_vendors` is the record of who was asked, who quoted and who was reminded:
+`round`, `is_carried_over`, `invited_at`, `cancelled_at`, `quoted_at` (stamped when the supplier's
+quote on the request is created; a shelved quote keeps it), `reminder_count` and `last_reminded_at`
+(stamped by each daily quote reminder). Invitations per supplier, `quoted_at` and `reminder_count`
+are the basis for a later rule deactivating suppliers who keep not responding (not built yet).
+
+### Quote deadline
+
+The quote deadline is counted in **working days** (Monday to Friday; public holidays are not
+excluded) and falls at **17:00** on the day reached. `rfq_default_deadline_days` (default 3) is used:
+
+- when the procurement step opens the first round and the request has no deadline (a `deadline` a
+  step set is kept);
+- for every round after a rebase, whatever the form sends;
+- for each "request more quotes" extension.
+
+### Rebase
+
+`POST /requests/{procurementRequest}/rebase`
+
+Puts a work request back for quotes so the procurement officer can change it and send it out again.
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `reason` | Yes | string | Max 2000 characters. Sent to every supplier asked as the cancellation reason |
+
+Allowed (`permissions.rebase`) for an actor of the current procurement step (`handle_procurement`)
+who holds `update-facility-procurement-request-step`, while that step is `waiting-quotes` or
+`quotes-review` (request `order` or `quotes-review`): the chain has not moved past procurement.
+Otherwise **403**. `can_rebase` on the request says whether the state allows it.
+
+What happens, in one transaction:
+
+- the round's live quotes (`bid`, `recommended`) become `shelved`, with `shelved.at` and
+  `shelved.reason`; `is_computer_recommended` stays on them as history and `round` is unchanged;
+- every open invitation is cancelled (`cancelled_at`), and each supplier asked gets
+  `RfqCancelledNotification` (in-app and email) with the reason, after commit;
+- the request goes back to `request`, `deadline` and the shortfall are cleared, `quote_round` goes
+  up by one, and `rebased` records who, when and why;
+- the procurement step is `pending` and current again (its review is cleared) and is re-dispatched
+  to everyone eligible on the property, who get the "Review procurement request" task. A later step
+  that had sent the request back is reset to `pending`.
+
+**Resubmission** is the officer approving the pending procurement step again
+(`PUT /requests/{id}/steps/{step}` with `status=approved`). On a round after a rebase:
+
+- the next `rfq_vendor_batch_size` suppliers in rotation are asked (never anyone asked on this
+  request before), and get `RfqInvitationNotification`;
+- the suppliers whose quotes the rebase shelved are asked again, carried over
+  (`is_carried_over=true`), and get `RfqReopenedNotification`: the job is open again, the scope may
+  have changed, and they may send a revised quote. Suppliers asked before who did not quote are not
+  asked again;
+- the deadline is `rfq_default_deadline_days` working days out; the form's `deadline`, preferred
+  supplier and `override` are ignored.
+
+A carried-over supplier may quote again: the one-quote-per-supplier rule ignores shelved quotes.
+
+Response:
+
+```json
+{
+  "data": {
+    "message": "Procurement request rebased. The invited suppliers have been told it was cancelled.",
+    "request": { "...": "the request as GET /requests/{id} returns it" }
+  }
+}
+```
+
+### Quote shortfall: request more quotes / evaluate anyway
+
+At the deadline (`procurement:quotes-review`, daily at 08:00) a work request waiting for quotes with
+fewer live quotes (`bid` or `recommended`) than the company's `min_quotes_for_evaluation` (default 3)
+is **not opened**. Instead:
+
+- `quotes_shortfall` is set on the request (`awaiting: true`, `received`, `required`, `since`);
+- each actor of the procurement step gets the pending task "Only {received} of {required} quotes
+  received for {title}" and an in-app `QuotesShortfallNotification`;
+- quoting stays closed (the deadline has passed) until the officer decides, and later runs leave the
+  request alone.
+
+With enough quotes the request opens as before (system recommendation, `quotes-review`, "Select a
+quote" task).
+
+`POST /requests/{procurementRequest}/request-more-quotes` (no body)
+
+- Extends the deadline to `rfq_default_deadline_days` working days from now and clears the shortfall
+  and its task.
+- Asks the next `rfq_vendor_batch_size` suppliers in rotation, in the same round
+  (`RfqInvitationNotification`).
+- Tells every supplier already asked whose invitation is open, quoted or not, the new deadline
+  (`RfqDeadlineExtendedNotification`).
+- When nobody new is left to ask, the deadline still moves and the message says so.
+
+```json
+{
+  "data": {
+    "message": "Quote deadline extended to 21 Oct 2026, 17:00 and 2 more suppliers asked to quote.",
+    "invited": 2,
+    "request": { "...": "the request as GET /requests/{id} returns it" }
+  }
+}
+```
+
+With nobody new: `"Quote deadline extended to 21 Oct 2026, 17:00. No other prequalified supplier is left to ask."`, `invited: 0`.
+
+`POST /requests/{procurementRequest}/evaluate-anyway` (no body)
+
+Clears the shortfall and opens the quotes received exactly as the deadline would have: the system
+recommends one, the request and step move to `quotes-review`, and the officer gets the "Select a
+quote" task. With no quote at all it still opens, with nothing recommended.
+
+```json
+{
+  "data": {
+    "message": "The quotes received are open for evaluation.",
+    "request": { "...": "the request as GET /requests/{id} returns it" }
+  }
+}
+```
+
+Both are allowed (`permissions.requestMoreQuotes`, `permissions.evaluateAnyway`) for an actor of the
+current procurement step holding `update-facility-procurement-request-step`, while the request is
+`order`, the step is `waiting-quotes` and a shortfall is recorded; otherwise **403**.
+`can_request_more_quotes` / `can_evaluate_anyway` say whether the state allows it. The officer may
+also rebase a request held for a shortfall.
+
+### Quote rounds on the request
+
+`GET /requests/{procurementRequest}` adds:
+
+| Field | Type | Notes |
+|---|---|---|
+| `quote_round` | integer | 1 for the first round, one more after each rebase |
+| `quotes_shortfall` | object or null | `{ awaiting: bool, received: int, required: int, since: { raw, formatted } }` while the deadline passed with too few quotes and the officer has not decided; else `null` |
+| `rebased` | object or null | `{ at: { raw, formatted }, by: { id, name } or null, reason }` for the latest rebase; else `null` |
+| `can_rebase` | boolean | The state allows a rebase (show only) |
+| `can_request_more_quotes` | boolean | The state allows requesting more quotes (show only) |
+| `can_evaluate_anyway` | boolean | The state allows evaluating anyway (show only) |
+| `permissions.rebase`, `permissions.requestMoreQuotes`, `permissions.evaluateAnyway` | boolean | Whether the caller may (state and actor) |
+
+Show the actions when the permission is true. The flags alone carry the state, for disabled
+buttons or explanations.
+
+Each entry of `quotes` (and of `GET /requests/{id}/bids`) adds `round` and `shelved`
+(`{ at: { raw, formatted }, reason }` or `null`). `status` may be `shelved`
+(`{ value: "shelved", color: "warning" }`). A shelved quote cannot be recommended or selected
+(`selected_option` naming one returns **422**), is left out of the step form's `meta.quotes`, and
+is not rejected again when the LPO is raised.
 ### Who a step is addressed to
 
 A request step goes to the same people an approval step on the request's property would. The

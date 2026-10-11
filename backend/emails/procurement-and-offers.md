@@ -1,13 +1,18 @@
 # Procurement and offer emails
 
-Five emails built on the shared shell in [emails.md](../emails.md): the RFQ invitation, the
-quote reminder, the Letter of Offer, the returned lease application and the invitation to apply. All five are notifications marked `SendsEmail` and
-`HasNotificationCompany`, so they carry the company's branding and go through its mailer.
+Eight emails built on the shared shell in [emails.md](../emails.md): the RFQ invitation, the
+quote reminder, the three RFQ round emails (cancelled, reopened, deadline extended), the Letter of
+Offer, the returned lease application and the invitation to apply. All are notifications marked
+`SendsEmail` and `HasNotificationCompany`, so they carry the company's branding and go through its
+mailer.
 
 | Email | Class | Recipient | Sent when | Button |
 |---|---|---|---|---|
 | Request for quotation | `RfqInvitationNotification` | each invited, active supplier | the procurement step of a work request is approved and the request opens for quotes | "Submit quote" → `vendor.bid` |
 | Quote reminder | `QuoteSubmissionReminderNotification` | each invited supplier who has not quoted | once per working day, by `RemindPendingQuotesService`, until they quote or the deadline passes | "Submit quote" → `vendor.bid` |
+| RFQ cancelled | `RfqCancelledNotification` | each active supplier whose invitation a rebase cancelled | `RebaseProcurementRequestAction` | none |
+| RFQ reopened | `RfqReopenedNotification` | each active supplier whose quote a rebase shelved, carried into the next round | `ReviewStepAction` sends a rebased request out again | "Submit revised quote" → `vendor.bid` |
+| Quote deadline extended | `RfqDeadlineExtendedNotification` | each active supplier whose invitation is open | `RequestMoreProcurementQuotesAction` extends the deadline after a quote shortfall | "View request" → `vendor.rfq` |
 | Letter of Offer | `LooSentNotification` | the tenant or applicant, or the address the sender typed | `SendLooAction` sends the offer | "Read and respond" → `tenant.loo`, or "Sign in" → `login` |
 | Lease application returned | `LeaseApplicationReturnedNotification` | the staff member who approved the application, else the reviewer-role holders | `ReturnLeaseApplicationAction` sends an approved application back for review, directly or through a LOO rebase | "Review application" → `app.lease_application` |
 | Invitation to apply | `LeaseApplicantInvitationNotification` | a prospective tenant, on demand (no account yet) | staff send it from the lease applications list (`InviteLeaseApplicantAction`) | "Start application" → `register` with `apply=lease` and the applicant's details |
@@ -19,9 +24,11 @@ request whose procurement step is approved without a quote change, which moves t
 `order` and the step to `waiting-quotes`. Purchase requests never invite. The emergency
 default supplier is invited the same way.
 
-- **Recipients** are read fresh from `$procurementRequest->vendors()` (the invite rows are
-  deleted and recreated by `AttachVendorsToRequestAction`), with the supplier loaded. A supplier
-  whose account is not `active` is skipped, the same filter as the quote reminder.
+- **Recipients** are read fresh from `$procurementRequest->vendors()` (on the first round the
+  invite rows are deleted and recreated by `AttachVendorsToRequestAction`; later rounds append),
+  with the supplier loaded. Cancelled invitations are skipped, and so is a supplier whose account
+  is not `active`, the same filter as the quote reminder. A supplier carried over after a rebase
+  gets `RfqReopenedNotification` instead.
 - **Once per supplier per request.** Before sending, the action looks for a stored
   `RfqInvitationNotification` in `notifications` with this request as its subject
   (`subject_type`/`subject_id`, stamped by `DatabaseChannel`) and the supplier as its
@@ -39,6 +46,29 @@ deadline, site visit with its instructions when one is required); the button; a 
 Database payload: `title`, `message`, `procurement_request_id`, `request_title`,
 `facility_name`, `deadline`, plus the `resource_*` keys from `ResolvesRecipientResource`
 (the supplier's open-job page).
+
+## RFQ round emails
+
+`RfqCancelledNotification`, `RfqReopenedNotification` and `RfqDeadlineExtendedNotification` share
+`RfqSupplierNotification` (abstract): database and mail (never text), queued on `notifications`, the
+request as the subject, sent through `OutboundEmail::send()` after commit. Inactive suppliers are
+skipped.
+
+- **Cancelled**: title `RFQ CANCELLED`; "{company} has cancelled the request for quotation for
+  {title} at {property}. Any quotation you sent for it will not be considered."; a "Cancellation"
+  card (reference, property, reason); a note. Payload adds `reason`.
+- **Reopened**: title `RFQ REOPENED`; the job is open again, the scope may have changed, send a
+  revised quotation before the deadline; a "Request details" card (reference, property, reason for
+  the change = the rebase reason, quote deadline); the button with the request-page link in its note.
+  Payload adds `deadline`.
+- **Deadline extended**: title `QUOTE DEADLINE EXTENDED`; "{company} has extended the quote
+  deadline for {title} at {property} to {deadline}."; a card (reference, property, new quote
+  deadline); the button; a note that a supplier who already quoted need do nothing. Payload adds
+  `deadline`.
+
+Suppliers newly asked in a later round, or by "request more quotes", get the ordinary request for
+quotation. On a round after a rebase, the "once per supplier per request" check only looks at
+invitations and reopen notices sent since the rebase.
 
 ## Quote reminder
 

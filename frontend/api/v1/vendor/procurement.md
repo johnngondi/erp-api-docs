@@ -13,6 +13,16 @@ Auth:
 
 Invited suppliers who have not quoted on an open request receive a daily quotation reminder (working days, 09:00) until they quote or the deadline passes; see the `QuoteSubmissionReminderNotification` type in [notifications.md](notifications.md).
 
+**Cancelled invitations (rebase).** Staff can rebase a request: the request for quotation is
+cancelled, every supplier asked is told why (`RfqCancelledNotification`), and any quote sent is
+**shelved** (status `shelved`, with the reason). A cancelled invitation no longer lists or opens the
+job and cannot quote, send a site visit report or assign a technician (`403`). When the request is
+sent out again, the suppliers who had quoted are asked again (`RfqReopenedNotification`) and may send
+a new quote; their shelved quote stays as history. Other suppliers may be newly invited
+(`RfqInvitationNotification`). When too few quotes came in by the deadline, staff may extend it
+(`RfqDeadlineExtendedNotification` to every supplier already asked); quoting reopens until the new
+deadline.
+
 ### List open jobs
 
 `GET /rfq/open-jobs`
@@ -41,7 +51,7 @@ Response item shape (`OpenJobResource`):
 - `require_site_visit`
 - `site_visit_instructions`
 - `priority` (enum object: `{ value, color }`)
-- `quote` (current vendor quote summary if present)
+- `quote` (the vendor's live quote summary if present; a quote shelved by a rebase is not shown here, so a supplier asked again can quote anew)
 - `facility`
 - `asset`
 - `owner`
@@ -57,7 +67,7 @@ Response item shape (`OpenJobResource`):
 
 Notes:
 
-- Returns `404` if request is not an open job (`status != order` or `type != work`).
+- Returns `404` if request is not an open job (`status != order` or `type != work`), or the vendor's invitation to it was cancelled by a rebase.
 - Includes `uploads` in addition to list fields.
 
 ### Assign technician
@@ -117,8 +127,11 @@ Response item shape (`JobBidResource`):
 - `tax`
 - `total`
 - `delivery` (`raw`, `formatted`, `diff`)
-- `status` (enum object) — `bid`, `recommended`, `selected`, `rejected`
+- `status` (enum object) — `bid`, `recommended`, `selected`, `rejected`, `shelved` (`{ value: 'shelved', color: 'warning' }`)
 - `rejection_reason` — set when the quote lost to another supplier's (`Another quotation was selected for this request.`)
+- `round` — the request's quote round the quote was sent in (1, then one more after each rebase)
+- `shelved` — `{ at: { raw, formatted }, reason }` when a rebase set the quote aside (the reason is the one the supplier was sent), else `null`
+- `permissions` — `update` and `delete` are `false` on a shelved quote: it can no longer be changed or withdrawn
 - `created` (`raw`, `formatted`, `diff`)
 
 ### Create quote
@@ -157,6 +170,9 @@ Item object (`ProcurementRequestBidDataItemData`):
 
 Create behavior:
 
+- One live quote per supplier per job: a second one returns **422** (`You have already submitted a quotation for this job.`). A quote shelved by a rebase does not count, so a supplier asked again after a rebase can quote anew.
+- A vendor whose invitation a rebase cancelled gets **403**; after the deadline (or while staff decide on a quote shortfall) the job is closed: **422** (`Quotation submission is closed for this request.`).
+- The quote is stamped with the request's current quote `round`, and the invitation records `quoted_at`.
 - If `purchase_item_id` is not integer, backend creates/finds purchase item by name.
 - Backend computes `amount`, `amount_after_discount`, `tax`, `total` per item.
 - Quote totals are aggregated from item totals.

@@ -124,6 +124,60 @@ address or a phone number.
 The reminder is queued, so if the scheduled run is ever triggered a second time on the same day before
 the queue has drained, a supplier may receive the day's reminder twice.
 
+Only suppliers whose invitation is still open are reminded (a rebase cancels invitations), and a quote
+shelved by a rebase does not count as quoting. Each reminder is counted on the invitation
+(`reminder_count`, `last_reminded_at`).
+
+### Request for quotation cancelled
+
+`type`: `App\Notifications\PropertyManagement\Procurement\RfqCancelledNotification`
+
+Sent to every supplier asked to quote in a round that staff cancelled by **rebasing** the request.
+Any quote the supplier sent is shelved and will not be considered. Also delivered by email.
+
+| Key | Type | Notes |
+|---|---|---|
+| `title` | string | "Request for quotation cancelled" |
+| `message` | string | e.g. "The request for quotation for Rewire the lobby at Riverside Apartments was cancelled: The scope now includes the basement." |
+| `reason` | string | The reason staff gave for the rebase. |
+| `procurement_request_id` | integer | The request. |
+| `request_title` | string | The request's title. |
+| `facility_name` | string | The property. |
+| `resource_type` / `resource_id` / `resource_url` | | The standard resource payload. |
+
+### Request for quotation reopened
+
+`type`: `App\Notifications\PropertyManagement\Procurement\RfqReopenedNotification`
+
+Sent to a supplier who quoted in a round that was rebased, when the request is sent out again: the
+job is open for quotes again, the scope may have changed, and they may send a revised quote by the
+new deadline (their earlier quote stays shelved). Suppliers newly asked in that round get the usual
+invitation instead. Also delivered by email.
+
+| Key | Type | Notes |
+|---|---|---|
+| `title` | string | "Request for quotation reopened" |
+| `message` | string | e.g. "The request for quotation for Rewire the lobby at Riverside Apartments is open again. The scope may have changed: send a revised quote by 19 Oct 2026, 17:00." |
+| `deadline` | string | The new quotation deadline, ISO-8601. |
+| `procurement_request_id`, `request_title`, `facility_name` | | As above. |
+| `resource_type` / `resource_id` / `resource_url` | | The standard resource payload. |
+
+### Quote deadline extended
+
+`type`: `App\Notifications\PropertyManagement\Procurement\RfqDeadlineExtendedNotification`
+
+Sent to every supplier whose invitation is still open, whether or not they quoted, when staff extend
+the deadline because too few quotes came in. Quoting reopens until the new deadline. Also delivered by
+email.
+
+| Key | Type | Notes |
+|---|---|---|
+| `title` | string | "Quote deadline extended" |
+| `message` | string | e.g. "The quote deadline for Rewire the lobby at Riverside Apartments was extended to 21 Oct 2026, 17:00." |
+| `deadline` | string | The new quotation deadline, ISO-8601. |
+| `procurement_request_id`, `request_title`, `facility_name` | | As above. |
+| `resource_type` / `resource_id` / `resource_url` | | The standard resource payload. |
+
 ## Mark one as read
 
 `PATCH /api/v1/vendor/notifications/{notification}/read`
