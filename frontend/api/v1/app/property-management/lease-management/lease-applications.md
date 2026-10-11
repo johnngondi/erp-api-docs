@@ -452,13 +452,16 @@ approval could never be set in time to price one.
 | Field | Required | Type | Notes |
 |---|---|---|---|
 | `lease_component_id` | Yes | integer | One schedule per component — a second is refused with a 422 |
-| `start_at` | Yes | date (`YYYY-MM-DD`) | The **first escalation date**, not the tenancy start |
+| `next_due` | Yes | date (`YYYY-MM-DD`) | The **first escalation date** — the only date; there is no start date |
 | `cycle` | Yes | `days` \| `weeks` \| `months` \| `years` | |
 | `period` | Yes | integer ≥ 1 | How many cycles between escalations |
 | `rate` | Yes | decimal | Percent, compounding — 10% twice is ×1.21, not ×1.2 |
-| `next_due` | No | date | Defaults to `start_at`; only exists to keep the row copyable onto `lease_escalations` |
+| `end_at` | No | date (`YYYY-MM-DD`) | When it stops; must be after `next_due` |
 
-`start_at` being the first escalation date is the thing to get right: a schedule
+`start_at` is no longer accepted or returned; one sent anyway is ignored. Overlap between two
+schedules on a component is judged on `next_due` → `end_at`, and refused under `next_due`.
+
+`next_due` being the first escalation date is the thing to get right: a schedule
 anchored on the tenancy's own start date does not escalate the first period — it walks
 forward and first bites one cycle in, which is what "escalates annually" is normally
 taken to mean.
@@ -474,12 +477,12 @@ DELETE /lease-applications/{application}/escalations/{escalation}
 ```
 
 Filter on `lease_component_id` and `cycle`; sort by `id`, `lease_component_id`,
-`start_at`, `rate` or `created_at`, defaulting to `start_at`.
+`next_due`, `rate` or `created_at`, defaulting to `next_due`.
 
 ```json
 {
   "lease_component_id": 3,
-  "start_at": "2027-10-01",
+  "next_due": "2027-10-01",
   "cycle": "years",
   "period": 1,
   "rate": 7.5
@@ -641,7 +644,10 @@ no document-type collection here.
 | `DELETE` | `/guarantors/{guarantor}` | `update` |
 
 `GET /guarantors` is paginated. Guarantors also come back on the application
-itself via `include=guarantors`.
+itself via `include=guarantors`, and on the single-application read
+(`GET /lease-applications/{application}`, both portals) **with their documents**
+(`registration_upload`, `id_upload`, `tax_pin_upload`, `financial_statement_upload`), so an
+edit form can send back the documents it is not changing without reading each guarantor.
 
 ### Create / Update Guarantor
 
@@ -655,11 +661,26 @@ itself via `include=guarantors`.
 | `registration_type` | Yes | string | `national_id`, `business_license` or `passport` |
 | `registration_number` | Yes | string | |
 | `registration_upload_id` | Yes | integer | Scan of the registration document. Must exist in `uploads.id` |
-| `id_upload_id` | No | integer | Guarantor's ID document. Must exist in `uploads.id` |
-| `tax_pin_upload_id` | No | integer | Guarantor's tax PIN certificate. Must exist in `uploads.id` |
-| `financial_statement_upload_id` | No | integer | Feeds the income-to-rent score. Must exist in `uploads.id` |
+| `id_upload_id` | No | integer \| null | Guarantor's ID document. Must exist in `uploads.id` |
+| `tax_pin_upload_id` | No | integer \| null | Guarantor's tax PIN certificate. Must exist in `uploads.id` |
+| `financial_statement_upload_id` | No | integer \| null | Feeds the income-to-rent score. Must exist in `uploads.id` |
 | `postal_address` | No | string \| null | The guarantor's postal address (P.O. Box) |
 | `city` | No | string \| null | |
+
+On an **update**, the optional fields follow one rule:
+
+| Sent as | Effect |
+|---|---|
+| Left out | Kept as it is |
+| `null` | Cleared. For a document, it is removed and its verification status cleared |
+| The same upload id | Kept, with its verification status |
+| A new upload id | Replaced; its status goes back to `pending` and it is verified again |
+
+So a form that edits only the guarantor's details can leave all five out. The required
+fields, `registration_upload_id` included, must be sent on every update: leaving one out is a
+`422`.
+
+Every update re-runs the guarantor's FRC name check, whatever changed.
 
 ```json
 {
@@ -1089,6 +1110,7 @@ Each step raises a pending task for the people the company settings name:
 | `pending` | Review lease application | Holders of the **Lease Application Reviewer Role** (`lease_application_reviewer_role_id`) **on the application's property** |
 | `pending`, [returned](#return-an-approved-application) | Re-review returned lease application | The person who approved it (`reviewed_by`), else the reviewer-role holders as above |
 | `approved` | Generate Letter of Offer | Holders of the **Letter of Offer Generation Role** (`loo_generation_role_id`) |
+| Offer [submitted to a lawyer](loo/loo.md#submit-to-lawyer) | Legal review: {our_ref} | **One** holder of the **Internal Counsel Role** (`internal_counsel_role_id`, default **Internal Counsel**): the one with the fewest open tasks, among those allocated to the offer's property when there are any, else across the company |
 
 The two settings differ in scope:
 
@@ -1103,9 +1125,11 @@ If nobody qualifies, the task falls back to everyone holding any role on the pro
 The applicant never gets the task.
 
 The setting's options list follows the scope: the reviewer setting offers
-`access-management/roles?filter[enforce_on_facility]=1`, and the LOO generation setting
-offers every app staff role (`access-management/roles?filter[user_group_id]={app group id}`).
-Saving a role outside those lists is refused with `422`.
+`access-management/roles?filter[enforce_on_facility]=1`, and the LOO generation and Internal
+Counsel settings offer every app staff role
+(`access-management/roles?filter[user_group_id]={app group id}`). Saving a role outside those
+lists is refused with `422`. The Internal Counsel task has no fallback: with no role configured,
+or nobody holding it, Submit to Lawyer is refused with `422`.
 
 ## Return an approved application
 

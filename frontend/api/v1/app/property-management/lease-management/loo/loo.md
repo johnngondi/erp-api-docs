@@ -308,8 +308,20 @@ The first three are strings, not numbers: the clause prints them verbatim.
 (`0`, only meaningful when the signatory type is `trustees`).
 
 **Legal** — `has_lawyer` (`false`), `submitted_to_lawyer_at`, `legal_fees`,
-`disbursement_fee`, `stamp_duty_fee`, `legal_fee_updated_at`,
-`legal_fee_recorder_id`, `fee_note_file_id` (an upload; not a tag).
+`disbursement_fee`, `stamp_duty_fee`, `other_legal_fees`, `legal_fee_notes` (text, up to
+2000 characters), `legal_fee_updated_at`, `legal_fee_recorder_id`, `fee_note_file_id` (an
+upload; not a tag). Written by [Submit to lawyer](#submit-to-lawyer) and never by an edit:
+`assigned_lawyer_id` (the Internal Counsel the offer was handed to),
+`submitted_to_lawyer_by_id`, and `legal_fee_invoice_id` (the invoice the fees were billed on
+once the lease raised from the offer went active — see [Promote](#promote)). There is still no
+`lawyer_id`.
+
+The resource adds, on the staff surface: `assigned_lawyer` and `submitted_to_lawyer_by`
+(`{ id, name, ... }` users, detail only), `legal_fee_total` (the four fees summed — what is
+billed, with no tax added), `legal_fee_recorded` (a fee note file and a recorder stamp are
+both there), `can_submit_to_lawyer` and `can_record_legal_fee_note` (see below).
+`legal_fee_notes`, `assigned_lawyer_id` and the lawyer objects are never sent to the tenant
+portal.
 
 
 ## Approval
@@ -441,6 +453,7 @@ highlighted inside it.
 |---|---|---|
 | `comment_in` | enum \| null | `offer_content` or `agreement_content` — the `loos` columns of the same names. Serialised as `{ value, color }` |
 | `highlighted_content` | text \| null | The highlighted passage, verbatim |
+| `highlight_context` | object \| null | Where the passage sat when it was quoted: `{ start_offset, end_offset, prefix, suffix }` — character offsets into the clause's plain text and up to 500 characters either side. Only with `highlighted_content`; the client uses it to open the right occurrence of a repeated word and falls back to searching for the passage when the clause has since changed |
 
 **Both are optional.** The highlight-then-comment flow is the usual one, but a
 reviewer also has document-level remarks — "this offer is missing a break clause"
@@ -609,6 +622,8 @@ property and space type.
 | `POST` | `loos/{loo}/send` | `send-loo` |
 | `POST` | `loos/{loo}/signature` | `sign-loo` |
 | `POST` | `loos/{loo}/promote` | `create-lease` |
+| `POST` | `loos/{loo}/submit-to-lawyer` | `update-loo`, and the offer can go (see [Submit to lawyer](#submit-to-lawyer)) |
+| `POST` | `loos/{loo}/legal-fee-note` | none: the assigned lawyer or an Internal Counsel holder (see [Legal fee note](#legal-fee-note)) |
 
 There is **no `POST loos`**: an offer is generated from a source record, never
 posted into existence on its own.
@@ -616,6 +631,12 @@ posted into existence on its own.
 Index filters: `status`, `type`, `facility_id`, `loo_template_id`, `our_ref`,
 `loo_preparation_type`, `loo_preparation_id`. The last two are how you list the
 offers on one application or one lease.
+
+The list holds the offers on the properties you are allocated to, **plus every offer handed
+to you as its lawyer** (`assigned_lawyer_id`), whatever its property. `GET loos/{loo}` follows
+the same rule, and also opens the offer to whoever recorded its fee note
+(`legal_fee_recorder_id`): Internal Counsel works across the company without being allocated
+to each property.
 
 `promote` is gated on `create-lease` rather than a LOO permission — it creates a
 lease, and reaching it through an offer should not be a way around the permission
@@ -696,10 +717,106 @@ font, weight, alignment and spacing (see [the rent tags](#the-rent-tags)). Every
 tag's value is stored as sent and escaped when the document is rendered.
 
 `legal_fee_updated_at` and `legal_fee_recorder_id` are stamped by the server
-whenever a fee moves, and are not accepted in the payload.
+whenever a fee moves (`legal_fees`, `disbursement_fee`, `stamp_duty_fee` or
+`other_legal_fees`), and are not accepted in the payload. `legal_fee_notes` and
+`other_legal_fees` are editable here too; the lawyer normally records them through
+[Legal fee note](#legal-fee-note), which stamps the same way.
 
 Only while `status` is `draft` or `pending_approval`. An offer in a tenant's
 hands is fixed, and so is a `rejected` one.
+
+#### What this viewer may edit: `editable_fields`
+
+The detail (`GET loos/{loo}`, and every response that returns the whole offer) carries
+`editable_fields` for the person asking, so the page can disable what they may not change:
+
+| Value | When |
+|---|---|
+| `null` | Every field: they hold `update-loo`; or the offer was [sent back](#approval) to them for changes; or the approval step waiting on them lends an edit grant that names no fields |
+| `["rent_deposit_months", ...]` | Only these: the step waiting on them lends an edit grant limited to these fields (the names from the step's `editable_fields`, materiality dropped) |
+| `[]` | Nothing |
+
+A `PATCH` reaching past the list is refused with `403` (it is not trimmed). The key is absent
+on the list and on the tenant portal. The edit grant itself is described in
+[approval templates](../../../access-management/approval-templates.md).
+
+### Submit to lawyer
+
+`POST /api/v1/app/{company}/property-management/lease-management/loos/{loo}/submit-to-lawyer`
+
+No body. Hands the offer to the company's Internal Counsel to review and record the legal fee
+note. Needs `update-loo`, and the offer must be able to go — read `can_submit_to_lawyer`:
+
+- the property bills legal fees (`facilities.bill_legal_fees`);
+- the offer is `draft` or `pending_approval`;
+- it has not been submitted already (`assigned_lawyer_id` is null). **It goes once.**
+
+Anything else is a `403`.
+
+**Who gets it.** The holders of the role in the `internal_counsel_role_id` setting (default:
+**Internal Counsel**) — those allocated to the offer's property when there are any, otherwise
+every holder in the company — and of them the one with the fewest open pending tasks, ties
+going to the lowest user id. No role configured is a `422` on `loo` ("No Internal Counsel role
+is configured."); nobody holding it is a `422` on `loo` too.
+
+It sets `assigned_lawyer_id`, `submitted_to_lawyer_by_id` (you), `submitted_to_lawyer_at` and
+`has_lawyer: true`, raises a pending task **"Legal review: {our_ref}"** for the lawyer on the
+offer, and sends them an in-app notification. Response:
+
+```json
+{
+  "data": {
+    "message": "Offer submitted to Jane Wakili for legal review.",
+    "loo": {
+      "id": 812,
+      "assigned_lawyer_id": 57,
+      "assigned_lawyer": { "id": 57, "name": "Jane Wakili" },
+      "submitted_to_lawyer_by": { "id": 12, "name": "A. Letting" },
+      "submitted_to_lawyer_at": "2026-10-11T09:14:00.000000Z",
+      "has_lawyer": true,
+      "can_submit_to_lawyer": false,
+      "can_record_legal_fee_note": true,
+      "...": "the rest of the offer, as GET loos/{loo}"
+    }
+  }
+}
+```
+
+### Legal fee note
+
+`POST /api/v1/app/{company}/property-management/lease-management/loos/{loo}/legal-fee-note`
+
+The lawyer records the fee note: what the legal work costs and the file it comes from.
+
+```json
+{
+  "legal_fees": 45000,
+  "stamp_duty_fee": 12000,
+  "disbursement_fee": 3500,
+  "other_legal_fees": 1500,
+  "fee_note_file_id": 812,
+  "legal_fee_notes": "Fee note 2026/114, payable on execution."
+}
+```
+
+| Field | Rules |
+|---|---|
+| `legal_fees`, `stamp_duty_fee`, `disbursement_fee`, `other_legal_fees` | nullable, numeric, min `0`; **at least one above `0`** (else `422` on `legal_fees`) |
+| `fee_note_file_id` | required, an `uploads.id` (upload the file first through the common upload endpoint) |
+| `legal_fee_notes` | nullable string, max 2000 |
+
+**Who may.** The lawyer the offer was submitted to, or any holder of the Internal Counsel role
+the setting names — no permission of its own. Read `permissions.recordLegalFeeNote` (who you
+are) together with `can_record_legal_fee_note` (the offer's state).
+
+**When.** While the property bills legal fees and the offer is `draft` or `pending_approval`.
+It may be recorded **again** in that window; the note is recorded whole, so a fee left out is
+cleared rather than kept from the previous note. Once the offer is approved it is a `403`.
+
+It stamps `legal_fee_recorder_id`/`legal_fee_updated_at` (as a staff edit of the fees would),
+clears the lawyer's "Legal review:" task, and notifies whoever submitted the offer to the lawyer
+and whoever generated it (never the lawyer). The response is `{ message, loo }`, the offer as
+`GET loos/{loo}` returns it, with `legal_fee_total` and `legal_fee_recorded`.
 
 ### Granted spaces
 
@@ -768,12 +885,13 @@ Raising a point, anchored to a passage:
 {
   "body": "This deposit is two months short of policy.",
   "comment_in": "offer_content",
-  "highlighted_content": "a deposit equal to one month's rent"
+  "highlighted_content": "a deposit equal to one month's rent",
+  "highlight_context": { "start_offset": 1180, "end_offset": 1215, "prefix": "The Tenant shall pay ", "suffix": " on signing." }
 }
 ```
 
-Answering one. A reply carries neither `comment_in` nor `highlighted_content` —
-it inherits the thread's, and sending either is a `422`:
+Answering one. A reply carries neither `comment_in`, `highlighted_content` nor
+`highlight_context` — it inherits the thread's, and sending any of them is a `422`:
 
 ```json
 { "body": "Corrected to three months in the latest revision.", "parent_id": 41 }
@@ -791,6 +909,7 @@ than omitting the key.
   "body": "This deposit is two months short of policy.",
   "comment_in": { "value": "offer_content", "color": "info" },
   "highlighted_content": "a deposit equal to one month's rent",
+  "highlight_context": { "start_offset": 1180, "end_offset": 1215, "prefix": "The Tenant shall pay ", "suffix": " on signing." },
   "parent_id": null, "root_id": null, "depth": 0, "is_reply": false,
   "author": { "id": 7, "name": "A. Reviewer" },
   "is_resolved": true,
@@ -953,6 +1072,20 @@ signing after the lease exists is exactly what should happen.
 
 Refused when the offer has not been sent, when it has already been promoted, and when it grants no
 spaces.
+
+**Legal fees.** When the property bills legal fees and the offer's fee note totals more than
+zero (`legal_fee_total`), promotion adds a **zero-cost line** for the legal fees lease component
+to the lease's first space, and the fees are billed **once the lease is active**: approved through
+its chain or activated by hand, or straight away when the lease is raised active. One invoice,
+notes `Legal fees`, one line for `legal_fee_total` with **no tax added**, the line noted
+"Legal fees per fee note {file} ({our_ref})". `legal_fee_invoice_id` is then set on the offer, and
+an offer already billed is not billed again.
+
+The component is the one in the `legal_fees_lease_component_id` setting, else the active component
+flagged `is_legal_fees_deposit`, else the active one named "Legal Fees". When none resolves, the
+property does not bill legal fees, or the total is zero, nothing is billed and **the promotion still
+goes through** — legal fees never hold a lease up. A failure raising the invoice is logged and
+rolled back on its own, without failing the lease's approval.
 
 **Read `can_promote` to decide whether to offer the button.** It is the same rule the endpoint
 enforces — sent or accepted, right type, not already promoted. Do **not** use
@@ -1125,6 +1258,13 @@ offer is drafted from a source record rather than posted into existence.
 | `create-loo-template` | app | Authoring a template |
 | `update-loo-template` | app | Editing one, and restoring a deleted one |
 | `delete-loo-template` | app | Deleting one |
+
+**[Submit to lawyer](#submit-to-lawyer) and the [legal fee note](#legal-fee-note) add no
+permission.** Submitting is the drafter's `update-loo`. The fee note belongs to the lawyer the
+offer was handed to, or any holder of the role in the `internal_counsel_role_id` setting —
+being handed the offer is the rule, and no permission can express it. The seeded **Internal
+Counsel** role (company-wide) holds `view-loo` only; the migration that adds it to existing
+installs grants just that.
 
 **[Comments](#comments) add no permission.** Who may raise and answer a point is
 membership of the offer's approval chain, which no permission can express; reading

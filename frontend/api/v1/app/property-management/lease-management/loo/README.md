@@ -100,9 +100,9 @@ document in [loo.md](./loo.md).
 ## The tag registry
 
 `loo_tags` is a **system-wide** catalogue (not per-company) of the tokens a
-template author can drag into clause text. 82 tags across nine categories.
+template author can drag into clause text. 84 tags across ten categories.
 
-> **Looking for a particular tag?** [loo-tags.md](./loo-tags.md) lists all 82 with
+> **Looking for a particular tag?** [loo-tags.md](./loo-tags.md) lists all 84 with
 > their names, descriptions and the exact source each one resolves from. This
 > section describes the registry's shape; that one is its contents.
 
@@ -137,11 +137,12 @@ Categories (`App\Enums\LooTagCategory`), with how many tags each holds:
 | `parties` | Parties | 10 |
 | `property` | Property | 7 |
 | `lease_terms` | Lease Terms | 19 |
-| `financials` | Financials | 20 |
+| `financials` | Financials | 21 |
 | `legal` | Legal | 7 |
 | `execution` | Execution & Signatures | 5 |
 | `banking` | Banking | 8 |
 | `system` | System | 4 |
+| `approval` | Approval | 1 |
 
 `system` tags (`id`, `type`, `loo_preparation_type`, `loo_preparation_id`) are
 internal reference fields, seeded for completeness. They are not expected to be
@@ -221,7 +222,7 @@ the tag's `default_format`.
 | `yes_no` | `Yes` / `No` |
 | `list` | prose, not bullets: `A, B and C` |
 | `raw` / `null` | the value as it stands; whole floats lose their decimals, integers never gain separators |
-| `html` | a block of trusted markup the resolver built (today only `rent_breakdown`, a table). The **editor must insert it as HTML**, not as text: a `tags_content` row whose `tag.default_format` is `html` holds markup. The renderer does the same and escapes every other tag's value |
+| `html` | a block of trusted markup the resolver built (`rent_breakdown`, `money_computations` and `approval_signatures`, all tables; the last carries `<img>` signatures as `data:` URLs). The **editor must insert it as HTML**, not as text: a `tags_content` row whose `tag.default_format` is `html` holds markup. The renderer does the same and escapes every other tag's value |
 | anything else | a PHP date format |
 
 **The premises tags read `loo_spaces`.** `floor_unit` (`Ground Floor - Shop 4`),
@@ -278,7 +279,7 @@ finished:
 
 ## Related
 
-- [Tag reference](./loo-tags.md) — all 82 tags, and how each resolves
+- [Tag reference](./loo-tags.md) — all 84 tags, and how each resolves
 - [LOO templates](./loo-templates.md) — the clause text a LOO is drafted from
 - [LOO document](./loo.md) — granted spaces, the rent schedule, and approval
 - [Lease Applications API](../lease-applications.md) — `proposed_start_date` and

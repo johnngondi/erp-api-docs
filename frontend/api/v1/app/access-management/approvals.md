@@ -141,9 +141,12 @@ half-saved.
 
 ## Returned for changes
 
-A `review` on the first step returns the document to the people who raised it: its creator
-(`created_by`) and the person who submitted it for approval (`initiated_by` on the steps). The
-document keeps its pending status and nothing is posted.
+A `review` from a step with **no checkpoint step before it** returns the document to the people
+who raised it: its creator (`created_by`, or the model's own author column) and the person who
+submitted it for approval (`initiated_by` on the steps). Any step can do this, not only the first;
+the steps before it keep their approvals until the document is resubmitted. The document keeps its
+pending status and nothing is posted. With a checkpoint before it, the chain goes back to that
+checkpoint instead - see [Checkpoints](approval-templates.md#checkpoints).
 
 While it is returned:
 
@@ -157,13 +160,12 @@ While it is returned:
 - the chain still counts as open, so the document cannot be submitted for approval a second time.
 
 **Resubmission is implicit.** The first successful update of the document through its update
-endpoint — by a returned-to user or anybody else allowed to edit it — sends the step back to
-`pending`, addressed to **the reviewer alone**: the step's `actors` becomes just the reviewer,
-who gets the pending task back ("Resubmitted after your review: {comment}"), and the
-submitters' tasks are removed. If the reviewer can no longer act on the step (they lost the role,
-or are no longer named for it on the property or allocated to it), the step is addressed afresh
-as described in [Who a step is addressed to](#who-a-step-is-addressed-to). The chain carries on
-from there in the same attempt.
+endpoint — by a returned-to user or anybody else allowed to edit it — resets every step up to and
+including the one that asked, and starts the chain again from the **first step**, addressed to
+**everybody eligible** for it as described in [Who a step is addressed to](#who-a-step-is-addressed-to).
+Their pending task reads "Resubmitted after {reviewer} asked for changes: {comment}", and the
+submitters' tasks are removed. The step that asked is asked again when the chain reaches it. The
+chain carries on in the same attempt.
 
 Step fields for this:
 

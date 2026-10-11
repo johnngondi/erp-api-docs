@@ -23,7 +23,7 @@ client holds no defaults of its own:
 | `GET /app/{company}/inbox/summary` | `session` — settings **plus** the live state |
 
 ```json
-{ "session": { "idle_minutes": 15, "max_attempts": 3, "lockout_minutes": 15 } }
+{ "session": { "idle_minutes": 15, "max_attempts": 3, "lockout_minutes": 15, "enforced": true } }
 ```
 
 and on the summary, the same plus:
@@ -37,8 +37,14 @@ and on the summary, the same plus:
 | `idle_minutes` | How long a session may sit idle before it locks |
 | `max_attempts` | Wrong PINs allowed before a lockout — show this on the lock screen rather than waiting to learn it from a failure |
 | `lockout_minutes` | How long a lockout lasts |
+| `enforced` | Whether the server locks idle sessions at all (`SESSION_PIN_ENFORCE`). While it is `false` the client runs **no idle timer** and shows **no forced Set-PIN prompt** |
 | `locked` | Whether this session is locked **now** |
 | `locks_in_seconds` | Seconds left, or `null` when the server will never lock this session |
+
+**`enforced: false` means the client runs no idle timer.** The server will never refuse a request
+with a `423`, so a lock the client puts up on its own clock is a lock nobody asked for - and the
+"set a PIN" prompt has nothing to protect. Treat a missing `enforced` (an older backend) as `true`
+and keep the old behaviour.
 
 **Settings are on login and profile; live state is not.** At login there is no session to be idle
 yet, and on a profile read a countdown is stale the moment it is read. Poll the summary for state.
@@ -272,7 +278,7 @@ it is polled every thirty seconds, it answers behind the lock, and it does not c
 activity, so it carries the lock state on every portal:
 
 ```json
-{ "session": { "locked": false, "locks_in_seconds": 212, "idle_minutes": 5 } }
+{ "session": { "locked": false, "locks_in_seconds": 212, "idle_minutes": 5, "enforced": true } }
 ```
 
 - `locked: true` — put the lock screen up now. The next ordinary request would be refused anyway.
@@ -280,8 +286,10 @@ activity, so it carries the lock state on every portal:
   `null` means the server will never lock this session (enforcement off, or no PIN set), so
   there is nothing to wait for.
 - `idle_minutes` — the window, for the "locked after N minutes" label.
+- `enforced` — `false` means the server never locks anyone; stop any idle timer and unlock a
+  screen the client's own clock put up.
 
-A client may still lock on its own clock sooner (five minutes without a mouse or key is a fair
+While `enforced` is `true`, a client may still lock on its own clock sooner (five minutes without a mouse or key is a fair
 signal); the summary is the authority for the case where its clock is wrong, cleared, or never
 started.
 
@@ -320,7 +328,8 @@ ever refused with a `423`. So the backend can merge and deploy before the lock s
 without anyone being locked out of a product that has nothing to show them.
 
 Turning it on is an environment change, not a deploy. So is turning it off again, which matters
-more.
+more. Clients learn which it is from `session.enforced` on login, the profile and the summary, and
+run no idle timer while it is `false`.
 
 ## Settings
 

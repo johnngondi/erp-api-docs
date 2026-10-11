@@ -10,7 +10,7 @@ the registry's *shape*; this file is its *contents*. The catalogue is also serve
 live at `GET lease-management/loo-tags`, and that endpoint — not this page — is what
 a client should build against.
 
-**82 tags across nine categories.**
+**84 tags across ten categories.**
 
 ## How to read the "Resolved from" column
 
@@ -96,7 +96,7 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 | `{{termination_notice_rent_in_lieu_months}}` | Rent in Lieu of Notice (Months) | — | Months of rent payable in lieu of termination notice. | **Path.** `loo.termination_notice_rent_in_lieu_months` — the same on all three types. |
 | `{{parking_security_deposit_months}}` | Parking Deposit Months | — | Months of parking fee held as deposit. | **Path.** `loo.parking_security_deposit_months` — the same on all three types. |
 
-## Financials <sub>`financials` · 20 tags</sub>
+## Financials <sub>`financials` · 21 tags</sub>
 
 | Tag | Name | Format | Description | Resolved from |
 |---|---|---|---|---|
@@ -120,6 +120,7 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 | `{{deposit_to_pay}}` | Deposit Payable | `currency` | The deposit the tenant still has to pay (the top-up on a renewal): the rent, service-charge and utility deposits less what is already held, never below zero. | **Computed.** `max(0, rent_security_deposit + service_charge_security_deposit + utility_security_deposit − deposit_held)`. |
 | `{{currency}}` | Currency | — | The currency the offer is priced in, as its code: `KES`. | **Path.** `facility.reportingCurrency.code` — the same on all three types. |
 | `{{has_vat}}` | VAT Applicable | `yes_no` | Whether the quoted amounts attract VAT. | **Path.** `loo.has_vat` — the same on all three types. |
+| `{{money_computations}}` | Money Computations | `html` | A table of what the tenant pays on signing - item, amount, tax and total: the first billing cycle's rent, service charge and every other priced component, the fit-out period service charge when it applies, the security deposit (net of any deposit held on a renewal), the legal fees deposit, and the total payable on signing. | **Computed.** `MoneyComputationsTable`, a `table.money-computations` in the same cell shape as `rent_breakdown`, columns Item / Amount / Tax / Total. See [Money computations](#money-computations) below for every row. Re-resolved whenever the granted spaces change, on every save of the offer, and when a legal fee note is recorded. |
 
 ## Legal <sub>`legal` · 7 tags</sub>
 
@@ -156,6 +157,12 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 | `{{collection_bank_branch}}` | Collection Bank Branch | — | The branch of the property's collection account. | **Path.** `facility.collectionAccount.bankBranch.name` — the same on all three types. |
 | `{{collection_bank_code}}` | Collection Bank Code | — | The branch code of the property's collection account, for transfers. | **Path.** `facility.collectionAccount.bankBranch.code` — the same on all three types. |
 
+## Approval <sub>`approval` · 1 tag</sub>
+
+| Tag | Name | Format | Description | Resolved from |
+|---|---|---|---|---|
+| `{{approval_signatures}}` | Approval Signatures | `html` | The last two approvals of the offer's current approval chain side by side, the earlier on the left: each approver's signature (or a blank signing line), name and role. Empty until a step is approved, and refreshed as the chain moves. | **Computed.** `ApprovalSignaturesTable` off `Loo::approvalSteps()`. See [Approval signatures](#approval-signatures) below. |
+
 ## System <sub>`system` · 4 tags</sub>
 
 Internal reference fields, seeded for completeness. Not expected in real
@@ -167,6 +174,67 @@ templates, and reasonable to hide or collapse in the sidebar.
 | `{{type}}` | Loo Type | — | Internal reference field, included for completeness. | **Path.** `loo.type` — the same on all three types. |
 | `{{loo_preparation_type}}` | Preparation Source Type | — | Internal reference field, included for completeness. | **Path.** `loo.loo_preparation_type` — the same on all three types. |
 | `{{loo_preparation_id}}` | Preparation Source ID | — | Internal reference field, included for completeness. | **Path.** `loo.loo_preparation_id` — the same on all three types. |
+
+## Money computations
+
+`{{money_computations}}` prints a four-column table, Item / Amount / Tax / Total, of what the
+tenant pays on signing. Rows, in this order:
+
+| Row | Amount | Tax | Shown when |
+|---|---|---|---|
+| **First {Cycle} Rent** | Rent per month × the cycle's months | the rent's tax × the same months when `has_vat`, else 0 | the offer grants a priced rent component |
+| **First {Cycle} Service Charge** | Service charge per month × months | as above | a priced service-charge component |
+| **First {Cycle} {Component}** | one row per other priced component (parking, signage, anything else), per month × months | as above | the component is priced above zero |
+| **Fit-out Period Service Charge** | service charge per month × `fit_out_period_months` | service-charge tax × the same months when `has_vat` | `apply_fitout_period_service_charge` is true and the application has fit-out months |
+| **Security Deposit** | `rent_security_deposit + service_charge_security_deposit + utility_security_deposit` | never taxed | always |
+| ↳ *Total deposit* | the three deposits summed | — | renewals only (see below) |
+| ↳ *Less deposit held* | `−deposit_held` | — | renewals only |
+| **Legal Fees Deposit** | `legal_fee_total` once a fee note is recorded, else 0 | never taxed | always |
+| **Total Payable on Signing** | — | — | always; bold, the Total cell double underlined |
+
+- **{Cycle}** is the application's `billing_cycle`: `monthly` → Month (1), `quarterly` → Quarter (3),
+  `biannual` → Half-Year (6), `annually` → Year (12). On an offer with no application cycle, the
+  cycle of the lease being renewed is used, and otherwise a month.
+- **Per-month figures** come from the **first period of the stored `rent_breakdown`**: each component's
+  `monthly_net` and `monthly_tax`. Escalation never touches the first period. When there is no stored
+  schedule (no start date or term yet), or a reviewer rewrote the first period without its
+  components, the granted `loo_space_components` are used instead: `amount` net, and tax at the row's
+  own `tax_id` (`taxes.value` is a fraction, 0.16 = 16%).
+- **Renewal deposit**: when `deposit_held > 0` or the offer renews a lease, the Security Deposit row
+  states the top-up, `max(0, deposits − deposit_held)` (the `deposit_to_pay` rule), and two indented
+  lines below it give the whole deposit and the deposit held. Those two lines are working only; they
+  are never added into the total.
+- **Legal fees**: nothing in the codebase computes an indicative legal fee from
+  `facilities.legal_fee_type` / `indicative_legal_rate`, so before a fee note is recorded the row
+  prints 0.
+- **Total Payable on Signing** is the Total column added up. Every figure is rounded to the cent
+  first, so the column adds up as printed.
+- Money prints in the property's reporting currency, `KES 1,234.56`. A table with no rent, no
+  service charge and nothing payable at all resolves to `null`.
+
+## Approval signatures
+
+`{{approval_signatures}}` prints the **last two `approved` steps of the current approval attempt**
+(the highest two `step_order`s) as a full-width table of two cells: the earlier approval on the
+left and the later one on the right. With only one approval it sits in the left cell and the right
+cell is blank. With none, the tag resolves to `null`.
+
+Each cell holds:
+
+1. the approver's signature, `<img src="data:image/png;base64,…">` about 60px high, when the user
+   (`acted_by_id`) has saved one on their profile; otherwise a blank signing line;
+2. the approver's name, bold;
+3. the role the step was addressed to (`ApprovalStep.role.name`).
+
+**It stays current with the chain.** The approval framework calls `Loo::approvalChainMoved()` inside
+its transaction whenever a step is approved, a push-back resets steps, a returned offer is
+resubmitted, or a new attempt opens. That call re-resolves only this tag (not forced, so a hand
+correction stands). A signature saved or changed later does not re-print an offer by itself; the
+offer picks it up the next time its chain moves.
+
+The signature is stored in `loo_tag_values` as part of the value, because the value is what the
+editor preview, the PDF and the tenant's copy print. The sanitiser lets an `img` through only with
+a `data:` PNG/JPEG/GIF source whose bytes really are an image, never a URL.
 
 ## A note on `is_computed`
 

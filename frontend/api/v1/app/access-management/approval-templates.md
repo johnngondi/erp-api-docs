@@ -47,7 +47,9 @@ Create payload table:
 | `steps[].role_id` | int | Yes | - | Company app-role ID to act at this step |
 | `steps[].conditions` | object \| null | No | `null` | When this step applies — see [Step conditions](#step-conditions) |
 | `steps[].allowed_to_edit` | boolean | No | `false` | Lets this step's actor edit the resource while it waits on them |
-| `steps[].editable_fields` | array[string] \| null | No | `null` | Which fields that grant covers — see [The edit grant](#the-edit-grant) |
+| `steps[].can_edit_approvable` | boolean | No | `false` | The newer name for `allowed_to_edit`; send either. When both are sent, this one wins |
+| `steps[].editable_fields` | array[object \| string] \| null | No | `null` | Which fields that grant covers, each `{ "field": "notes", "is_material": false }` (a bare `"notes"` still works) — see [The edit grant](#the-edit-grant) |
+| `steps[].is_checkpoint` | boolean | No | `false` | A later step's push-back lands here — see [Checkpoints](#checkpoints) |
 | `always_requires_approval` | boolean | No | `false` | If `true`, bypass roles are ignored |
 | `bypass_role_ids` | array[int] | No | `[]` | Roles allowed to bypass workflow |
 | `post_approval_event` | string \| null | No | `null` | FQCN event class; must exist |
@@ -66,11 +68,29 @@ Example request:
   "always_requires_approval": false,
   "bypass_role_ids": [11],
   "steps": [
-    { "step_order": 1, "role_id": 21 },
-    { "step_order": 2, "role_id": 22 }
+    { "step_order": 1, "role_id": 21, "is_checkpoint": true },
+    {
+      "step_order": 2,
+      "role_id": 22,
+      "can_edit_approvable": true,
+      "editable_fields": [
+        { "field": "due_at", "is_material": true },
+        { "field": "notes", "is_material": false }
+      ]
+    }
   ]
 }
 ```
+
+Each step in the response (on the template and on a resource's `approval_steps`) carries:
+
+| Field | Notes |
+| --- | --- |
+| `allowed_to_edit` | Whether the step lends its actor the right to edit |
+| `can_edit_approvable` | Same value as `allowed_to_edit` |
+| `editable_fields` | Always objects `{ field, is_material }`, whatever shape was sent; `null` when no list was given |
+| `editable_field_names` | Just the names; `null` means **every field** (no list, `[]`, or `*`) |
+| `is_checkpoint` | Whether a later step's push-back lands here |
 
 ## Update Template
 
@@ -172,6 +192,69 @@ resource's update permission edits as they always could.
 Field names are validated on the way in against `GET /approvable-models` → the
 model's `fields` array, so a step cannot grant editing over something the resource
 does not expose.
+
+### Shape and the `can_edit_approvable` alias
+
+Each `editable_fields` entry is an object, `{ "field": "due_at", "is_material": true }`.
+`is_material` defaults to `false`. A bare string (`"due_at"`) is still accepted and
+reads as a non-material field, so templates saved before materiality keep working;
+responses always come back as objects. Anything else - a number, an object without
+`field`, an `is_material` that is not a boolean - is a **422** on that entry.
+
+`can_edit_approvable` is the same switch as `allowed_to_edit` (it is stored in
+`allowed_to_edit`). Send either; both come back.
+
+### Edit notifications and materiality
+
+Whenever a resource is edited through its update endpoint while its chain is open
+(a step `pending` or sent back for changes), the people behind the chain are told
+with an in-app **"Edited during approval: {resource}"** notification. Its `data`
+carries `fields` (the columns that changed) and `is_material`.
+
+| Who | When |
+| --- | --- |
+| The resource's creator | Every edit |
+| Whoever submitted it for approval, and everybody who has already answered a step | Only when the edit is **material** |
+
+An edit is material when a changed field is marked `is_material: true` on **any**
+step of the chain (`{ "field": "*", "is_material": true }` makes every field
+material). The editor is never told of their own edit. A value that only changed
+shape (`100` written over `100.00000`) is not a change, and `status` and the
+timestamps are never counted. This applies to every approvable, whoever made the
+edit - a step-granted editor, a permission holder, or a creator answering a
+push-back.
+
+## Checkpoints
+
+`steps[].is_checkpoint` decides where a push-back lands. When a step answers
+`review` (`POST approval-steps/{step}` with `status: review` and a `comment`):
+
+- **A checkpoint before it** - the chain goes back to the **nearest** one. That step
+  and every step after it, up to the reviewer, are reset to `pending` (their
+  `acted_by`, `acted_at` and `comment` cleared, actors re-resolved) and the
+  checkpoint is put in front of **everybody eligible** for its role on the
+  property. The reviewer's own step stays `review` with their comment; when the
+  chain is approved back up to it, it is asked again rather than skipped.
+- **No checkpoint before it** - the resource goes back to its **creator and
+  submitter**, from whichever step asked (not only the first). Each gets a
+  "Changes requested" task and notification. The earlier steps keep their
+  approvals for now, the reviewer's step is the current one with `is_returned:
+  true`, and nobody may act until the resource is edited.
+- **Resubmission** - editing a returned resource through its update endpoint resets
+  every step up to and including the one that asked, and starts the chain again
+  from the first step, put in front of everybody eligible (not only whoever
+  approved it last time). Their task reads "Resubmitted after {reviewer} asked for
+  changes: {comment}".
+
+A checkpoint the resource's [conditions](#step-conditions) bypassed left no row,
+so it cannot be landed on - the next checkpoint before it is used, or the
+resource goes back to its creator.
+
+Reset steps lose `acted_by` and `comment` on the row; who answered them before is
+kept in the activity log.
+
+The flag is copied onto each `approval_steps` row when the chain starts, like the
+edit grant, so changing the template does not move a chain already in flight.
 
 ## Attempts
 
