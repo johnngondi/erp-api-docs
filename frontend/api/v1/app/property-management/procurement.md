@@ -380,6 +380,18 @@ current procurement step holding `update-facility-procurement-request-step`, whi
 `can_request_more_quotes` / `can_evaluate_anyway` say whether the state allows it. The officer may
 also rebase a request held for a shortfall.
 
+**Requests opened before this rule existed.** A request already in quotes review with fewer quotes
+than the minimum can be put back to waiting for quotes, shortfall recorded, so the officer gets the
+same two choices. On the server:
+
+```
+php artisan procurement:hold-short-quotes-review --dry-run   # lists what would move
+php artisan procurement:hold-short-quotes-review [--company=ID]
+```
+
+Only a review the chain has not acted on qualifies (the procurement step is still current, no quote
+is selected, no later step has answered). The system's recommended quote keeps its flag.
+
 ### Quote rounds on the request
 
 `GET /requests/{procurementRequest}` adds:
