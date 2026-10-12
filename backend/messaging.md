@@ -111,6 +111,21 @@ php artisan queue:work --queue=otp,notifications,default
 
 or run a separate worker for `otp` so a code never waits behind anything else.
 
+ETR signing (`SignFacilityInvoiceJob`, `SignFacilityCreditNoteJob`, both on `default`) is
+serialised per device for drivers that cannot sign two documents at once. With
+`config('etr.drivers.{driver}.serialize')` on, the job runs behind a shared `WithoutOverlapping`
+lock keyed on the driver type and the device URL (`EtrDeviceData::lockKey()`), so properties that
+share the default device share the lock, and invoices and credit notes wait for each other. The
+lock is held until the device answers; a job that finds it taken goes back on the queue for 15
+seconds, and a lock left by a dead worker expires after `ETR_TIMEOUT` plus 60 seconds.
+`ETR_NOVITAS_SERIALIZE` defaults to `true` (Novitas devices reject concurrent requests);
+`ETR_INCOTEX_SERIALIZE`, `ETR_TEVIN_SERIALIZE` and `ETR_ETIMS_SERIALIZE` default to `false`.
+Because a release by the lock counts as an attempt, the jobs have unlimited tries, stop after
+three real failures (`maxExceptions`) and give up two hours after dispatch (`retryUntil`). Their
+`timeout` (60) stays under the database queue's `retry_after` (90), so a slow job is never handed
+to a second worker. The lock needs a cache store with locks: the `file` store works on one server;
+workers on several hosts need a shared store (Redis or database).
+
 ## Layout
 
 `app/Support/Messaging`:

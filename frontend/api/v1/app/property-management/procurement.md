@@ -82,6 +82,9 @@ Example:
 | `is_carried_over` | boolean | A bidder of the round a rebase cancelled, asked again |
 | `cancelled` | boolean | The invitation was cancelled by a rebase |
 | `cancelled_at` | object or null | `{ raw, formatted }` |
+| `declined` | boolean | The supplier declined the invitation from the supplier portal |
+| `declined_at` | object or null | `{ raw, formatted }` |
+| `decline_reason` | string or null | The reason the supplier gave, if any |
 | `quoted_at` | object or null | `{ raw, formatted }`: when the supplier's quote came in. Kept when the quote is shelved |
 | `reminder_count` | integer | Daily quote reminders sent to the supplier for this request |
 | `last_reminded_at` | object or null | `{ raw, formatted }` |
@@ -172,11 +175,85 @@ procurement step a second time asks the same suppliers. A later round never asks
 asked on the request. A preferred or default supplier set on the request is still invited on the
 first round as before.
 
+When the request's sub-category has a default supplier and the company prioritizes it, the first
+round starts with that supplier alone, and the rotation is asked only when that stage ends; see
+[Default supplier first](#default-supplier-first).
+
+An invitation is **open** while it is neither cancelled (`cancelled_at`, by a rebase) nor declined
+(`declined_at`, by the supplier). Only open invitations can quote, send a site visit report or
+assign a technician, get daily quote reminders and are told of a new deadline. A supplier whose
+invitation was declined can still view the request in the supplier portal.
+
 `procurement_request_vendors` is the record of who was asked, who quoted and who was reminded:
 `round`, `is_carried_over`, `invited_at`, `cancelled_at`, `quoted_at` (stamped when the supplier's
 quote on the request is created; a shelved quote keeps it), `reminder_count` and `last_reminded_at`
 (stamped by each daily quote reminder). Invitations per supplier, `quoted_at` and `reminder_count`
 are the basis for a later rule deactivating suppliers who keep not responding (not built yet).
+
+### Default supplier first
+
+A **non-emergency** work request whose sub-category allows a default supplier
+(`can_have_default_vendor`) and has one goes to that supplier **alone** when the procurement step is
+approved, as long as the company setting `rfq_prioritize_default_vendor` is `yes` (see
+[Settings](settings.md)). This is the request's preliminary stage.
+
+The default supplier is, in order:
+
+1. the property's default: the supplier whose prequalification for the sub-category names the
+   request's property (`facility_expense_sub_type_vendors.is_default_in_facility_id`); they must be
+   prequalified and active;
+2. else the sub-category's company-wide `default_vendor_id`, when that supplier is active;
+3. else nobody, and the request goes straight to the rotation.
+
+While preliminary, the request carries `is_preliminary: true`, `default_vendor_id`, and
+`preliminary_until` = now + `rfq_default_vendor_exclusive_window_hours` (default 24). The same value
+is its `deadline`; a deadline the step set is replaced by the window. A preferred supplier chosen
+by the step is asked alongside the default one.
+
+The stage ends in one of four ways:
+
+| What happens | Result |
+|---|---|
+| The default supplier quotes with an `amount` (before discount and tax) at or under `rfq_default_vendor_auto_accept_max_amount` (default 50000) | The request and the procurement step move to `quotes-review` at once, with that quote recommended. Nobody else is asked |
+| The default supplier quotes above that amount | Broadcast (`reason: over-threshold`) |
+| The default supplier declines from the supplier portal | Broadcast at once (`reason: declined`) |
+| The window passes without a quote | Broadcast by `procurement:release-preliminary-rfqs`, hourly at ten past the hour (`reason: window-expired`) |
+
+A broadcast:
+
+- clears `is_preliminary` and `preliminary_until` and sets the `deadline` to
+  `rfq_default_deadline_days` working days from now;
+- adds the next `rfq_vendor_batch_size` suppliers in rotation to the same round
+  (`RfqInvitationNotification`). The default supplier stays invited and may still quote, unless they
+  declined;
+- tells every supplier already asked whose invitation is open and who has not quoted the new
+  deadline (`RfqDeadlineExtendedNotification`);
+- gives each actor of the procurement step an in-app `PreliminaryRfqBroadcastNotification`
+  ("RFQ sent to more suppliers"). Its data carries `procurement_request_id`, `reason`
+  (`over-threshold`, `declined` or `window-expired`), `invited` (suppliers newly asked) and
+  `deadline` (ISO 8601), with a `message` naming the supplier and, for `over-threshold`, their
+  amount and the auto-accept amount.
+
+From then on the request follows the normal flow (deadline, shortfall, request more quotes,
+evaluate anyway, rebase). Between `preliminary_until` and the next hourly run (at most an hour)
+quoting is closed, because the deadline has passed.
+
+Only the first round has a preliminary stage. A round after a rebase, "request more quotes" and an
+`override` follow the normal round-robin flow. Emergency requests are unchanged: they still go to
+the default supplier only, with no broadcast.
+
+**Step form.** `GET /requests/{procurementRequest}/steps/{step}` returns in `meta`:
+
+- `default_vendor`: `{ id, name }` of the supplier the request will go to first. Set only on the
+  procurement step of a first-round, non-emergency work request while the step is `pending` and
+  the company prioritizes default suppliers; otherwise `null`;
+- `defaultVendorContext`: a sentence to show above the supplier list. With `default_vendor` set it
+  names the supplier, the auto-accept amount, the window in hours, the batch size and the
+  working-day deadline that follows a broadcast. For an emergency request it says the RFQ goes to
+  the default supplier only and not to the others automatically. `null` when there is no default
+  supplier;
+- `vendors`: with `default_vendor` set, the batch that would be asked after the default supplier
+  (the next `rfq_vendor_batch_size` in rotation, the default supplier left out).
 
 ### Quote deadline
 
@@ -184,9 +261,14 @@ The quote deadline is counted in **working days** (Monday to Friday; public holi
 excluded) and falls at **17:00** on the day reached. `rfq_default_deadline_days` (default 3) is used:
 
 - when the procurement step opens the first round and the request has no deadline (a `deadline` a
-  step set is kept);
+  step set is kept), unless the request goes to its default supplier first;
 - for every round after a rebase, whatever the form sends;
-- for each "request more quotes" extension.
+- for each "request more quotes" extension;
+- when a request in its default-supplier stage is sent to the other suppliers (broadcast).
+
+While the request is with its default supplier alone, the deadline is the end of that supplier's
+window, `preliminary_until` (`rfq_default_vendor_exclusive_window_hours` from the step approval, in
+clock hours, not working days). It replaces a deadline the step set.
 
 ### Rebase
 
@@ -305,6 +387,10 @@ also rebase a request held for a shortfall.
 | Field | Type | Notes |
 |---|---|---|
 | `quote_round` | integer | 1 for the first round, one more after each rebase |
+| `is_preliminary` | boolean | The request is with its default supplier alone (see [Default supplier first](#default-supplier-first)) |
+| `preliminary_until` | object or null | `{ raw, formatted, diff }`: when the default supplier's window ends; `null` outside the preliminary stage |
+| `default_vendor_id` | integer or null | The default supplier the request was sent to first |
+| `default_vendor` | object or null | `{ id, name }` of that supplier |
 | `quotes_shortfall` | object or null | `{ awaiting: bool, received: int, required: int, since: { raw, formatted } }` while the deadline passed with too few quotes and the officer has not decided; else `null` |
 | `rebased` | object or null | `{ at: { raw, formatted }, by: { id, name } or null, reason }` for the latest rebase; else `null` |
 | `can_rebase` | boolean | The state allows a rebase (show only) |

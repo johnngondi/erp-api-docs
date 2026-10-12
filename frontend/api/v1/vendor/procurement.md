@@ -23,6 +23,16 @@ a new quote; their shelved quote stays as history. Other suppliers may be newly 
 (`RfqDeadlineExtendedNotification` to every supplier already asked); quoting reopens until the new
 deadline.
 
+**Default supplier first.** When a property or category names you as its default supplier, a work
+request may come to you alone first, for a limited window (the request's `deadline`). Quote within
+it, or [decline](#decline-an-invitation) if you cannot do the job, and the request goes to other
+suppliers at once. If you do neither, it goes to them when the window ends; you stay invited and
+may still quote until the new deadline.
+
+**Declined invitations.** A supplier who declines still sees the job (`permissions.view`) but can no
+longer quote, send a site visit report or assign a technician (`403`), and gets no more quote
+reminders or deadline notices for it.
+
 ### List open jobs
 
 `GET /rfq/open-jobs`
@@ -37,6 +47,7 @@ Query params:
 - `filter[expense_sub_type_id]`
 - `filter[created_at]`
 - `filter[priority]`
+- `filter[not_quoted]` (`true`: only jobs the vendor has not quoted on; jobs the vendor declined are left out too)
 - `sort=id,title,created_at,priority`
 - `per_page` (optional)
 - `page` (optional)
@@ -60,6 +71,9 @@ Response item shape (`OpenJobResource`):
 - `status` (enum object)
 - `deadline` (`raw`, `formatted`, `diff`)
 - `created` (`raw`, `formatted`, `diff`)
+- `technician` (`VendorUserResource` or `null`): the technician the vendor assigned
+- `declined` (`{ raw, formatted, reason }` or `null`): set once the vendor declined to quote; `reason` may be `null`
+- `permissions` (`{ view, bid, sendSiteVisitReport, assignTechnician, decline }`): what the vendor may do on the job. After declining, `decline`, `bid`, `sendSiteVisitReport` and `assignTechnician` are `false` and `view` stays `true`
 
 ### Show open job
 
@@ -92,6 +106,62 @@ Success response (`DataResource`):
 - `message`: `Technician assigned successfully.`
 - `open_job_id`
 - `technician` (`VendorUserResource`)
+
+### Decline an invitation
+
+`POST /procurement/rfq/open-jobs/{openJob}/decline`
+
+The vendor turns down the invitation to quote on a work request.
+
+Request body:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `reason` | string | No | Max 1000 characters. Shown to staff on the request's suppliers list (`decline_reason`) |
+
+Allowed (`permissions.decline`) only while:
+
+- the job is open for quotation (`status=order`) and is a `work` request;
+- the vendor's invitation is open: not cancelled by a rebase and not already declined;
+- the vendor has no live quote on it (a vendor who quoted withdraws the quote instead).
+
+Otherwise **403**.
+
+What happens:
+
+- the invitation records `declined_at` and the reason; the job's `declined` is set;
+- the vendor can still view the job but can no longer quote, send a site visit report or assign a
+  technician, and gets no more quote reminders or deadline notices for it;
+- `filter[not_quoted]=true` no longer lists the job;
+- when the vendor is the request's default supplier and the request is still in its default-supplier
+  stage, the request goes to the other suppliers at once.
+
+Success response (`DataResource`):
+
+```json
+{
+  "data": {
+    "message": "You have declined to quote on this request.",
+    "open_job": {
+      "id": 42,
+      "title": "Fix the borehole pump",
+      "declined": {
+        "raw": "2026-10-12T09:30:00.000000Z",
+        "formatted": "12 Oct, 2026 09:30",
+        "reason": "We do not service this pump model."
+      },
+      "permissions": {
+        "view": true,
+        "bid": false,
+        "sendSiteVisitReport": false,
+        "assignTechnician": false,
+        "decline": false
+      },
+      "...": "the rest of OpenJobResource"
+    }
+  }
+}
+```
 
 ## RFQ Quotes
 

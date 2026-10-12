@@ -72,9 +72,9 @@ Seeded Procurement General settings:
 | `rfq_vendor_batch_size` | `10` | `number` | `null` | none | Suppliers asked per round (first round, after a rebase, and per "request more quotes"), in round-robin order: the supplier asked the fewest times goes first. Whole number, at least 1, else **422**. |
 | `emergency_rfq_auto_send_enabled` | `no` | `select` | static: `yes/no` | none | Whether emergency RFQs should be auto-sent when default vendor does not respond. |
 | `emergency_rfq_send_after_hours` | `24` | `number` | `null` | `emergency_rfq_auto_send_enabled=yes` | Hours to wait before sending emergency RFQs when default vendor has not submitted a bid. |
-| `rfq_prioritize_default_vendor` | `yes` | `select` | static: `yes/no` | none | Whether default vendor gets first chance to bid before RFQ is sent to other vendors. |
-| `rfq_default_vendor_exclusive_window_hours` | `24` | `number` | `null` | `rfq_prioritize_default_vendor=yes` | Hours granted to default vendor before RFQ goes to other vendors. |
-| `rfq_default_vendor_auto_accept_max_amount` | `50000` | `number` | `null` | `rfq_prioritize_default_vendor=yes` | Maximum default-vendor bid amount that can be accepted directly. |
+| `rfq_prioritize_default_vendor` | `yes` | `select` | static: `yes/no` | none | With `yes`, a non-emergency work request whose sub-category has a default supplier goes to that supplier alone first when the procurement step approves it (the preliminary stage; see [Procurement → Default supplier first](procurement.md#default-supplier-first)). With `no`, the request goes straight to the round-robin batch. `yes` or `no`, else **422**. |
+| `rfq_default_vendor_exclusive_window_hours` | `24` | `number` | `null` | `rfq_prioritize_default_vendor=yes` | Hours the default supplier has the request to themselves. The request's `preliminary_until` and `deadline` are set to now plus this. When it passes without a quote, the hourly `procurement:release-preliminary-rfqs` sends the request to the next suppliers in rotation. Whole number, at least 1, else **422**. |
+| `rfq_default_vendor_auto_accept_max_amount` | `50000` | `number` | `null` | `rfq_prioritize_default_vendor=yes` | A default supplier's quote whose `amount` (before discount and tax) is at or under this opens the quotes at once: the request and the procurement step move to `quotes-review` with that quote recommended. A quote above it sends the request to the next suppliers in rotation. A number of 0 or more (decimals allowed), else **422**. |
 
 ### Request Step Template Groups
 
@@ -530,6 +530,18 @@ Expense sub-type create/update payload:
 | `is_procurable` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
 | `can_have_default_vendor` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
 | `can_have_preferred_vendor` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
+| `default_vendor_id` | No | integer/null | The sub-category's company-wide default supplier. Must be a user in the vendor group who is not terminated, else **422**. `null` clears it; leaving the field out keeps the current one. Used only while `can_have_default_vendor` is `true`; a property's own default (the supplier's prequalification with `is_default_in_facility_id`) wins over it, and an inactive supplier is skipped when a request is sent out. |
+
+Expense sub-type responses carry `default_vendor_id` and `defaultVendor` (a user: `id`, `name`, `email`, or `null` when none is set). The list, show, create and update responses always load it; `include=defaultVendor` is accepted on the list as well. The list also accepts `filter[default_vendor_id]` (exact) and `include=expenseType`.
+
+Bulk default suppliers: `php artisan procurement:set-default-vendors 244=12,13,14 251=15 [--dry-run]`
+gives each listed vendor (left of `=`) as the default supplier of the listed sub types (right of `=`),
+setting `default_vendor_id` and `can_have_default_vendor=true` on each. The vendor must exist, be
+active and be in the vendor group, and every sub type must exist; otherwise nothing is changed. A
+sub type given to two vendors is refused. It warns, and still sets the default, when the vendor is
+not prequalified on any sub type of the sub type's company. The run is one transaction, prints a
+table of what changed, and changes nothing when run again with the same list; `--dry-run` only
+reports.
 
 Response envelope for create/update/delete:
 
