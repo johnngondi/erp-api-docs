@@ -25,12 +25,20 @@ company you are not a member of: `403`. Not signed in: `401`.
     "pending_tasks": 2,
     "active_alerts": 1,
     "open_tickets": 4,
-    "outgoing_transfer": {
-      "id": 12,
-      "status": "active",
-      "timestamp_to": "2026-09-27T10:00:00+03:00",
-      "to_user": { "id": 5, "name": "Jane" }
-    },
+    "outgoing_transfers": [
+      {
+        "id": 14,
+        "status": "pending",
+        "timestamp_to": "2026-10-02T17:00:00+03:00",
+        "to_user": { "id": 9, "name": "Peter" }
+      },
+      {
+        "id": 12,
+        "status": "active",
+        "timestamp_to": "2026-09-27T10:00:00+03:00",
+        "to_user": { "id": 5, "name": "Jane" }
+      }
+    ],
     "incoming_transfers": 1,
     "session": { "locked": false, "locks_in_seconds": 212, "idle_minutes": 5 }
   }
@@ -45,11 +53,14 @@ portal's own tasks, alerts and notifications, plus legacy rows that carry no por
 - `active_alerts`: what `GET {portal}/alerts` would total.
 - `open_tickets`: App only, the Property Management dashboard's open-tickets badge
   (`open_tickets.total` with no filters). `null` on other portals.
-- `outgoing_transfer`: App only. The caller's open outgoing responsibility transfer **in this
-  company**, or `null`.
-  `timestamp_to` is `null` for a permanent transfer. `status` is `pending`, `accepted` or `active`.
-  Fetch `mine/outgoing` for the full object (countdown, `can_reclaim`) when you need it.
-  `null` on other portals.
+- `outgoing_transfers`: App only. The caller's open outgoing responsibility transfers **in this
+  company**, newest first, one entry per floating indicator; `[]` when there are none. A user may
+  run several at once on properties that do not overlap. `status` is `pending`, `accepted` or
+  `active`: a permanent transfer is `completed` the moment it is accepted and drops out of the
+  list. `timestamp_to` is `null` for a permanent transfer still waiting for an answer, and `to_user` is
+  `null` if the recipient no longer exists. Fetch
+  `mine/outgoing` for the full objects (countdown, `can_reclaim`) when you need them; it returns
+  the same transfers in the same order. `[]` on other portals.
 - `incoming_transfers`: App only, how many rows `mine/incoming` would return: open transfers naming
   the caller in this company, pending and held (`accepted`/`active`) alike. `0` on other portals.
 - `session`: the PIN lock as the server sees it, on every portal. `locked` is whether the token

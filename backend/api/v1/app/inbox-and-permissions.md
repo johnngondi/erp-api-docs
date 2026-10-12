@@ -36,12 +36,20 @@ unauthenticated call gets `401`.
     "pending_tasks": 2,
     "active_alerts": 1,
     "open_tickets": 4,
-    "outgoing_transfer": {
-      "id": 12,
-      "status": "active",
-      "timestamp_to": "2026-09-27T10:00:00+03:00",
-      "to_user": { "id": 5, "name": "Jane" }
-    },
+    "outgoing_transfers": [
+      {
+        "id": 14,
+        "status": "pending",
+        "timestamp_to": "2026-10-02T17:00:00+03:00",
+        "to_user": { "id": 9, "name": "Peter" }
+      },
+      {
+        "id": 12,
+        "status": "active",
+        "timestamp_to": "2026-09-27T10:00:00+03:00",
+        "to_user": { "id": 5, "name": "Jane" }
+      }
+    ],
     "incoming_transfers": 1,
     "session": { "locked": false, "locks_in_seconds": 212, "idle_minutes": 5 }
   }
@@ -49,7 +57,7 @@ unauthenticated call gets `401`.
 ```
 
 On the tenant, vendor and landlord portals the three App-only keys are always present with their
-empty value: `"open_tickets": null`, `"outgoing_transfer": null`, `"incoming_transfers": 0`.
+empty value: `"open_tickets": null`, `"outgoing_transfers": []`, `"incoming_transfers": 0`.
 
 | Key | Portals | Same scoping as |
 |---|---|---|
@@ -57,13 +65,16 @@ empty value: `"open_tickets": null`, `"outgoing_transfer": null`, `"incoming_tra
 | `pending_tasks` | all | `GET {portal}/pending-tasks` |
 | `active_alerts` | all | `GET {portal}/alerts` |
 | `open_tickets` | app (null elsewhere) | `open_tickets.total` of `GET /app/{company}/property-management` with no filters |
-| `outgoing_transfer` | app (null elsewhere) | `GET /app/{company}/access-management/responsibility-transfers/mine/outgoing` |
+| `outgoing_transfers` | app (`[]` elsewhere) | `GET /app/{company}/access-management/responsibility-transfers/mine/outgoing`, same rows in the same order (newest first) |
 | `incoming_transfers` | app (0 elsewhere) | row count of `.../responsibility-transfers/mine/incoming` |
 | `session` | all | `App\Support\Auth\SessionActivity::state()`: the same clock `EnforceSessionPinLock` refuses on |
 
-`outgoing_transfer` is either null or the four fields shown. `status` is the raw
-`ResponsibilityTransferStatus` value (`pending`, `accepted` or `active`, the open set);
-`timestamp_to` is ISO-8601 with offset, or null for a permanent transfer.
+`outgoing_transfers` is a list, possibly empty, of the four fields shown per transfer: a user may
+run several transfers at once on properties that do not overlap. `status` is the raw
+`ResponsibilityTransferStatus` value (`pending`, `accepted` or `active`, the open set; a permanent
+transfer is `completed` on acceptance and is not listed); `timestamp_to` is ISO-8601 with offset,
+or null for a permanent transfer still pending. One query for the rows plus one for `to_user`,
+whatever the number of transfers.
 
 Two scoping rules, shared with the listings:
 
@@ -71,8 +82,9 @@ Two scoping rules, shared with the listings:
   `user_group_id = <portal group> OR user_group_id IS NULL`. A user in both the App and vendor
   groups sees each portal's own rows. Null is legacy ("unscoped, show everywhere").
 - **Company.** The transfer reads are scoped to the route `{company}`: a transfer sent or received in
-  another company shows when that company is in the URL. The one-open-outgoing rule is a separate,
-  cross-company check in `InitiateResponsibilityTransferAction`, which does not use these builders.
+  another company shows when that company is in the URL. The rule that a new transfer's properties
+  must not overlap the caller's open ones is a separate, cross-company check in
+  `InitiateResponsibilityTransferAction`, which does not use these builders.
 
 ### Where the scoping lives
 
@@ -94,15 +106,15 @@ The count and the list must never disagree, so neither re-implements a filter:
 
 ### Query budget
 
-Counts only: no resources, no eager loads beyond the outgoing transfer's `toUser:id,name`, no
+Counts only: no resources, no eager loads beyond the outgoing transfers' `toUser:id,name`, no
 permission maps. Every count is folded into **one** `SELECT (SELECT COUNT(*) …) AS …, …` statement,
 so the App portal costs, beyond the per-request middleware baseline:
 
 1. `user_groups` id for the portal (resolved once, used by all three portal-scoped counts);
 2. `facility_user` for the caller's allocated properties (the open-tickets universe);
 3. the combined counts statement;
-4. the outgoing transfer;
-5. its `to_user`.
+4. the outgoing transfers (one query, however many);
+5. their `to_user` rows (one query; skipped when there are none).
 
 The tenant, vendor and landlord portals run 1 and 3 only.
 
