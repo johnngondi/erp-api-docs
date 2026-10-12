@@ -16,16 +16,18 @@ Base route:
 
 ## Charge rate for utility charges
 
-When the property's utility distribution method is not `defined`, the UI derives the
-rate from the provider's bill before validating:
+When the property's utility distribution method is not `defined`, the user types in three
+figures from the provider's bill and the UI derives the rates before validating:
 
-- **Provider rate** = total bill amount (tax inclusive) ÷ total billed consumption.
-- **Tenant charge rate** = provider rate ÷ (1 + utility VAT rate) when the utility
-  carries a VAT, otherwise exactly the provider rate.
+- Inputs: **total bill amount including tax**, the **tax amount on the bill** (suggested
+  from the utility VAT rate until overwritten) and the **total billed consumption**.
+- **Rate with utility VAT** = total ÷ consumption.
+- **Charge rate without utility VAT** = (total − tax) ÷ consumption.
 
-The tenant charge rate is what is sent as `charge_rate`. The import tax is then added
-back on every invoice line, so a taxed utility bills tenants the provider's gross rate
-and an untaxed one bills the provider rate as is.
+Both rates are shown and both are editable; editing one moves the other by the bill's own
+ratio. The charge rate without VAT is what is sent as `charge_rate`. The import tax is then
+added back on every invoice line, so tenants are billed the provider's gross rate. A bill
+with no tax has a tax amount of 0 and the two rates are equal.
 
 When the distribution method is `defined`, `charge_rate` is entered by hand.
 
