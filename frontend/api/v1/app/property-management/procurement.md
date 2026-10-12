@@ -45,6 +45,10 @@ Example:
 
 ### Create/Update payload
 
+A request can be updated or deleted only while its status is `new` or `request` (`permissions.update`
+/ `permissions.delete` answer false afterwards, for the requester and permission holders alike). Once
+it has gone out for quotes the way to change what was asked is a rebase (below).
+
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
 | `title` | Yes | string | - |
