@@ -63,8 +63,8 @@ Request body:
 | `amount` | Yes | integer | - |
 | `currency_id` | No | integer | Must exist in `currencies.id` |
 | `allocations` | Yes | array | Invoice allocations |
-| `pop_message` | Conditional | string | Proof of payment reference. Required when the payment method's `proof_of_payment_type` is `message` or `both` |
-| `pop_upload_id` | Conditional | integer | Must exist in `uploads.id`. Required when the payment method's `proof_of_payment_type` is `document` or `both` |
+| `pop_message` | Conditional | string | Proof of payment reference. Required when the payment method's `proof_of_payment_type` is `message` or `both`; one of `pop_message` / `pop_upload_id` when it is `either` |
+| `pop_upload_id` | Conditional | integer | Must exist in `uploads.id`. Required when the payment method's `proof_of_payment_type` is `document` or `both`; one of `pop_message` / `pop_upload_id` when it is `either` |
 
 `allocations[]` fields:
 
@@ -170,7 +170,15 @@ Once confirmed, only the fields below may change:
 
 The receipt's proof of payment — a reference (`pop_message`), a document (`pop_upload_id`) or both —
 is set by the payment method's `proof_of_payment_type`, which is on the payment method resource as
-one of `none`, `message`, `document` or `both`.
+one of `none`, `message`, `document`, `both` or `either`.
+
+| `proof_of_payment_type` | On create |
+|---|---|
+| `none` | Neither field is required |
+| `message` | `pop_message` is required |
+| `document` | `pop_upload_id` is required |
+| `both` | Both are required |
+| `either` | At least one of the two. Sending neither returns `422` on **both** `pop_message` and `pop_upload_id`, with the same message on each, because either field would satisfy it |
 
 On an update each of the two fields reads three ways, so **sending the key and leaving it out mean
 different things**:
@@ -203,6 +211,24 @@ document *is* the withholding tax certificate that the tenant withholding report
 
 `pop_message` behaves identically against a `message` or `both` method. On a `both` method each
 half holds independently: either may be replaced, neither may be removed.
+
+On an `either` method only the **last** proof is held. Removing the document while a message is on
+the receipt succeeds, and vice versa. Removing the one that remains returns `422` on both
+`pop_message` and `pop_upload_id`:
+
+```json
+{
+  "message": "The last proof of payment cannot be removed while this payment method is selected. Keep a message or a document on the receipt.",
+  "errors": {
+    "pop_message": ["The last proof of payment cannot be removed while this payment method is selected. Keep a message or a document on the receipt."],
+    "pop_upload_id": ["The last proof of payment cannot be removed while this payment method is selected. Keep a message or a document on the receipt."]
+  }
+}
+```
+
+Swapping one for the other in a single request (`"pop_upload_id": 41, "pop_message": null`) is
+fine: the check runs on the request as a whole, not field by field. So the "remove" action on an
+`either` method is offered only while the other half is present.
 
 **Deciding whether to offer "remove".** The receipt's `payment_method` carries
 `proof_of_payment_type`, so nothing else has to be fetched:
@@ -249,6 +275,46 @@ upload itself alongside its id:
 
 `pop_upload` is `null` when no document is attached — the key is always present on list and show
 responses, so read it rather than testing for its existence.
+
+## Proof of Payment
+
+`PUT|PATCH /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}/proof-of-payment`
+
+Attach, replace or remove a receipt's proof of payment on its own.
+
+```json
+{ "pop_upload_id": 4821, "pop_message": "MPESA HI4949494P" }
+```
+
+**Use this, not Update Receipt, for the proof-of-payment panel.** Editing a *pending* receipt
+goes through the full create payload — property, payer, amount, allocations — so a panel
+holding only these two fields is refused with `The property field is required` and four
+more. A receipt sent back for changes stays `pending`, which is exactly when that panel is
+most needed.
+
+Three states, as on the receipt's own edit:
+
+| Payload | Effect |
+|---|---|
+| key absent | keeps what is attached |
+| `"pop_upload_id": null` | removes it |
+| `"pop_upload_id": 4821` | replaces it |
+
+**Saving resubmits a returned receipt** to the reviewer who asked for the change, the same
+way a full edit does. Attaching the corrected document *is* the answer to the reviewer, so
+it needs no second step.
+
+Nothing else on the receipt is touched — amount, allocations and transaction number are left
+exactly as they were. Only `pop_upload_id` and `pop_message` are read: a `payment_method_id` or
+`transaction_number` sent here is ignored. Changing the payment method means changing the
+transaction number with it, so both stay on Update Receipt.
+
+The payment method still decides what the proof must contain. A method requiring a document
+or a reference refuses to have it removed, with *"cannot be removed while this payment
+method is selected. Send a replacement instead."* The method itself is not editable here.
+
+Needs `update-facility-receipt`, or to be the receipt's creator, or to hold a step that
+opened the field, or to be the person it was returned to — the same rule as Update Receipt.
 
 ## Cancel Receipt
 

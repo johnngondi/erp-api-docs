@@ -36,6 +36,27 @@ Each tax row now also returns `hs_code` (string|null), and the list accepts `fil
 
 Only the list endpoint is implemented today, so there is no way to edit `hs_code` through the API yet.
 
+### Payment methods: `proof_of_payment_type`
+
+Each payment method row returns `proof_of_payment_type`, and the create/update payload accepts it.
+It decides what proof of payment a receipt paid by this method must carry:
+
+| Value | Receipt must carry |
+|---|---|
+| `none` | Nothing |
+| `message` | `pop_message` |
+| `document` | `pop_upload_id` |
+| `both` | `pop_message` and `pop_upload_id` |
+| `either` | `pop_message` or `pop_upload_id`, at least one |
+
+Unknown values return `422` on `proof_of_payment_type`. The field is optional on the payload; a
+new method without it is `none`. How each value plays out on a receipt, including which proof can
+be removed on an edit, is in the receipts doc under **Proof of payment**.
+
+```json
+{ "id": 3, "name": "Mpesa", "code": "MPESA", "proof_of_payment_type": "message", "status": "active" }
+```
+
 ### Banks: `paybill_number`
 
 Each bank row now also returns `paybill_number` (string|null): the bank's M-Pesa paybill. The invoice `mobile_money` document block uses it when the landlord holds the collection account, or when the company has no `paybill_number` setting. The account number printed with it is the pay-to bank account's `account_number`.
@@ -106,6 +127,13 @@ Like `paybill_number`, it is set through the database, seeders or the EPMAS impo
 `title` is what lists of documents display, so it is worth asking the user for: a landlord's
 documents read "KRA PIN Certificate" rather than `whv-cert-0491.pdf`, and it is the only thing
 telling them which file they are about to delete. The file keeps its own `file_name` either way.
+
+**Any file type is accepted** - images, PDF, Excel (`.xlsx`, `.xls`, `.csv`), Word and the rest -
+so which types a field takes is the file picker's choice. A receipt's proof of payment and a credit
+note's supporting document both take Excel (row 146). Until October 2026 an `.xlsx`, `.docx` or
+`.pptx` failed with a 500: their MIME type, stored as `type`, did not fit its column. The upload's
+`type` is the detected MIME type and `extension` the file's own; `preview` streams the file, so a
+spreadsheet downloads rather than displays.
 
 ### Renaming
 
