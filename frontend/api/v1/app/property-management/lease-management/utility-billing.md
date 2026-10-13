@@ -76,20 +76,23 @@ Body fields:
 |---|---|---|---|
 | `facility_id` | Yes | integer | The property. Must exist in `facilities.id` |
 | `utility_id` | Yes | integer | The utility (`lease_components.id` where `is_utility_charge = true`). This is the meter's `utility_id` |
-| `tax_id` | Yes | integer | The utility's tax (carried to the provider bill / used as a fallback). Per-lease invoice tax is driven by each `lease.tax_id`, not this value. Must exist in `taxes.id` |
+| `tax_id` | Yes | integer | The tax for this run. It is applied to **every** lease's utility lines, whatever tax the lease itself carries; pick a 0% tax for an untaxed utility such as water. Must exist in `taxes.id` |
 | `total_bill_amount` | Cond. | number | **Total monthly bill charged** (tax-inclusive) — the sum of the current period's charges, NOT the amount payable/balance due after credits or arrears. Required unless `charge_rate` is supplied; drives the derived rate |
 | `bill_consumption` | Cond. | number | Total metered consumption on the provider bill. Required for the `utility provider rate` and `defined` methods |
-| `bill_tax_amount` | Cond. | number | Tax portion of the provider bill. **Used in the rate for commercial facilities** (`total_bill_amount − bill_tax_amount`) and carried to the provider bill. Recommended whenever tax applies |
-| `charge_rate` | No | number | **Optional flat override.** When supplied, it is used as the per-unit rate for every lease, the distribution method is ignored (no per-lease tax reduction) and no indirect consumption is computed |
+| `bill_tax_amount` | Cond. | number | Tax portion of the provider bill. When the selected tax is above 0% the rate is priced on `total_bill_amount − bill_tax_amount`; when it is omitted the net falls back to `total_bill_amount / (1 + tax value)`. Ignored for the rate under a 0% tax. Carried to the provider bill. Recommended whenever tax applies |
+| `charge_rate` | No | number | **Optional flat override.** When supplied, it is used as the per-unit rate for every lease, the distribution method is ignored (no tax reduction; the rows are still taxed at the selected tax) and no indirect consumption is computed |
 
 ### How the tenant rate is derived
 
 The per-unit `charge_rate` is **computed server-side** from the utility's
-`facility_utilities.utility_bill_distribution_method`, the **facility class**
-(Commercial / Residential / Mixed Use, from the facility's `facility_type`), and per-lease
-taxability, unless a flat `charge_rate` override is supplied. A lease is **taxable** iff its
-own `lease.tax_id` references a tax with value > 0; that tax value drives both the rate
-reduction and the invoice tax so tenant charges reconcile with the provider bill.
+`facility_utilities.utility_bill_distribution_method` and the **selected tax** (`tax_id`),
+unless a flat `charge_rate` override is supplied. The selected tax applies to **every lease
+alike**: the lease's own `lease.tax_id` and the property's type (commercial, residential,
+mixed use) play no part in utility billing.
+
+- **16% (any tax above 0%)** taxes every tenant. The rate is priced on the bill **net of tax**
+  and the invoice tax adds the tax back, so tenant charges rebuild the gross bill.
+- **0%** taxes nobody. The rate is priced on the **gross** bill and no invoice tax is added.
 
 The two main methods differ in **what the bill is divided by**:
 
@@ -100,41 +103,45 @@ The two main methods differ in **what the bill is divided by**:
   used, so the denominator is **tenant** consumption. Nothing is left over.
 
 With `T = total_bill_amount`, `X = bill_tax_amount`, `Cb = bill_consumption`,
-`Ct = Σ(billable tenant consumption)`, `v = the lease's tax value`:
+`Ct = Σ(billable tenant consumption)`, `v = the selected tax's value` (a fraction, `0.16` = 16%):
 
-| Method | Facility class | Rate |
-|---|---|---|
-| `utility provider rate` | Commercial | `(T − X) / Cb` for every lease (tenants are taxed on the invoice) |
-| `utility provider rate` | Residential | `T / Cb` for every lease (no invoice tax) |
-| `utility provider rate` | Mixed Use | base `T / Cb`; taxable lease → `base / (1 + v)`, else `base` |
-| `distribute to tenants` | any | base `T / Ct`; taxable lease → `base / (1 + v)`, else `base` |
-| `defined` | any | base `T / Cb` seeds an editable per-lease rate; taxable lease → `base / (1 + v)` |
+- `taxed = v > 0`
+- `net = T − X` when `bill_tax_amount` is supplied, else `T / (1 + v)`
 
-If no lease is taxable (or the utility tax is zero-rated) every branch collapses to the plain
-rate with no invoice tax.
+| Method | Rate (every lease) |
+|---|---|
+| `utility provider rate` | `(taxed ? net : T) / Cb` |
+| `distribute to tenants` | `(taxed ? net : T) / Ct` |
+| `defined` | `(taxed ? net : T) / Cb` seeds an editable per-lease rate |
+| flat `charge_rate` override | the override, flat (no reduction) |
 
-The taxable reduction **divides by `(1 + v)`**, it does not multiply by `(1 − v)`. The provider
-bill total is tax-inclusive, so the tax-exclusive rate is `T / (1 + v)`; re-adding `v` on the
-invoice then rebuilds the gross share exactly. Under `distribute to tenants` this makes
+Every priced row then carries `tax = round(amount × v, 2)`, `tax_id` = the selected tax and
+`is_taxable = taxed`; the indirect figures are taxed the same way.
+
+The fallback net **divides by `(1 + v)`**, it does not multiply by `(1 − v)`. The provider
+bill total is tax-inclusive, so the tax-exclusive figure is `T / (1 + v)`; re-adding `v` on the
+invoice then rebuilds the gross exactly. Under `distribute to tenants` this makes
 `Σ(amount + tax) = T` to the cent. (Multiplying by `(1 − v)` would yield `(1 − v)(1 + v) = 1 − v²`
 of the bill — a silent shortfall of `v²`, 2.56% at `v = 0.16`.)
 
-Note the invoice tax is the **lease's own** tax value, so `bill_tax_amount` from the provider
-bill is reproduced only when the provider taxed at that same rate. A bill carrying non-VATable
-levies has a lower implied tax rate, so the invoice `tax` will exceed the bill's `X` while
-`amount + tax` still reconciles to `T`.
+A typed-in `bill_tax_amount` wins over the fallback because provider bills carry levies and
+rounding that a percentage does not reproduce. The invoice tax is still `amount × v`, so when
+the bill's `X` is not exactly `v` of its net, `amount + tax` differs from `T` by that gap.
 
-The response returns the resolved **base** rate as `resolved_charge_rate` and the applied
-`distribution_method`; each row also carries its own reduced `charge_rate`, plus `is_taxable`
-and `tax_id` (for the `defined` method the FE may edit the rates before processing).
+The response returns the resolved rate as `resolved_charge_rate` (the same rate every row
+carries as `charge_rate`; for the `defined` method the FE may edit each row's rate before
+processing), the applied `distribution_method`, and the selected tax as top-level **`tax_id`**
+and **`tax_rate`** (the tax's value as a fraction). Use `tax_rate` to re-derive a row's tax
+after a local rate edit (`tax = amount × tax_rate`) instead of the row's `tax / amount` ratio,
+which is undefined on a zero amount.
 
 Alongside it the response returns **`bill_rate`** — the provider's own per-unit price,
 `total_bill_amount / bill_consumption` (**gross**, tax included), read straight off the bill
 and independent of the distribution method. Display it beside `resolved_charge_rate` so the
 user can see what the tenants are charged versus what the provider charged. It is `null`
 when `total_bill_amount` or `bill_consumption` was not supplied (e.g. a flat `charge_rate`
-override). Note that for a **commercial** facility `resolved_charge_rate` is derived net of
-tax (`(T − X) / Cb`), so it is legitimately lower than `bill_rate`.
+override). When the selected tax is above 0%, `resolved_charge_rate` is derived net of tax
+(e.g. `(T − X) / Cb`), so it is legitimately lower than `bill_rate`.
 
 ### Tenant vs. bill consumption
 
@@ -203,9 +210,9 @@ Rows are **per lease**, never per meter — `summary.total_rows` counts leases.
   lease items; a space with no size counts as 1).
 - **Several meters on one lease:** each meter's consumption is computed on its own and the
   results are summed into the lease's single row (see [One row per lease](#one-row-per-lease)).
-- Amount formula: `consumption × charge_rate`; `tax = amount × v` for taxable leases and
-  `0` otherwise; `total = amount + tax`. The `charge_rate` is the method-derived (and, for
-  taxable leases, tax-reduced) rate — see above.
+- Amount formula: `consumption × charge_rate`; `tax = amount × v` with `v` the selected
+  tax's value (`0` under a 0% tax); `total = amount + tax`. The `charge_rate` is the
+  method-derived rate, net of tax when the selected tax is above 0% — see above.
 
 ### Row fields
 
@@ -226,10 +233,10 @@ Rows are **per lease**, never per meter — `summary.total_rows` counts leases.
 | `consumption` | number\|null | Units for this lease, summed across its meters |
 | `consumption_type` | string\|null | `individual` or `shared` (`shared` if **any** of the row's meters is shared) |
 | `consumption_notes` | string\|null | Sharing breakdown, one sentence per shared meter |
-| `charge_rate` | number\|null | The per-unit rate applied to this lease (tax-reduced for taxable leases; editable per-lease for `defined`) |
-| `is_taxable` | bool | Whether this lease is taxed on its invoice (from `lease.tax_id`) |
-| `tax_id` | integer\|null | The tax applied to this lease's invoice line (`null` when not taxable) |
-| `amount` / `tax` / `total` | number\|null | Computed **direct** line figures (`tax` is `0` for non-taxable leases) |
+| `charge_rate` | number\|null | The per-unit rate applied to this lease: the same for every lease (net of tax when the selected tax is above 0%; editable per-lease for `defined`) |
+| `is_taxable` | bool | Whether the selected tax is above 0%. The same for every priced row; the lease's own tax is not read |
+| `tax_id` | integer\|null | The selected tax (the request's `tax_id`) on every priced row; `null` only on rows that were not priced (errors, zero consumption) |
+| `amount` / `tax` / `total` | number\|null | Computed **direct** line figures (`tax = amount × tax_rate`, `0` under a 0% tax) |
 | `indirect_consumption` | number | This lease's share of the unmetered units (`0` when indirect is not billed) |
 | `indirect_amount` / `indirect_tax` / `indirect_total` | number | The indirect line's figures, priced at the same `charge_rate` |
 | `has_warning` / `warning_notes` | bool / string | Warns on zero/negative consumption or a faulty meter (amount is still computed) |
@@ -253,6 +260,8 @@ images collected, `meters[]` holding the detail). Lease 102 has no meter for the
   "cache_key": "8Kd2...q9",
   "distribution_method": "utility provider rate",
   "resolved_charge_rate": 25,
+  "tax_id": 3,
+  "tax_rate": 0.16,
   "bill_rate": 29,
   "bill_indirect_consumption": true,
   "total_indirect_consumption": 20,
@@ -349,6 +358,8 @@ images collected, `meters[]` holding the detail). Lease 102 has no meter for the
       "charge_rate": 25,
       "amount": 1250,
       "tax": 200,
+      "tax_id": 3,
+      "is_taxable": true,
       "total": 1450,
       "indirect_consumption": 5,
       "indirect_amount": 125,
@@ -424,22 +435,36 @@ its items as utility bills and links the previous/current readings, marks the cu
 readings billed, and sets the lease's `utility_billed_at`) and raises **one** provider
 expense bill against the utility's `FacilityContract`.
 
-Each invoice carries **one or two** lines, both against the lease's utility component:
+Each invoice carries **one direct line per meter** that serves the lease, plus at most one
+indirect line, all against the lease's utility component:
 
 | Line | When | Notes text | Quantity |
 |---|---|---|---|
-| Direct | always | `Electricity — Direct Consumption: Prev:522 Curr:566 Cons: 44` | the lease's metered consumption |
+| Direct (one per meter) | the meter's `consumption > 0` | `Electricity — Meter WM-001: Prev: 1600 Curr: 2100 Cons: 500` | that meter's consumption (for a shared meter, this lease's share) |
 | Indirect | `indirect_consumption > 0` | `Electricity — Indirect Consumption: 5 of total indirect bill 50` | the lease's share of the unmetered units |
 
-Both are priced at the same `charge_rate`. Only the direct line links the meter readings
-(`previous_utility_meter_reading_id` / `current_utility_meter_reading_id`), so it is the
-one that shows the reading images.
+Direct-line notes:
 
-A lease served by several meters is billed **once**, on its merged row: one invoice with a
-single direct line for the summed consumption, whose notes carry the summed readings
-(`Prev:1600 Curr:2100 Cons: 500`). **Every** reading in the row's
-`current_utility_meter_reading_ids` is marked billed, not just the one the line links, so no
-meter is re-billed next period.
+- On a meter's first bill (no billed reading yet, so the previous side is the meter's
+  `initial_reading`), the previous label reads `Prev (initial):`, e.g.
+  `Electricity — Meter WM-001: Prev (initial): 0 Curr: 120 Cons: 120`.
+- For a shared meter the row's share wording is appended:
+  `Electricity — Meter WM-0012: Prev: 1000 Curr: 1400 Cons: 100 Shared meter WM-0012 across 2 leases; this lease's share 25% (size 100 of 400).`
+- Notes are capped at 191 characters (longer text is cut and ends with `…`).
+
+Every line is priced at the row's `charge_rate` and carries the request's `tax_id`. Each
+direct line links **its own meter's** readings (`previous_utility_meter_reading_id` /
+`current_utility_meter_reading_id`), so the invoice shows one group of reading images per
+meter. The indirect line links none.
+
+A lease served by several meters is still billed **once** (one invoice, from its single
+preview row): the invoice gets a direct line per meter, built from the row's `meters[]`.
+A meter whose consumption is zero or negative gets no line (and a warning); a lease where
+no meter has a positive consumption is skipped. **Every** reading in the row's
+`current_utility_meter_reading_ids` is marked billed, so no meter is re-billed next period.
+A row without `meters[]` (a preview cached before this change) falls back to a single direct
+line, `Electricity — Direct Consumption: Prev:522 Curr:566 Cons: 44`, linked to the row's
+first meter.
 
 A lease is skipped only when its `utility_billed_at` falls **inside the current period**
 (on or after the first of the current month). A lease with no `utility_billed_at` has simply
@@ -455,7 +480,7 @@ Body fields:
 |---|---|---|---|
 | `facility_id` | Yes | integer | The property |
 | `utility_id` | Yes | integer | `lease_components.id` where `is_utility_charge = true` |
-| `tax_id` | Yes | integer | The utility's tax / fallback. Per-lease invoice tax is driven by each `lease.tax_id`: taxable leases are taxed, non-taxable leases are billed with a zero-rated tax |
+| `tax_id` | Yes | integer | The tax put on **every** invoice line of every lease, whatever tax the lease carries. A 0% tax yields no invoice tax |
 | `notes` | No | string | Prepended into invoice/bill notes |
 | `cache_key` | No | string | Token from `utility-billing-fetch`. Bills the cached rows when it matches the same `facility_id`/`utility_id`/`tax_id`/`distribution_method`/`charge_rate`/`total_bill_amount`/`bill_tax_amount`/`bill_consumption`; otherwise the server recomputes. Carries the indirect-consumption split too. Consumed (forgotten) after processing |
 | `charge_rate` | No | number | Optional flat rate override (same semantics as fetch). When omitted, the cached/derived per-lease rates are used |

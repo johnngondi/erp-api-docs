@@ -174,7 +174,7 @@ Each block declares:
 | `fiscal_qr` | invoice, credit note | qr | QR of `document.verify_url`, then `document.cu_invoice_number`/`.cu_serial_number` stacked beneath (toggle via `show_cu_invoice_number`/`show_cu_serial_number`). The CU invoice number is a link to `document.verify_url` (the invoice's `cu_invoice_verify_url`, the credit note's `cu_credit_note_verify_url`) when that is an http(s) address, so it is clickable in the PDF |
 | `document_notes` | invoice, credit note, lpo | text | Binds `document.notes` |
 | `invoice_items` | invoice | table, **flow** | `items.notes`, `.quantity`, `.amount`, `.tax`, `.total`. Meter photos are no longer drawn in the table; see `meter_reading_images` |
-| `meter_reading_images` | invoice | image, **flow** | Reads `items[]` directly (no field list). One group per `is_utility_bill` item with at least one `image_url`, titled with the item description and `· Meter {number} ({name})`. Beneath the title, "Previous reading" (left) and "Current reading" (right) photos sit side by side, each with its reading value and date, followed by "Consumption". A side with no photo shows a "No photo captured" box. `image_url` is only set when the upload's `source_url` file exists on the storage disk. When no utility item has a stored photo, the block renders nothing. Because `BlockType::hidesWhenEmpty()` is true, the renderer also skips the block box: border, background, padding and `min_height`. Config: `heading_text` (default "Meter readings"; `""` hides it), `font_size`, `image_height_mm` (20–150, default 70), `show_reading_values`, `show_consumption`, `show_meter_details` (all default true). Placement is up to the designer, e.g. right after `invoice_items` or at the end of the document |
+| `meter_reading_images` | invoice | image, **flow** | Reads `items[]` directly (no field list). One group per `is_utility_bill` item with at least one `image_url`, titled with the item description and `· Meter {number} ({name})`. Beneath the title, "Previous reading" (left) and "Current reading" (right) photos sit side by side, each with its reading value and date, followed by "Consumption". A side with no photo shows a "No photo captured" box. On a first bill (the line has no previous reading linked), the previous side carries the meter's `initial_reading` (`previous_reading.is_initial_reading` true): its box reads "No photo (initial reading)" and its value line "Initial reading: {value}" with no date, and "Consumption" is the current reading minus that initial reading. Meters have no initial-reading photo, so the group still needs the current photo to show. An invoice with one utility line per meter shows one group per line. `image_url` is only set when the upload's `source_url` file exists on the storage disk. When no utility item has a stored photo, the block renders nothing. Because `BlockType::hidesWhenEmpty()` is true, the renderer also skips the block box: border, background, padding and `min_height`. Config: `heading_text` (default "Meter readings"; `""` hides it), `font_size`, `image_height_mm` (20–150, default 70), `show_reading_values`, `show_consumption`, `show_meter_details` (all default true). Placement is up to the designer, e.g. right after `invoice_items` or at the end of the document |
 | `credit_note_items` | credit note | table, **flow** | `items.notes`, `.quantity`, `.amount`, `.tax`, `.total` |
 | `lpo_items` | lpo | table, **flow** | `items.title`, `.notes`, `.quantity`, `.amount`, `.tax`, `.total` |
 | `totals` | invoice, credit note, lpo | fields | `totals.amount`, `.tax`, `.total`, `.paid`, `.balance` (no receipt — receipts have no totals block) |
@@ -225,9 +225,14 @@ payee:          { name, tax_pin, address, phone, email }               # payment
 document:       { title, number, raw_number, issued_at, due_at, status, notes, currency,
                    invoice_number, cu_invoice_number, cu_serial_number, verify_url, served_by }
 items[]:        { description, notes, quantity, unit_price, amount, tax, tax_rate, total,
-                   is_utility_bill, previous_reading: {value, read_at, image_url},
+                   is_utility_bill,
+                   previous_reading: {value, read_at, image_url, is_initial_reading},
                    current_reading: {value, read_at, image_url},
-                   meter: {name, number}, consumption }
+                   meter: {name, number, initial_reading}, consumption }
+                # utility lines — a first bill has no previous reading, so previous_reading
+                # is the meter's initial_reading ({value, read_at: null, image_url: null,
+                # is_initial_reading: true}) and consumption = current − initial_reading.
+                # previous_reading is null only when the meter has no initial_reading
                 # invoice/cn — lines sharing component + quantity + notes print as ONE row
                 # (GroupsLineItems): unit_price, amount, tax, total are summed; tax_rate is
                 # null when the lines differ. Utility-bill lines never merge. tax_summary
