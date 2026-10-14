@@ -49,13 +49,42 @@ Request body:
 
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
-| `lease_component_id` | Yes | integer | Must exist in `lease_components.id` |
-| `start_at` | Yes | date (`YYYY-MM-DD`) | The first escalation date, not the tenancy start |
-| `end_at` | No | date (`YYYY-MM-DD`) | The date this escalation stops. Omit for one that runs indefinitely. Must be after `start_at` |
+| `lease_component_id` | Yes | integer | A component at least one of the lease's units carries. See [Only a component the lease has](#only-a-component-the-lease-has) |
+| `next_due` | Yes | date (`YYYY-MM-DD`) | The next date this escalation applies — the **only** date that drives it |
+| `end_at` | No | date (`YYYY-MM-DD`) | The date this escalation stops. Omit for one that runs indefinitely. Must be after `next_due` |
 | `cycle` | Yes | string | `days`, `weeks`, `months`, `years` |
 | `period` | Yes | integer | Number of cycle units. At least 1 |
 | `rate` | Yes | decimal | Percent. Fractions are kept, so `7.5` means 7.5% |
-| `next_due` | No | date (`YYYY-MM-DD`) | Defaults to `start_at` |
+
+There is **no start date**. `start_at` is no longer accepted or returned: an escalation applies on
+`next_due`, then `next_due` moves on by `period` × `cycle`. A `start_at` sent anyway is ignored.
+
+### Only a component the lease has
+
+An escalation names a component, not a unit, and raises **every unit on the lease that carries
+it**: Parking on one of three units raises that one unit, Rent on all three raises all three. A
+component none of the lease's units carries would raise nothing, so it is refused (row 145):
+
+```json
+{
+  "message": "This lease has no unit with Parking.",
+  "errors": { "lease_component_id": ["This lease has no unit with Parking."] }
+}
+```
+
+On an edit the check runs only when `lease_component_id` changes, so an escalation whose unit was
+since removed from the lease can still have its rate and dates corrected.
+
+### When an escalation stops
+
+It applies on `next_due` only while `next_due` is on or before **both**:
+
+- its own `end_at` (when set), and
+- the lease's `end_at` (when set).
+
+Once `next_due` falls after either, the escalation is finished: the component **keeps the rent it
+escalated to** and stops rising, and nothing further applies. An escalation that came due before its
+stop date still applies even if the nightly run reaches it late.
 
 ### Several escalations on one component
 
@@ -69,25 +98,24 @@ cycle, and it never shows up as a line on an invoice.
 
 An escalation with no `end_at` runs indefinitely, so nothing can follow it until one is set.
 
-Once `end_at` has passed the escalation stops applying and `next_due` stops advancing. The
-component **keeps the rent it escalated to** and simply stops rising — it does not revert.
+Two escalations overlap when one's `next_due` → `end_at` window meets the other's.
 
 | Error key | When |
 |---|---|
-| `end_at` | The stop date is not after the start date |
-| `start_at` | The period overlaps another escalation on the same component |
+| `lease_component_id` | None of the lease's units carries the component |
+| `end_at` | The stop date is not after `next_due` |
+| `next_due` | The window overlaps another escalation on the same component |
 
 Example request:
 
 ```json
 {
   "lease_component_id": 9,
-  "start_at": "2026-03-01",
+  "next_due": "2026-03-01",
   "end_at": "2027-02-28",
   "cycle": "months",
   "period": 12,
-  "rate": 5,
-  "next_due": "2027-03-01"
+  "rate": 5
 }
 ```
 
@@ -98,17 +126,16 @@ Example response:
   "message": "Lease escalation created successfully.",
   "lease_escalation": {
     "id": 61,
-    "start_at": { "raw": "2026-03-01", "formatted": "01 Mar, 2026", "diff": "5 months ago" },
     "end_at": { "raw": "2027-02-28", "formatted": "28 Feb, 2027" },
     "cycle": "months",
     "period": 12,
     "rate": 5,
-    "next_due": { "raw": "2027-03-01", "formatted": "01 Mar, 2027", "diff": "5 months from now" }
+    "next_due": { "raw": "2026-03-01", "formatted": "01 Mar, 2026", "diff": "5 months ago" }
   }
 }
 ```
 
-`start_at.raw`, `end_at.raw` and `next_due.raw` are plain dates (`YYYY-MM-DD`), not UTC timestamps.
+`end_at.raw` and `next_due.raw` are plain dates (`YYYY-MM-DD`), not UTC timestamps.
 Send them back as they are: a timestamp like `2026-02-28T21:00:00Z` is midnight on 1 March in
 Nairobi, and taking its date part moves the escalation a day earlier on every save.
 
@@ -121,6 +148,36 @@ Use the same payload shape as create. Prefill the edit form from the `raw` dates
 ## Delete Lease Escalation
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/leases/{lease}/escalations/{leaseEscalation}`
+
+## How an escalation shows on an invoice
+
+When an escalation takes effect partway through a billing period, the generated invoice still
+carries **one line per component**, billed at the average rate across the period:
+
+| Field | Value |
+|---|---|
+| `quantity` | The months in the period, e.g. `3` for a quarter |
+| `amount` | Each stretch's monthly rate × the months it covers, added together |
+| `cost` | `amount ÷ quantity` |
+| `notes` | The period label, e.g. `Jan - Mar 2027` |
+
+Example: rent is 100,000 a month, rising to 110,000 on 1 February, billed quarterly Jan–Mar.
+
+```json
+{
+  "notes": "Jan - Mar 2027",
+  "quantity": 3,
+  "cost": 106666.66667,
+  "amount": 320000
+}
+```
+
+`amount` is exact. `cost` is rounded, so `cost × quantity` printed to two decimals can be a cent
+off — always show and total `amount`, never recompute it.
+
+This applies to every component with an escalation configured, not only rent. An escalation in
+the middle of a month is shared by days, so one on 15 February in the example above bills 315,000.
+A period with no escalation in it is billed exactly as before.
 
 ## Frontend Error Handling
 

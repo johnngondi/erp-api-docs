@@ -12,7 +12,10 @@ status lifecycle, see [README.md](./README.md).
 ## Templates
 
 A template carries two independent content blobs, `offer_content` and
-`agreement_content`, both `{{tag}}`-bearing HTML.
+`agreement_content`, both `{{tag}}`-bearing HTML. A blob may open with a repeating
+`<header data-loo-header>` and `<footer data-loo-footer>`, which the editor writes
+and the renderer prints on every page; see **Headers and footers** under the LOO
+export in [loo.md](loo.md).
 
 Scoping is two-dimensional, and `NULL` means "no restriction" on either axis:
 

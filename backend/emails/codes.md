@@ -1,25 +1,25 @@
 # Code emails
 
-Three emails carry a one-time code. All follow the OTP design in
+Two emails carry a one-time code. Both follow the OTP design in
 `resources/views/mail/_design/reference.html`: a greeting and an intro, the code on a `code` card
 with "Valid until", a "Didn't request this?" `callout`, and a closing `note` that staff never ask
-for the code. All are platform-branded (`EmailMessage::for(null)`, `config('app.name')`): they
+for the code. Both are platform-branded (`EmailMessage::for(null)`, `config('app.name')`): they
 are about the person's account, not a company's.
 
-None is ever on the database channel: a code in the in-app list would be readable by anyone
+Neither is ever on the database channel: a code in the in-app list would be readable by anyone
 looking at the screen it protects. Both are sent synchronously, one channel per notification
 instance, so a broken SMS gateway does not take the email down with it. If either is ever
 queued, it must also implement `Illuminate\Contracts\Queue\ShouldBeEncrypted`.
 
-| | Temporary session PIN | Password reset code | Approval code |
-|---|---|---|---|
-| Notification | `App\Notifications\Auth\TemporaryPinNotification` | `App\Notifications\Auth\PasswordResetCodeNotification` | `App\Notifications\Approvals\ApprovalCodeNotification` |
-| Sent by | `SessionPinService::issueTemporary()` (`POST auth/pin/temporary`) | `PasswordResetCodeService::issue()` (`POST auth/password/forgot`) | `ApprovalOtpService::issue()` (`POST app/{company}/pending-tasks/decisions/otp`) |
-| Channels | email, SMS, WhatsApp | email, SMS | email, SMS, WhatsApp |
-| Title | `VERIFICATION CODE` | `PASSWORD RESET` | `APPROVAL CODE` |
-| Code card label | Temporary PIN | Reset code | Approval code |
-| Code shown as | `5091` | `482 913` (the SMS carries `482913`) | `482 913` (SMS and WhatsApp carry `482913`) |
-| Preview | `/_mail/pin-code` | `/_mail/password-reset-code` | `/_mail/approval-code` |
+| | Temporary session PIN | Password reset code |
+|---|---|---|
+| Notification | `App\Notifications\Auth\TemporaryPinNotification` | `App\Notifications\Auth\PasswordResetCodeNotification` |
+| Sent by | `SessionPinService::issueTemporary()` (`POST auth/pin/temporary`) | `PasswordResetCodeService::issue()` (`POST auth/password/forgot`) |
+| Channels | email, SMS, WhatsApp | email, SMS |
+| Title | `VERIFICATION CODE` | `PASSWORD RESET` |
+| Code card label | Temporary PIN | Reset code |
+| Code shown as | `5091` | `482 913` (the SMS carries `482913`) |
+| Preview | `/_mail/pin-code` | `/_mail/password-reset-code` |
 
 The session PIN flow itself is documented in `docs/frontend/api/v1/common/session-pin.md`; only
 its email changed here.
@@ -91,40 +91,3 @@ message only; the person signs in again with the new password.
 after every request, so the terminating callback has run by the time a request returns. The
 controller guards its callback to run once, because the application keeps its terminating
 callbacks and a test that makes two requests terminates it twice.
-
-## Approvals inbox code
-
-One code authorises one batch of approve / send back / reject decisions from the staff approvals
-inbox. Frontend contract: `docs/frontend/api/v1/app/pending-tasks.md` (Batch decisions).
-
-| Route | Controller | Service / action |
-|---|---|---|
-| `POST api/v1/app/{company}/pending-tasks/decisions/otp` (`throttle:5,1`) | `App\PendingTasks\RequestPendingTaskDecisionCodeController` | `ApprovalOtpService::issue()` |
-| `POST api/v1/app/{company}/pending-tasks/decisions` (`throttle:10,1`) | `App\PendingTasks\DecidePendingTasksController` | `DecidePendingTasksAction` (`DecidePendingTasksData`) |
-
-`user_approval_codes`, model `UserApprovalCode` (same columns and `usable()` scope as the reset
-codes). `App\Services\Approvals\ApprovalOtpService`:
-
-- **Issue** is modelled on `SessionPinService::issueTemporary()`: the person is signed in, so
-  refusals are said out loud. A cooldown or the hourly cap is a `422` keyed `otp` (with the seconds
-  or minutes to wait); a send that reached nobody spends the code and is a `422` keyed
-  `otp_send_failed`. Every outstanding code is spent first. One `ApprovalCodeNotification` per
-  channel (email, SMS, WhatsApp) through `OutboundEmail::send()`, each in its own try. The answer
-  names the channels and the masked phone and email (`App\Support\Auth\ContactMasking`, shared
-  with the session PIN).
-- **Verify** is modelled on `PasswordResetCodeService::verify()`: the latest usable code, row
-  locked, `attempts` counted on the row, spent on success (with any other outstanding one). Refusals
-  are keyed `code`. `DecidePendingTasksAction` runs it in a transaction of its own that **commits
-  on a refusal**, so the attempt count survives; then each decision runs without an outer
-  transaction, so one refused decision does not undo the others.
-
-Limits, in `config/approval_otp.php` (env-tunable):
-
-| Key | Default | Meaning |
-|---|---|---|
-| `minutes` | 10 | How long a code works |
-| `max_attempts` | 5 | Wrong guesses before the code is spent |
-| `resend_after_seconds` | 60 | Cooldown between codes for one person (`approval-otp:resend:{id}`) |
-| `max_per_hour` | 10 | Codes per person per hour (`approval-otp:hourly:{id}`) |
-
-Tests: `tests/Feature/PendingTaskDecisionsTest.php`.

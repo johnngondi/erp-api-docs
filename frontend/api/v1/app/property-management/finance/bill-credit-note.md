@@ -20,6 +20,13 @@ normal expenses, where it offsets the amount payable).
 > derives `vendor_id`, `facility_id`, `currency_id`, and `expense_type_id` from the bill being
 > credited. The front end only sends the fields in the payload tables below.
 
+## Dates
+
+`invoice_date` come back with `raw` as a **plain date**, `"2026-10-01"` (row 142). They used to be UTC
+timestamps - `"2026-09-30T21:00:00.000000Z"` for 1 Oct in Nairobi - and a form that sent `raw` back
+saved the day before. For a bill credit note that moved it into the previous month's VAT and withholding reports. The server now reads any date it is sent as the day it means in
+Nairobi, but send `YYYY-MM-DD`.
+
 ## Endpoints
 
 - `POST   /bills/credit-notes` — create a credit note against a bill

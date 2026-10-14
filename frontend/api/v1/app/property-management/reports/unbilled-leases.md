@@ -37,13 +37,18 @@ problem whatever its status.
 
 ## What makes a lease unbilled
 
-Both conditions, as at `period_to`:
+All three conditions, as at `period_to`:
 
-1. `leases.next_due_at` has passed, and
-2. **no invoice has been raised for it** — no invoice on that lease created on or after
+1. `leases.next_due_at` has passed,
+2. `next_due_at` falls on or before the lease's `end_at` (or the lease has no end), and
+3. **no invoice has been raised for it** — no invoice on that lease created on or after
    `next_due_at`, ignoring cancelled ones.
 
-The second condition is the one that matters, because there are two ways a lease stops being
+Billing stops at the lease's end. The biller bills the last period only up to `end_at`, then sets
+`next_due_at` to the day after it, so an ended lease has a past due date with nothing missing. The
+second condition keeps it off this report.
+
+The third condition is the one that matters, because there are two ways a lease stops being
 unbilled:
 
 - **The automatic biller runs.** It raises the invoice *and* advances `next_due_at` past today, so

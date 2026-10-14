@@ -6,6 +6,13 @@ Base route:
 
 `/api/v1/app/{company}/property-management/finance/expenses`
 
+## Dates
+
+`transaction_at` come back with `raw` as a **plain date**, `"2026-10-01"` (row 142). They used to be UTC
+timestamps - `"2026-09-30T21:00:00.000000Z"` for 1 Oct in Nairobi - and a form that sent `raw` back
+saved the day before. The server now reads any date it is sent as the day it means in
+Nairobi, but send `YYYY-MM-DD`.
+
 ## Endpoints
 
 - `GET /expenses`
@@ -30,6 +37,8 @@ Supported query params:
 `filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
 returned rows for facility 60. Send the whole value. Date filters are still partial, so
 `filter[created_at]=2026-09` means that month.
+Every date filter also takes a range, `filter[created_between]=2026-09-01,2026-09-30`; see
+[List filters](../../../list-filters.md) for each one's name.
 
   - `filter[created_at]`, `filter[transaction_at]`
 - Sort:

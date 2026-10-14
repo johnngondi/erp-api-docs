@@ -13,15 +13,51 @@ no properties, and no invoices, bills, contracts, receipts, LPOs or credit notes
 out of the query itself — `whereIn('facility_id', [])` is a false predicate — rather than being a
 special case someone has to remember to write.
 
-Allocation is granted two ways, both writing the same pivot:
+Allocation is granted three ways, all writing the same pivot:
 
 | How | Where |
 |---|---|
 | Directly, on a company user | `AssignFacilitiesToUserAction`, from the company-user endpoints |
 | Implicitly, by naming someone to a property role | `AssignFacilityRolesAction`, additively |
+| Automatically, the moment a property is created | `AutoAssignFacilityAction`, from `CreateFacilityAction` |
 
 Because naming a role holder also writes `facility_user`, reading that one table covers role
 holders too. Nothing needs to consult `facility_role` to answer "can this user see it".
+
+## What a new property starts with
+
+`CreateFacilityAction` runs `AutoAssignFacilityAction` right after the row exists. It allocates,
+within the property's own company only:
+
+| Who | Why |
+|---|---|
+| The staff member creating it (`facilities.created_by_id`) | Nobody should create a property and then not see it. |
+| Every active member holding a role **not** enforced on a property (`roles.enforce_on_facility = false`) | A company-wide role means "every property", so its holders are allocated to each one as it appears. Seeded global roles (`company_id` null) and the company's own roles both count. |
+| Active members flagged `users.auto_assign_facilities` | The explicit opt-in that predates company-wide roles. |
+| The landlord (`facilities.landlord_id`) | The landlord portal reads the same pivot. |
+| The company owner (`companies.user_id`) | |
+
+A role enforced on a property grants nothing here: its holders are allocated only when named to
+that role on a specific property, through `AssignFacilityRolesAction`.
+
+The grant is additive and idempotent. It never removes an allocation and is safe to run again,
+which is what the backfill command does:
+
+```bash
+# Every property of every company; prints what it would add, writes nothing
+php artisan properties:sync-auto-allocations --dry-run
+
+# Write the missing allocations, one company
+php artisan properties:sync-auto-allocations {company-id-or-slug}
+
+# One property
+php artisan properties:sync-auto-allocations --facility=198
+```
+
+Run it after inserting a property outside the API (an import, a manual SQL insert) or after a
+role is switched from property-enforced to company-wide: a property written straight to the
+table has no `facility_user` rows and is visible to nobody until this runs.
+`properties:audit-allocations` stays the read-only report of who holds nothing.
 
 ## What is scoped, and what is not
 

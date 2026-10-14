@@ -152,6 +152,13 @@ Reason:
 - `GET /facilities/{facility}/roles`
 - `PUT /facilities/{facility}/roles/{role}`
 
+Who sees a property the moment `POST /facilities` returns: the staff member who created it, every
+active staff member holding a role that is not enforced on a property (`enforce_on_facility =
+false`), staff flagged for automatic property assignment, the landlord and the company owner.
+Holders of a property-enforced role see it only once named to that role on the property, via
+`PUT /facilities/{facility}/roles/{role}` or the `roles` array on create. Nothing in the create
+payload controls this; it follows from role configuration.
+
 ### 4.2.1 `collection_account` on a property
 
 `GET /facilities` and `GET /facilities/{facility}` return the property's default collection
@@ -330,9 +337,29 @@ Supports:
 Scopes spaces across the full facility tree.
 
 Supports:
-- filters: `status`, `name`, `space_type`, `size`
+- filters: `status`, `name`, `space_type`, `size`, `is_parking`, `is_signage`, `parking_type`
 - sorts: `name`, `size`, `status`, `space_type`, `created_at`
 - `per_page`
+
+Parking bays and signage positions, for a lease's "Add parking" and "Add signage" pickers:
+
+| Query | Returns |
+|---|---|
+| `filter[is_parking]=true` | Parking bays only |
+| `filter[is_signage]=true` | Signage positions only |
+| `filter[is_parking]=false&filter[is_signage]=false` | Everything else |
+| `filter[parking_type]=open` / `closed` | Parking bays of that kind |
+
+Add `filter[status]=available` for the ones still free. `parking_type` comes back as a plain
+string, `open` or `closed`, and `null` on anything that is not a parking bay.
+
+### Component options for a space
+
+`GET /facilities/{facility}/spaces/{facilitySpace}/component-options`
+
+What a space can be billed and the property's suggested amounts, for Create Lease, which has no
+lease to ask through yet. Same response as the lease version: see "Component options for a space"
+in `lease-management/leases.md`.
 
 ## 6. Request Payloads by Resource
 

@@ -9,6 +9,13 @@ Auth:
 - Requires `auth:sanctum` and vendor portal access.
 - Vendor-scoped data is enforced in queries/policies.
 
+## Dates
+
+Quote, LPO and site visit `delivery_at` come back with `raw` as a **plain date**, `"2026-10-01"` (row 142). They used to be UTC
+timestamps - `"2026-09-30T21:00:00.000000Z"` for 1 Oct in Nairobi - and a form that sent `raw` back
+saved the day before. The server now reads any date it is sent as the day it means in
+Nairobi, but send `YYYY-MM-DD`.
+
 ## RFQ Open Jobs
 
 Invited suppliers who have not quoted on an open request receive a daily quotation reminder (working days, 09:00) until they quote or the deadline passes; see the `QuoteSubmissionReminderNotification` type in [notifications.md](notifications.md).

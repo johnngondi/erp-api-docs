@@ -57,7 +57,7 @@ receivables staff who bill from them. Today that is:
 
 | Purpose | Notification (under `App\Notifications`) | Channels |
 | --- | --- | --- |
-| One-time codes | `Auth\TemporaryPinNotification`, `Auth\PasswordResetCodeNotification`, `Approvals\ApprovalCodeNotification` (one notification per channel, from `SessionPinService` / `PasswordResetCodeService` / `ApprovalOtpService`) | the channel asked for |
+| One-time codes | `Auth\TemporaryPinNotification`, `Auth\PasswordResetCodeNotification` (one notification per channel, from `SessionPinService` / `PasswordResetCodeService`) | the channel asked for |
 | A document sent to a supplier | `PropertyManagement\Procurement\LpoIssuedNotification` | database, mail, SMS |
 | A reminder to a supplier | `PropertyManagement\Procurement\QuoteSubmissionReminderNotification` | database, mail, SMS, WhatsApp |
 | An approved lease application sent back to its reviewer (product decision, 7 October 2026) | `PropertyManagement\LeaseApplicationReturnedNotification` | database, mail, SMS |
@@ -87,7 +87,7 @@ Outbound messages run on named queues, so a backlog of emails cannot hold up a o
 
 | Queue | What runs on it |
 | --- | --- |
-| `otp` | `TemporaryPinNotification`, `PasswordResetCodeNotification` and `ApprovalCodeNotification`, on every channel |
+| `otp` | `TemporaryPinNotification` and `PasswordResetCodeNotification`, on every channel |
 | `notifications` | The email, SMS and WhatsApp sends of every other notification |
 | `default` | The in-app (`database`) copy of a notification, and every other job |
 

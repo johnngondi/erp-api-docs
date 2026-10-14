@@ -19,13 +19,18 @@ Supported query params:
 
 - Filters:
   - `filter[id]`
+  - `filter[lease_component_id]` (exact)
   - `filter[lease_item_component_id]`
   - `filter[created_at]`
 - Sort:
-  - `sort=id,lease_item_component_id,created_at`
+  - `sort=id,lease_component_id,lease_item_component_id,created_at`
 - Pagination:
   - `per_page`
   - `page`
+
+Each row carries **`lease_component`** - what the deposit is held against (Rent, Service Charge,
+Parking). Show that as the deposit's type: `lease_item_component` is the lease line it was billed
+on, which for a deposit taken since row 143 is the lease's single Deposit line.
 
 ## Access Rules
 

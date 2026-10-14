@@ -193,3 +193,48 @@ record returned by create/update/action endpoints). List rows and records nested
 another resource leave it out, because building the chain costs several queries per
 record. Pass `?with_approval_steps=1` on a list to get it back for every row.
 
+
+## Pending with me (row 136)
+
+A document stays `pending` until its whole chain is done, so filtering a list on `status=pending`
+also shows a reviewer what they have already approved or sent back. **"Pending with me"** is the
+narrower question: does this document wait on **me** to act, right now?
+
+Every list of a document that goes through a workflow carries a boolean on each row and a filter:
+
+| | |
+|---|---|
+| Row field | `pending_with_me` - `true` / `false` |
+| Filter | `filter[pending_with_me]=1` keeps only what waits on the caller; `=0` leaves it out |
+
+Lists that have it:
+
+| Document | List |
+|---|---|
+| Receipts | `GET .../lease-management/receipts` |
+| Invoices | `GET .../lease-management/invoices` |
+| Credit notes | `GET .../lease-management/credit-notes` |
+| Exit notices | `GET .../lease-management/exit-notices` |
+| Leases | `GET .../lease-management/leases` |
+| Offer letters (LOOs) | `GET .../lease-management/loos` |
+| Lease applications | `GET .../lease-management/lease-applications` |
+| Remittances | `GET .../finance/remittances` |
+| LPOs | `GET .../procurement/lpos` |
+| Supplier contracts | `GET .../procurement/contracts` |
+| Procurement requests | `GET .../procurement/requests` |
+
+**What counts as "with me":**
+
+- **Approval workflow** (receipts, invoices, credit notes, exit notices, leases, offer letters,
+  remittances, LPOs, contracts): the step the chain stands on (latest attempt, first open step) is
+  `pending` and you are one of its assigned approvers - **or** that step **sent it back for
+  changes** and you raised or submitted the document, so your edit is what resubmits it. A
+  reviewer who has approved or sent it back is no longer "with me"; a later step's approvers are
+  not yet.
+- **Procurement requests** (their own steps): the current step is `pending` or `quotes-review` and
+  you are among its actors - or the first step sent it back to you, its creator, for changes.
+- **Lease applications**: you hold the pending task for it - reviewing it, re-reviewing a returned
+  one, or generating its offer letter.
+
+In the UI this is a **"Pending with me"** option placed before "Pending" in the status filter. The
+row field and the filter are worked out the same way, so they always agree.

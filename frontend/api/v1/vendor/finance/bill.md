@@ -6,6 +6,13 @@ Base route:
 
 `/api/v1/vendor/finance/bills`
 
+## Dates
+
+`invoice_date` comes back with `raw` as a **plain date**, `"2026-10-01"` (row 142). It used to be a
+UTC timestamp - `"2026-09-30T21:00:00.000000Z"` for 1 Oct in Nairobi - and sending it back saved the
+day before, which moved the bill into the previous month's VAT. The server now reads any date it is
+sent as the day it means in Nairobi, but send `YYYY-MM-DD`.
+
 ## Endpoints
 
 - `GET /bills`

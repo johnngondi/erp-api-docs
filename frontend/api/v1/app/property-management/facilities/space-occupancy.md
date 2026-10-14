@@ -14,6 +14,22 @@ columns on `facility_spaces` capture this:
 
 `FacilitySpaceResource` also exposes a convenience boolean `is_available_for_application`.
 
+### `allocated_components_ids`
+
+The lease components a space is let on **by leases that still hold it**: `pending`, `active` or
+`suspended`. A `terminated` or `rejected` lease releases its components the moment it ends; its
+lease items stay as history but no longer count. So a unit whose last lease ended reads `[]`, and
+one let for rent and service charge reads e.g. `[1, 2]`.
+
+It is worked out from the leases on every read, not stored, so it is right even where a space's
+stored `status` / occupied-by columns lag its leases (units imported from EPMAS before the
+importer synced occupancy read `available` under active leases). That makes it the safer field
+for "is this component on this unit already taken" in pickers such as Create Lease. A pending
+lease counts, so a unit is not double-booked while its lease waits for approval.
+
+Before October 2026 it listed every component the space had **ever** been let with, ended leases
+included.
+
 ## How occupancy is derived
 
 These three fields are **never set directly** — they are recomputed from the

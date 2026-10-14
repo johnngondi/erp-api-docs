@@ -52,6 +52,29 @@ Examples:
 - `GET /api/v1/app/12/property-management/lease-management/leases?filter[status]=active&sort=-start_at`
 - `GET /api/v1/app/12/property-management/lease-management/leases?filter[user_id]=77&per_page=10&page=2`
 
+## Dates and the term
+
+`start_at`, `end_at` and `next_due_at` come back with `raw` as a **plain date**, `"2026-08-01"`
+(row 142). They used to be UTC timestamps (`"2026-07-31T21:00:00.000000Z"` for 1 Aug in Nairobi),
+which made two things go wrong:
+
+- **The term showed a month short.** Worked out from those two timestamps, a 6-year lease from
+  1 Aug 2026 to 31 Jul 2032 reads as 5 years 11 months 29 days. Show the term from
+  `period_in_years` / `period_in_months` - what was entered - not from the dates. `end_at` is the
+  term's **last day** (inclusive), so a date difference is a day short of the term anyway.
+- **Saving moved the dates.** Sending the old `raw` back as `start_at` was read as 31 July, so the
+  end landed on 30 July. The server now reads any date it is sent as the day it means in Nairobi,
+  so a timestamp no longer shifts it - but send `YYYY-MM-DD`.
+
+`end_at` is never accepted: it is start + term - 1 day. On an **update** it is worked out again
+only when `start_at`, `period_in_years` or `period_in_months` actually changes; any other edit keeps
+the end the lease has. Leases imported from EPMAS carry EPMAS's end date and a term counted a month
+short (6 years stored as 5 years 11 months), or run part-months (15 Jun to 13 Jun), so re-deriving
+the end on every save shortened them.
+
+The same applies to management contracts (`start_at`, `end_at`) and supplier contracts
+(`start_at`, `end_at`).
+
 ## Create Lease
 
 `POST /api/v1/app/{company}/property-management/lease-management/leases`
@@ -284,6 +307,8 @@ Eligibility (returns `422` validation error otherwise):
 
 - Lease `status` must be `active`.
 - Lease must have a billing schedule (`next_due_at` set).
+- The lease must not have ended. When `next_due_at` is after `end_at`, the last period has already
+  been billed: `422` with `lease`: `This lease ended on 15 Nov, 2026; there is nothing left to bill.`
 - At least one auto-billed component must be priced above zero. Otherwise the lease has nothing to
   bill: `422` with `lease`: `This lease has nothing to bill: every component is priced at zero.`
   No invoice is created and `next_due_at` does not move.
@@ -296,6 +321,15 @@ Behavior:
 - Every invoice line carries a value. A component priced at zero stays on the lease but is never
   invoiced, so the invoice holds only the priced components.
 - `next_due_at` is advanced to the start of the next period when the invoice is created.
+- **Billing stops at the lease's end.** When `end_at` falls inside the period, the invoice covers the
+  period only up to `end_at`. The monthly price stays the same, and the `quantity` is the number of
+  months actually billed. Whole months count 1 each, and the month the lease ends in counts its
+  days over the days in that month. For example, a quarter from 1 Oct with `end_at` 15 Nov bills
+  `quantity` `1.5`, with notes `Oct 01 - Nov 15 2026`. `next_due_at` then moves to the day after
+  `end_at` (16 Nov), and the lease is not billed again. An escalation inside that shorter period is
+  averaged over it, as usual.
+- The `invoices:generate` scheduler bills only `active` leases whose `next_due_at` is on or before
+  their `end_at` (or that have no end).
 
 Success response:
 
@@ -328,6 +362,71 @@ Component object inside `components`:
 | `cost_per_sqft` | Yes | integer | - |
 | `hs_code` | No | string | Optional |
 
+Each lease item's `facility_space` (list, show and the create response) says what kind of space
+it is:
+
+| Field | Type | Notes |
+|---|---|---|
+| `space_type` | string | `leasable`, `landlord` or `common` |
+| `is_parking` | boolean | A parking bay, billed its parking fee |
+| `is_signage` | boolean | A signage position, billed its signage fee |
+| `parking_type` | string \| null | `open` or `closed` on a parking bay, otherwise `null` |
+
+```json
+"facility_space": {
+  "id": 214,
+  "name": "P-12",
+  "status": "unavailable",
+  "size": 1,
+  "space_type": "common",
+  "is_parking": true,
+  "is_signage": false,
+  "parking_type": "closed"
+}
+```
+
+### Component options for a space
+
+- `GET /leases/{lease}/spaces/{facilitySpace}/component-options`, for editing a lease
+- `GET /facilities/{facility}/spaces/{facilitySpace}/component-options`, for Create Lease, before
+  there is a lease. Same answer for the same space.
+
+The prefill for the Units / Parking / Signage editor: what a space can be billed, and what the
+property's indicative rates suggest charging. Same response as the lease application's
+`component-options`.
+
+| Space | Components offered | Prefilled amount |
+|---|---|---|
+| Unit | Rent, service charge and any other autobilled component | Rent and service charge from the property's indicative rates; others empty |
+| Parking bay | Parking fee only | The property's closed or open parking fee, by `parking_type` |
+| Signage position | Signage fee only | Empty: there is no indicative signage rate |
+
+```json
+{
+  "data": {
+    "facility_space_id": 34,
+    "size": 1,
+    "is_lettable": true,
+    "components": [
+      {
+        "lease_component_id": 8,
+        "name": "Parking",
+        "cost_per_space_unit": 3024.88,
+        "amount": 3024.88,
+        "tax_id": 2
+      }
+    ]
+  }
+}
+```
+
+- `amount` is the monthly amount (`size × cost_per_space_unit`). Send it back as
+  `cost_per_month`. `null` on both means the property records no rate, and staff enter it.
+- `tax_id` is the component's own tax. Use it as the default.
+- A space on another property is refused with a `422` on `facility_space_id`.
+- Requires `view-lease` (lease version) or `view-facility` (property version), and an allocation
+  to the property.
+
 ### Lease item components endpoints
 
 - `GET /leases/{lease}/items/{leaseItem}/components`
@@ -343,8 +442,20 @@ array. Both are validated the same way; the bulk form previously accepted anythi
 |---|---|---|---|
 | `lease_component_id` | Yes | integer | Must exist in `lease_components.id` |
 | `tax_id` | Yes | integer | Must exist in `taxes.id` |
-| `cost_per_sqft` | Yes | number | `cost_per_month` is computed from it and the space size |
+| `cost_per_sqft` | One of the two | number | Rate per space unit. `cost_per_month` becomes `size × cost_per_sqft` |
+| `cost_per_month` | One of the two | number | The monthly amount, at least `0`. Stored exactly as sent, and `cost_per_sqft` becomes `cost_per_month ÷ size` |
 | `hs_code` | No | string \| null | Optional |
+
+Send **`cost_per_month`** when staff type a monthly amount. It is billed exactly as typed.
+Converting it to a rate in the browser and sending `cost_per_sqft` can drift: 52,023 on an 85 sq ft
+unit, sent as `612.04`, is stored as 52,023.40.
+
+- If both are sent, `cost_per_sqft` is used and `cost_per_month` is ignored, as before. To bill a
+  typed amount, send `cost_per_month` **without** `cost_per_sqft`.
+- Sending neither is refused with `422` on `cost_per_sqft`.
+- Both are stored to 5 decimals. Cents are kept either way.
+
+The same fields apply to each entry in `components` on `POST /leases/{lease}/items`.
 
 Errors on the bulk form are keyed by position, so the caller can mark the offending row:
 `components.0.lease_component_id`, `components.2.tax_id`. An empty `components: []` is refused with

@@ -36,6 +36,16 @@ Supported query params:
   - `per_page`
   - `page`
 
+## Supporting document
+
+List and show return the document staff attached when raising the credit note, the same shape as
+a receipt's `pop_upload`. Read-only for the tenant.
+
+| Field | Type | Notes |
+|---|---|---|
+| `supporting_upload_id` | integer\|null | - |
+| `supporting_upload` | object\|null | `{ id, title, description, source_url, thumbnail_url, file_name, type, extension, size, created }`. Open `source_url` to view the file |
+
 ## Access Rules
 
 - Tenant can only view credit notes linked to their own leases.

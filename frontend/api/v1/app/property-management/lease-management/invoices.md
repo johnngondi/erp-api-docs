@@ -418,6 +418,15 @@ Use the same payload shape as create.
 
 No request body required.
 
+`permissions.cancel` is **false** on an invoice that cannot be cancelled — one already
+cancelled, a rejected one (which can only be deleted), and a draft (`pending`, where
+cancelling would delete it outright rather than withdraw it). Drive the button off the flag;
+a direct call on any of those returns **403**.
+
+On an invoice with payments allocated, `permissions.cancel` is still `true`, but cancelling is
+refused with **422** and `status: ["This invoice has payments allocated to it. Reallocate them to
+another invoice before removing it."]`. Reallocate the payments first, then cancel.
+
 Possible status values returned by API resource:
 
 - `pending` (`secondary`)

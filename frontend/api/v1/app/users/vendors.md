@@ -34,10 +34,10 @@ Supported query params:
   - `filter[name]`
   - `filter[email]`
   - `filter[phone]`
-  - `filter[created_at]`
+  - `filter[created_at]`, `filter[created_between]` (a range: `2026-09-01,2026-09-30`)
   - `filter[country_id]` — exact
   - `filter[city_id]` — exact match on the supplier's region
-  - `filter[business_registration_number]` — partial match
+  - `filter[business_registration_number]` — exact
 - Sort:
   - `sort=id,name,created_at`
 - Include:

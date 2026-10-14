@@ -38,6 +38,8 @@ Supported query params:
 `filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
 returned rows for facility 60. Send the whole value. Date filters are still partial, so
 `filter[created_at]=2026-09` means that month.
+Every date filter also takes a range, `filter[created_between]=2026-09-01,2026-09-30`; see
+[List filters](../../../list-filters.md) for each one's name.
 - Sort:
   - `sort=id,period_from,period_to,total_income,total_expenses,remittable_amount,created_at,updated_at`
 - Include:

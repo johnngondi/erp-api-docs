@@ -119,6 +119,7 @@ Request body:
 | `cu_invoice_number` | No | string | Optional |
 | `cu_serial_number` | No | string | Optional |
 | `cu_credit_note_verify_url` | No | string | Optional |
+| `supporting_upload_id` | Yes | integer | One upload id (`uploads.id`): the document the credit note is raised on. See [Supporting document](#supporting-document) |
 
 `items[]` fields:
 
@@ -176,7 +177,7 @@ Example response:
 | Invoice has no balance left | Invoice is already paid for fully |
 | Invoice is cancelled / rejected | Invoice is already cancelled / Invoice was rejected |
 | Total is more than the invoice's available balance while documents awaiting approval hold part of it | Invoice #9001 has 400.00 available; 600.00 is held by documents awaiting approval (receipt #2500 RCPT-1004). |
-| Items total more than the invoice balance | Credit note total exceeds invoice balance |
+| Items total more than the invoice balance, beyond a cent per line of rounding room (a note that mirrors an invoice stored at five decimals can land a fraction of a cent above it; within that room it settles the balance to zero) | Credit note total exceeds invoice balance |
 
 The held-balance rule is described under
 [Invoices → Amounts held](./invoices.md#amounts-held-by-documents-awaiting-approval). Use the
@@ -226,6 +227,66 @@ doc).
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}`
 
 Use the same payload shape as create.
+
+`supporting_upload_id` on update: leave the key out to keep the document attached, or send an id
+to replace it. It cannot be removed, and it can only change while the credit note is `pending` (a
+returned one included). See [Supporting document](#supporting-document).
+
+## Supporting document
+
+The document a credit note is raised on (the tenant's letter, the agreed adjustment), attached the
+way a receipt carries its proof of payment (`pop_upload_id` / `pop_upload`).
+
+- **One file, required on create.** Upload it first through the file-management uploads endpoint and
+  send its id as `supporting_upload_id`. Without it the create answers `422`:
+  `errors.supporting_upload_id: ["Attach the supporting document for this credit note."]`.
+- **Replaced, never removed.** On an edit of a pending credit note (one sent back for changes stays
+  `pending`) send another id to replace it. Sending `null` answers `422`:
+  `errors.supporting_upload_id: ["A credit note needs its supporting document. Replace it rather than removing it."]`.
+  A credit note raised before the document was required has none; it still edits normally, and one
+  can be attached while it is pending.
+- **Fixed once approved.** When the credit note is approved (`unapplied`, `partially applied`,
+  `applied`) or closed (`cancelled`, `rejected`) the document is what the approver signed off on. Sending a different id, or `null`, then answers `422`:
+
+```json
+{
+  "message": "The supporting document cannot be changed once the credit note is approved.",
+  "errors": {
+    "supporting_upload_id": ["The supporting document cannot be changed once the credit note is approved."]
+  }
+}
+```
+
+  Leaving the key out, or sending the id already attached, is not a change, so the rest of the edit
+  still saves.
+- **Credit notes the system raises itself** (invoice reversals, negative opening balances, exit-notice
+  settlements) never carry one.
+- **Tenants see it** on their own credit note (`GET /api/v1/tenant/billing/credit-notes/{creditNote}`
+  and the list).
+
+### Replacing just the document
+
+`PUT/PATCH /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}/supporting-document`
+
+Body: `{ "supporting_upload_id": 123 }` - nothing else. Use this for a picker that swaps the document,
+not the credit note's edit: the edit validates the whole credit note (lease, due date, notes,
+items), and resending those "unchanged" is fragile - item costs come back negative and are refused,
+and the due date's `raw` is a UTC timestamp that saves a day early.
+
+- Same rules as above: required (replace, not remove), fixed once approved.
+- **Only a file the caller uploaded** can be attached - here and on create:
+  `errors.supporting_upload_id: ["Attach a document you uploaded yourself."]`.
+- **A credit note sent back for changes is resubmitted** when this saves: the reviewer is asked
+  again and the initiator's "Changes requested" task clears. Attaching the document the reviewer
+  asked for is the answer to them; there is no separate resubmit step.
+- Response: `{ "message": "...", "credit_note": { ... supporting_upload_id, supporting_upload ... } }`.
+
+Returned on list, show, and the create/update responses:
+
+| Field | Type | Notes |
+|---|---|---|
+| `supporting_upload_id` | integer\|null | - |
+| `supporting_upload` | object\|null | The upload: `{ id, title, description, source_url, thumbnail_url, file_name, type, extension, size, created }`. Open `source_url` to view the file |
 
 ## Cancel Credit Note
 
