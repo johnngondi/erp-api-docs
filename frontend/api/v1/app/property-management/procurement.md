@@ -6,6 +6,13 @@ Base prefix:
 
 `/api/v1/app/{company}/property-management/procurement`
 
+## Dates
+
+Quote, LPO and site visit `delivery_at`, and a purchase item's `next_update_due`, come back with `raw` as a **plain date**, `"2026-10-01"` (row 142). They used to be UTC
+timestamps - `"2026-09-30T21:00:00.000000Z"` for 1 Oct in Nairobi - and a form that sent `raw` back
+saved the day before. The server now reads any date it is sent as the day it means in
+Nairobi, but send `YYYY-MM-DD`.
+
 ## Procurement Requests
 
 Endpoints:
@@ -129,14 +136,52 @@ approves:
   `is_computer_recommended` marks the system's pick. The system sets it once, and nothing a
   person does changes it, not even an override. `is_selected` marks the current pick, which is
   the system's until someone overrides it. Preselect `is_selected`.
-- Each option in `meta.options` carries `is_computer_recommended`, which is set when the step is
-  first opened and is just as permanent, and `is_selected`, which is set once the step approves.
-  Before then, preselect `is_computer_recommended`.
+- Each option in `meta.options` carries `is_computer_recommended` and `is_selected`, which is set
+  once the step approves. Before then, preselect `is_computer_recommended`. Unlike a quote's flag,
+  an option's system pick is worked out again while nothing is selected and the prices move (see
+  [Price options follow the catalogue](#price-options-follow-the-catalogue)); no person changes it.
 
 Send the chosen id as `selected_option` with `status=approved`. If you leave it out on the first
 pass, the system's pick stands. If you pick anything other than the system's pick, you must send a
 `comment` giving the reason, or the request returns **422** keyed on `comment`. An id from another
 request returns **422** keyed on `selected_option`.
+
+### Price options follow the catalogue
+
+The price options of a `purchase` request are not a snapshot. While the request's
+`handle_procurement` step is current and `pending`, they are brought back in line with the purchase
+item prices:
+
+- on **every** `GET /requests/{procurementRequest}/steps/{step}` by an actor of that step, including
+  after a later step sent the request back;
+- when a price changes (`PUT .../purchase-items/{item}/prices/{price}`);
+- when the item's `vendors`, `currency_id` or regulated `base_price` changes
+  (`PUT .../purchase-items/{item}`);
+- when an operator runs `procurement:recompute-purchase-options` (see
+  [Maintenance commands](#maintenance-commands)).
+
+There is one option per (purchase item, supplier) priced at the request's property, or at any
+property when the item has no price there. A reconcile does three things:
+
+| Case | What happens |
+|---|---|
+| The pair still has a price | The option keeps its `id`. Quantity (from the request item), unit price, amount, currency (the item's), title (the supplier's name) and `total` are updated if they moved |
+| A pair has no option yet (a supplier was added) | A new option is created |
+| An option's pair has no price any more (the supplier was removed, or the item left the request) | The option and its item are deleted |
+
+Option ids are stable for pairs that did not change, so a form holding an id can keep it. Refetch
+the step before approving if the catalogue may have moved.
+
+**The system's pick.** While no option has `is_selected=true` (the step has not approved yet), the
+system's pick is worked out again whenever the options change: `is_computer_recommended` moves to the
+cheapest option as it now stands (ties to the supplier with the fewest purchase LPOs). Once the step
+has approved and a later step sent the request back, the selected option and the system's pick both
+stay where they are; only totals move. "Permanent" means no person changes the system's pick, not
+that it is never worked out again.
+
+**A removed supplier.** If the removed supplier's option was the selected one, the request has no
+selection any more and the system picks again among the remaining options. The step must choose
+again when it approves; a `selected_option` other than the new system pick still needs a `comment`.
 
 ### Pending tasks on a request
 
@@ -1099,7 +1144,79 @@ Purchase item price update payload:
 
 | Field | Required | Type |
 |---|---|---|
-| `price` | Yes | integer |
+| `price` | Yes | number |
+
+- Success response message: `Purchase Item Price updated successfully.`
+- Error message (server error): `Error updating Purchase Item Price`
+
+### Purchase item prices
+
+A purchase item has **one price row per (item, supplier, property)**. The database enforces it with
+a unique key on (`purchase_item_id`, `vendor_id`, `facility_id`), so a supplier can never appear
+twice at a property, and never twice as an option on a purchase request.
+
+| Behaviour | Result |
+|---|---|
+| A supplier is added to `vendors` | A row is created for them at every active property, priced at the item's `base_price` (`0` when none) in the item's currency |
+| A supplier stays in `vendors` | Their rows and prices are left alone; sending the same list again creates nothing |
+| A supplier is removed from `vendors` | Their rows are deleted **at every property**, and their option disappears from purchase requests still waiting on the procurement step |
+| `vendors: []` | Every price row of the item is deleted |
+| `vendors` omitted on update | Suppliers and prices are left untouched |
+
+`vendors` is the **complete list**, not an addition, the same as `uploads` on contracts.
+
+`price` is a number in currency units (up to 5 decimals); the response returns it as a decimal
+string, e.g. `"82.50000"`. A regulated item refuses a price above its `base_price` with `422` on the
+`price` key.
+
+### Maintenance commands
+
+#### Removing duplicate price rows
+
+Price rows created before the unique key existed could repeat (item, supplier, property). The
+migration that adds the key removes the duplicates itself; the command below repeats that, and
+also repairs rows stamped with the wrong company and lists rows of suppliers no longer on the item.
+
+```
+php artisan purchase-items:dedupe-prices --dry-run                  # list everything, change nothing
+php artisan purchase-items:dedupe-prices                            # dedupe and restamp
+php artisan purchase-items:dedupe-prices --company=3                # one company's items
+php artisan purchase-items:dedupe-prices --dry-run --purge-orphans  # list the orphans that would go
+php artisan purchase-items:dedupe-prices --purge-orphans            # also delete the orphans
+```
+
+- **Duplicates.** A group keeps the row with the latest `updated_at` (ties to the highest id, a row
+  without `updated_at` losing to any dated row) and deletes the rest. The kept row is the one
+  touched last, not the cheapest; the *Prices differ* column flags groups whose rows disagreed.
+- **Restamp.** A row whose `company_id` is empty or differs from its item's gets the item's
+  company, so it shows up under the company that owns the item.
+- **Orphans.** A row whose supplier is not in the item's `vendors` list is always listed, and is
+  deleted only with `--purge-orphans`. Prices imported per property and supplier lists imported
+  from supplier links were loaded separately, so read the dry run before purging: a purge deletes
+  real prices if a supplier is missing from `vendors` by mistake.
+- `--company` limits every phase to the purchase items of that company (by the item's company, not
+  the price row's). Each phase runs in its own transaction, and a second run reports nothing.
+
+#### Recomputing purchase price options
+
+Brings the price options of every purchase request whose `handle_procurement` step is current and
+`pending` back in line with the purchase item prices, the same reconcile the step fetch runs (see
+[Price options follow the catalogue](#price-options-follow-the-catalogue)). Use it after prices were
+changed outside the app, or to refresh options built before options followed the catalogue.
+
+```
+php artisan procurement:recompute-purchase-options --dry-run              # list what would change, write nothing
+php artisan procurement:recompute-purchase-options                        # every pending purchase request
+php artisan procurement:recompute-purchase-options --request=12 --request=15  # only these requests
+php artisan procurement:recompute-purchase-options --company=3            # one company's requests
+```
+
+- Prints a table of `Request | Property | Options before | Added | Updated | Removed | Pick`, then
+  totals. `Pick` is `rerun` (no option selected and the options changed, so the system picked
+  again), `kept` (an option is selected, or nothing changed), or `none` (no options).
+- Each request is reconciled in its own transaction; a dry run rolls each one back.
+- A `--request` id that is not a purchase request waiting on its procurement step is listed as
+  skipped. Requests whose step has moved on are never touched.
 
 ## Errors
 
