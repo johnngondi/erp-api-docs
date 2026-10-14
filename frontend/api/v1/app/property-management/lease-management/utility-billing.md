@@ -518,6 +518,33 @@ still created and a warning is returned.
 }
 ```
 
+### Splitting invoices billed before per-meter lines
+
+Invoices raised before lines were written per meter hold **one** summed line for a lease on
+several meters, linked to the first meter's readings only. The command below splits them in
+place; the invoice's amount, tax, total, paid and balance do not move, only its lines change.
+
+```
+php artisan utility-billing:split-merged-lines --dry-run        # list what would be split
+php artisan utility-billing:split-merged-lines                  # split
+php artisan utility-billing:split-merged-lines --company=3      # one company
+php artisan utility-billing:split-merged-lines --invoice=9001 --invoice=9002
+php artisan utility-billing:split-merged-lines --include-signed # also invoices with a CU number
+```
+
+- A candidate is a utility line whose linked reading is billed and whose lease has other
+  meters for the same utility with readings stamped `billed_at` in the same run and linked to
+  no line. Cancelled and rejected invoices are skipped; invoices carrying a CU (eTIMS) invoice
+  number are skipped unless `--include-signed` is given.
+- The original line keeps its meter and is renamed to the per-meter format; each other meter's
+  reading becomes a new line on the same component, cost and tax, linked to its own previous
+  (or initial) and current readings.
+- Quantities are the meters' own consumption when they add up to the line (an
+  individual-meter lease); otherwise they are shared in proportion (a shared meter billed the
+  lease only its share) and the row is marked `proportional`. Money follows the quantities
+  with the last line absorbing rounding, and the run is rolled back if any sum would change.
+- Running it again is a no-op: readings already linked to a line are never split again.
+
 ## Frontend Error Handling
 
 Apply shared rules in `docs/frontend/app/README.md`.
