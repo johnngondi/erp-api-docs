@@ -994,6 +994,18 @@ top padding becomes that image's bottom plus a small gap. Every other image is c
 text width and keeps its shape. The editor sets these attributes; nothing on the API side reads
 them beyond writing the offset as an inline position.
 
+**Headers and footers.** A repeating header and footer are part of the content too, written by
+the editor ahead of the body as `<header data-loo-header>…</header>` and `<footer
+data-loo-footer>…</footer>` (either, both or neither, always first). Each carries
+`data-loo-height`, the story's laid-out height in points, and `data-loo-distance`, its distance
+from the page edge in points (the editor's default is 36). Inside, the same markup as the body:
+paragraphs, runs with inline styles, tables and `data:` images; a page-number field is `<span
+data-loo-field="page">`, `numpages` or `sectionpages`. Tags in a story are filled in like tags in
+the body. The HTML export shows each story once, around the body. The PDF prints them on every
+page as Chrome's own page header and footer, with the page fields filled by the print engine, and
+takes a printer margin on that side of distance + height + a small gap in place of the page's
+padding. The API stores the content as sent; nothing reads the stories beyond the renderer.
+
 ### Send
 
 ```json
