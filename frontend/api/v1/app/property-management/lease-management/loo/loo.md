@@ -389,10 +389,42 @@ The canonical example, hung on the CEO step:
 | `approve`, the last step | → `approved`, and `LooApprovedEvent` fires |
 | `review` | stays `pending_approval`; the previous step is re-opened |
 | `reject` | → `rejected` (final) |
+| `php artisan loos:reset-to-draft` | → `draft`, the chain deleted (see [Resetting offers to draft](#resetting-offers-to-draft)) |
 
 A LOO **does not** enter a chain when it is created. It is drafted first and
 submitted deliberately — `shouldAutoInitiateApproval()` returns `false`, and
 `POST loos/{loo}/submit` calls `ApprovalService::initiate()`.
+
+No endpoint moves an offer back to `draft`. The console command below is the only
+route, and it exists for the one-off case of offers that went round their chain before
+anyone had prepared them properly.
+
+#### Resetting offers to draft
+
+```
+php artisan loos:reset-to-draft --dry-run
+php artisan loos:reset-to-draft
+php artisan loos:reset-to-draft --company=3 --loo=41 --loo=42
+```
+
+Puts every offer that is `pending_approval`, `approved`, `sent` or `accepted` and has
+**not** been onboarded into a lease (`promoted_lease_id` null) back to `draft`, so it can
+be prepared again and resubmitted. For each one it:
+
+- deletes its approval steps, every attempt — the pending tasks raised for them go with
+  them, and the comment threads lose their step link but stay readable as history;
+- deletes the approval notifications filed against the offer;
+- clears what delivery and signature wrote — `sent_at`, `sent_to`, `sent_by_id`,
+  `document_upload_id`, `responded_at`, `signed_by_id`, `signatory_name`,
+  `signature_upload_id`, `decline_reason` — so a sent or accepted offer leaves the tenant
+  portal until it is approved and sent again. The filed documents themselves are kept;
+- writes `status = draft` through the model, so the activity log records the change with
+  no causer, and clears the stored `{{approval_signatures}}` value.
+
+Onboarded offers and spent ones (`rejected`, `declined`, `expired`, `withdrawn`) are never
+touched. `--dry-run` lists what would be reset and writes nothing; `--loo` and
+`--company` narrow the run. The next `submit` opens the chain at attempt 1 again, so any
+comment threads from the earlier run sit beside the new one under the same attempt number.
 
 Rejection is **terminal**: the LOO moves to `rejected` and stays there. It can be
 viewed and deleted, and nothing else — `update`, `submit`, `manageSpaces`,
@@ -615,7 +647,7 @@ property and space type.
 |---|---|---|
 | `GET` | `loos` | `view-loo` |
 | `GET` | `loos/{loo}` | `view-loo` |
-| `PUT`/`PATCH` | `loos/{loo}` | `update-loo`, or an approval step's edit grant |
+| `PUT`/`PATCH` | `loos/{loo}` | `update-loo`, the person who generated the offer, or an approval step's edit grant |
 | `DELETE` | `loos/{loo}` | `delete-loo` |
 | `POST` | `loos/{loo}/submit` | `update-loo` |
 | `GET` | `loos/{loo}/export` | `export-loo` |
@@ -725,6 +757,19 @@ whenever a fee moves (`legal_fees`, `disbursement_fee`, `stamp_duty_fee` or
 Only while `status` is `draft` or `pending_approval`. An offer in a tenant's
 hands is fixed, and so is a `rejected` one.
 
+**Who may edit.** Anyone holding `update-loo`; the person who generated the offer
+(`generated_by_id`), whether or not they hold it; whoever the offer was
+[sent back](#approval) to for changes; and the actor of the current approval step when
+that step lends an [edit grant](../../../access-management/approval-templates.md).
+
+The author's right stands while the offer is in its chain, deliberately: an offer is
+prepared by one person and signed off by others, and the preparer correcting a figure
+an approver has queried should not need a step's grant to do it. Their edit does not
+restart the chain — steps already approved stay approved — but a change to a material
+field tells the chain's initiator and everyone who has already acted, exactly as an
+approver's own edit does. The author's right covers the fields, clauses and tag values
+only; granting and re-pricing spaces stays on `update-loo`.
+
 #### What this viewer may edit: `editable_fields`
 
 The detail (`GET loos/{loo}`, and every response that returns the whole offer) carries
@@ -732,7 +777,7 @@ The detail (`GET loos/{loo}`, and every response that returns the whole offer) c
 
 | Value | When |
 |---|---|
-| `null` | Every field: they hold `update-loo`; or the offer was [sent back](#approval) to them for changes; or the approval step waiting on them lends an edit grant that names no fields |
+| `null` | Every field: they hold `update-loo`; or they generated the offer; or the offer was [sent back](#approval) to them for changes; or the approval step waiting on them lends an edit grant that names no fields |
 | `["rent_deposit_months", ...]` | Only these: the step waiting on them lends an edit grant limited to these fields (the names from the step's `editable_fields`, materiality dropped) |
 | `[]` | Nothing |
 
@@ -994,6 +1039,18 @@ top padding becomes that image's bottom plus a small gap. Every other image is c
 text width and keeps its shape. The editor sets these attributes; nothing on the API side reads
 them beyond writing the offset as an inline position.
 
+**Headers and footers.** A repeating header and footer are part of the content too, written by
+the editor ahead of the body as `<header data-loo-header>…</header>` and `<footer
+data-loo-footer>…</footer>` (either, both or neither, always first). Each carries
+`data-loo-height`, the story's laid-out height in points, and `data-loo-distance`, its distance
+from the page edge in points (the editor's default is 36). Inside, the same markup as the body:
+paragraphs, runs with inline styles, tables and `data:` images; a page-number field is `<span
+data-loo-field="page">`, `numpages` or `sectionpages`. Tags in a story are filled in like tags in
+the body. The HTML export shows each story once, around the body. The PDF prints them on every
+page as Chrome's own page header and footer, with the page fields filled by the print engine, and
+takes a printer margin on that side of distance + height + a small gap in place of the page's
+padding. The API stores the content as sent; nothing reads the stories beyond the renderer.
+
 ### Send
 
 ```json
@@ -1247,7 +1304,7 @@ offer is drafted from a source record rather than posted into existence.
 |---|---|---|
 | `view-loo` | app | Reading offers |
 | `generate-loo` | app | Drafting one from a source record |
-| `update-loo` | app | Editing clauses, fields and resolved tags; **granting, withdrawing and re-pricing spaces**; submitting for approval |
+| `update-loo` | app | Editing clauses, fields and resolved tags; **granting, withdrawing and re-pricing spaces**; submitting for approval. The person who generated an offer edits its clauses, fields and tags without it while the offer is `draft` or `pending_approval` (see [Editing](#editing)) |
 | `delete-loo` | app | Deleting a draft, a pending or a rejected offer |
 | `rebase-loo` | app | [Rebasing](#rebase) an offer: deleting it and putting its application back to `approved` |
 | `return-lease-application` | app | With `rebase-loo`, rebasing to the reviewer. On its own, [returning an approved application](../lease-applications.md#return-an-approved-application) |
@@ -1289,6 +1346,8 @@ permission is ever consulted.
 `update-loo` is also the name the approval framework's edit grant checks
 (`Approvable::approvalEditBypassPermission()` derives `update-{model}`). Promotion
 reuses the existing `create-lease`.
+The author's right is not a permission either: `LooPolicy::update()` and the field guard
+both recognise `generated_by_id` directly, so no name was added to `permissions.json`.
 
 > **Upgrading an existing install.** `manage-loo-template` and `manage-loo-spaces`
 > are gone, and `sign-loo` is new. Run

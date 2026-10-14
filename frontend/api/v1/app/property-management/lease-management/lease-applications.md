@@ -451,7 +451,7 @@ approval could never be set in time to price one.
 
 | Field | Required | Type | Notes |
 |---|---|---|---|
-| `lease_component_id` | Yes | integer | One schedule per component — a second is refused with a 422 |
+| `lease_component_id` | Yes | integer | A component at least one of the application's allocated units is priced on — anything else is refused with a 422 (see below). Several schedules on one component are fine as long as their periods do not overlap |
 | `next_due` | Yes | date (`YYYY-MM-DD`) | The **first escalation date** — the only date; there is no start date |
 | `cycle` | Yes | `days` \| `weeks` \| `months` \| `years` | |
 | `period` | Yes | integer ≥ 1 | How many cycles between escalations |
@@ -460,6 +460,13 @@ approval could never be set in time to price one.
 
 `start_at` is no longer accepted or returned; one sent anyway is ignored. Overlap between two
 schedules on a component is judged on `next_due` → `end_at`, and refused under `next_due`.
+
+**Only a component the application has on a unit** (row 145). The allocated units, and the
+components each is priced on, are what the lease is built from, so a schedule on any other
+component would reach the lease and raise nothing. It is refused under `lease_component_id`:
+`"This application has no unit with Parking."` An application with no units allocated yet takes no
+schedules. On an edit the check runs only when `lease_component_id` changes, so a schedule whose
+unit was taken off the application can still have its rate and dates corrected.
 
 `next_due` being the first escalation date is the thing to get right: a schedule
 anchored on the tenancy's own start date does not escalate the first period — it walks
@@ -790,12 +797,35 @@ someone else's guarantor is rejected.
 ## The offers on an application
 
 Every row of the staff list, and the single application, carries the offers prepared from
-it under `loos` — enough to link to each one and show where it stands:
+it under `loos` — enough to link to each one, show where it stands, and draw the
+application's progress (new application → approved for offer preparation → offer → lease):
 
 ```json
 "loos": [
-  { "id": 31, "our_ref": "LOO/2026/002", "status": { "value": "sent", "color": "info" } },
-  { "id": 28, "our_ref": "LOO/2026/001", "status": { "value": "declined", "color": "danger" } }
+  {
+    "id": 31,
+    "our_ref": "LOO/2026/002",
+    "type": { "value": "new lease", "color": "primary" },
+    "status": { "value": "pending_approval", "color": "warning" },
+    "generated_by_id": 7,
+    "sent_at": null,
+    "responded_at": null,
+    "promoted_lease_id": null,
+    "promoted_at": null,
+    "pending_approval_from": [ { "id": 12, "name": "Jane Mwangi" } ]
+  },
+  {
+    "id": 28,
+    "our_ref": "LOO/2026/001",
+    "type": { "value": "new lease", "color": "primary" },
+    "status": { "value": "declined", "color": "danger" },
+    "generated_by_id": 7,
+    "sent_at": { "raw": "2026-09-02T10:14:00.000000Z", "formatted": "02 Sep, 2026", "diff": "1 month ago" },
+    "responded_at": { "raw": "2026-09-05T08:30:00.000000Z", "formatted": "05 Sep, 2026", "diff": "1 month ago" },
+    "promoted_lease_id": null,
+    "promoted_at": null,
+    "pending_approval_from": []
+  }
 ]
 ```
 
@@ -804,11 +834,21 @@ needed, so a list page costs one request rather than one per row.
 
 It is a list because an application can hold several: a declined or withdrawn offer stays
 on the record and another is prepared beside it. Which one counts as current is yours to
-decide — the API does not pick, so changing your mind is not an API change.
+decide — the API does not pick, so changing your mind is not an API change. The UI takes
+the newest offer that is not `withdrawn`.
 
-Three keys and no more, on purpose. A page holds 25 rows, each able to hold several
-offers, and the full offer resource carries clause text, tag values and spaces. Fetch
-`loos/{loo}` when the user opens one.
+Where each offer stands, for the progress steps:
+
+| Key | Meaning |
+|---|---|
+| `status` | The offer's own status, the same enum as `loos/{loo}` |
+| `pending_approval_from` | Who the chain is waiting on while `status` is `pending_approval`: the current step's actors as `{id, name}`, or `[{ "id": null, "name": "<role name>" }]` when the step has not been put in front of anyone yet. `[]` in every other status. **On `GET .../{application}` only** — the list does not load the chains, and the key is `[]` there |
+| `sent_at`, `responded_at` | When the offer went to the tenant and when they answered; date triples, or `null` |
+| `promoted_lease_id`, `promoted_at` | The lease the offer was onboarded into, which is the "lease generated" step — link to `leases/{lease}` with it. `lease_id` on the application itself is a different thing: the lease a **renewal** application renews |
+
+Still a summary, on purpose. A page holds 25 rows, each able to hold several offers, and
+the full offer resource carries clause text, tag values and spaces. Fetch `loos/{loo}` when
+the user opens one.
 
 Whether to show the action at all is the plain `view-loo` permission, read once from
 `/me/permissions`. There is no per-offer flag and none is needed: reading an offer needs
@@ -819,7 +859,9 @@ already satisfied.
 
 **Staff only.** The field is absent from the applicant surface entirely, whatever an
 offer's status — an applicant may read an offer only once it has cleared approval, and
-anything short of that is internal drafting.
+anything short of that is internal drafting. The applicant's own progress view reads
+`GET /api/v1/tenant/loos` instead, which returns only offers that have cleared approval,
+and takes the lease step from `promoted_lease_id` on those.
 
 ## Documents and guarantors, from the staff side
 
