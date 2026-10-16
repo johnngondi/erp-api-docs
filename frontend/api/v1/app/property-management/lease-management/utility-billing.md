@@ -545,6 +545,40 @@ php artisan utility-billing:split-merged-lines --include-signed # also invoices 
   with the last line absorbing rounding, and the run is rolled back if any sum would change.
 - Running it again is a no-op: readings already linked to a line are never split again.
 
+### Billing readings a run left behind (lease not active at the time)
+
+The fetch step only lists **active** leases, so a meter read while its lease was still pending
+(or suspended) keeps an unbilled reading after the run. Once the lease is active, the command
+below bills those readings without waiting for the next period's run.
+
+```
+php artisan utility-billing:bill-unbilled-readings --dry-run             # list what would be billed
+php artisan utility-billing:bill-unbilled-readings                       # bill everything found
+php artisan utility-billing:bill-unbilled-readings --facility=12         # one property
+php artisan utility-billing:bill-unbilled-readings --utility=4           # one utility (lease component id)
+php artisan utility-billing:bill-unbilled-readings --company=3           # one company
+php artisan utility-billing:bill-unbilled-readings --lease=901 --lease=902
+php artisan utility-billing:bill-unbilled-readings --rate=25 --tax=2     # price with this rate and tax id
+php artisan utility-billing:bill-unbilled-readings --notes="Catch-up"    # prefixed to the invoice notes
+```
+
+- A candidate is a meter on at least one **active** lease whose newest reading is unbilled.
+  Candidates are grouped per property + utility and each group is billed like a normal run of
+  that utility: shared meters split by leased area, one invoice line per meter linked to its own
+  readings, the first bill priced from the meter's initial reading. The submission check is
+  off, since `utility-meters:reset-submissions` may already have cleared `submitted_at`.
+- The per-unit rate and tax are taken from the **latest utility invoice line** of the same
+  property + utility (cancelled and rejected invoices ignored), i.e. the run the reading missed
+  or the closest one to it. `--rate` and `--tax` replace either or both; a property with no
+  earlier run is skipped unless both are given.
+- No provider bill is raised: the provider was billed by the run the reading missed. No
+  indirect-consumption line is written either.
+- A lease already billed inside the current month is skipped (same rule as the processor), and
+  a meter whose unbilled reading is **older** than a billed one is left alone: that consumption
+  was already charged from the initial (or an earlier billed) reading up to the later one.
+- Each billed reading is stamped `billed_at` and the lease `utility_billed_at`, so a second
+  run finds nothing and the next regular run starts from the reading just billed.
+
 ## Frontend Error Handling
 
 Apply shared rules in `docs/frontend/app/README.md`.
