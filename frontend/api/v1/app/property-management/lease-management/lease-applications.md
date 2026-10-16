@@ -76,6 +76,7 @@ Supported query params:
   - `filter[created_at]`
 - Includes: `include=guarantors`, `documents`, `documents.upload`, `facility`, `residentialUnitTypes`, `lease`
 - Sort: `sort=id,created_at,application_submitted_at,proposed_start_date,reviewed_at`
+  - Default: **newest first** (`-created_at`, then `-id`), on the staff and the tenant list alike. A `sort=` you send replaces it.
 - Pagination: `per_page`, `page`
 
 ## Invite an applicant
@@ -530,6 +531,15 @@ the database schema, so the set can grow without a migration:
 | `vat_exemption` | VAT exemption certificate |
 | `financial_statement` | Financial statement — feeds the income-to-rent score |
 | `other` | Anything else the applicant attaches |
+| `cr12` | CR12 (company directors and shareholding) |
+| `business_permit` | Single business permit |
+| `director_id` | ID of the signing director / contact person |
+| `combined` | One scan holding all the documents at once. Split into the other slots automatically; see [the combined scan](lease-application-links.md#the-combined-scan) |
+
+The last four are asked for on applications started by staff and finished through a signed link.
+See [Lease applications through a signed link](lease-application-links.md). None of them is
+pass/fail verified. A guarantor also holds `guarantor_form` (the signed guarantor form), returned
+as `guarantor_form_upload` on the guarantor.
 
 ### Reading documents
 
@@ -579,10 +589,20 @@ server-side and is never returned by the API — clients get the outcome
 `financial_statement` is not pass/fail verified. It feeds the income-to-rent
 score rather than a verification, so its `status` stays `pending`.
 
-> **Current behaviour:** automatic verification is not wired up yet, so every
-> document stays `pending` and `reason`/`verified_at` stay `null`. Build against
-> all three statuses — `verified` and `failed` start appearing once the
-> verification pipeline lands, with no API change.
+How each type is verified, once the upload has been read:
+
+| Type | Verified when |
+|---|---|
+| `id` | The name on it was read and matches the application (the applicant's name, or the guarantor's), the ID number matches when one was declared, and it has not expired. Checked by the AI read alone: iTax holds no ID register, and there is no IPRS check. |
+| `id` of a **business** applicant | Read as the company's registration certificate (certificate of incorporation or business registration). Verified when the company name was read and matches the application's business name, and the registration number matches when one was declared (`registration_type` `business_license`). Differences in punctuation, `&`/"and", and Ltd/Limited or Co/Company are ignored. |
+| `tax_pin`, `tcc`, `vat_exemption` | The same local checks pass **and** iTax confirms it. |
+
+Any failed check is `failed` with a `reason` saying which. A tax document stays
+`pending` while iTax is not connected (no environment has it yet), and is
+verified once it is - nothing for the applicant to do.
+
+For a business applicant, `id` is the registration certificate. A director's personal
+ID goes in `director_id`, which isn't pass/fail verified.
 
 ### Submit a Document
 
@@ -1165,6 +1185,31 @@ The two settings differ in scope:
 
 If nobody qualifies, the task falls back to everyone holding any role on the property.
 The applicant never gets the task.
+
+#### Putting the review with the manager alone
+
+```bash
+php artisan lease-applications:reassign-review-tasks --dry-run
+php artisan lease-applications:reassign-review-tasks
+php artisan lease-applications:reassign-review-tasks --company=3 --application=41 --application=42
+```
+
+A review task raised before the reviewer role was set, or while nobody on the property held
+it, sits with everyone who has any role on the property. This command gives the review of
+every `pending` application to whoever holds the **Lease Application Reviewer Role** on its
+property today and takes it off everyone else. A task already with that person keeps its row.
+The notices that follow a review (a replaced document, a submitted staff-started application)
+already go to the same role holders, so once the task is with the manager, so are they.
+
+- A [returned](#return-an-approved-application) application stays with the person who
+  approved it; the role holder steps in only when that account is gone.
+- It never falls back. An application on a property where nobody holds the role, or whose
+  company has no reviewer role set, is listed and left as it is: name the holder on the
+  property and run it again. The nightly `workflow:reassign-open-work` then agrees with it.
+- An application started by staff and still with the applicant is skipped: submitting it
+  raises the task for the right people.
+- `--dry-run` lists what would move and writes nothing. `--company=` and the repeatable
+  `--application=` narrow it.
 
 The setting's options list follows the scope: the reviewer setting offers
 `access-management/roles?filter[enforce_on_facility]=1`, and the LOO generation and Internal
