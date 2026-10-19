@@ -185,22 +185,22 @@ component.
 
 ### 1.3 `signatories` (LPO only)
 
-Not a fields/table hybrid — it renders N signature boxes computed from
-`payload.approval_chain[]` (§2.1) at render time, driven by one config key:
+Not a fields/table hybrid - it renders one signature box per entry of
+`payload.approval_chain[]` (§2.1). Every entry is an approver whose step is
+marked `signs_document_signature` (on the procurement request step template, or
+the approval template step for a direct LPO); the creator is never in it. An
+empty chain prints nothing.
 
 | Config | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `signatory_count` | number, 1–8 | 3 | How many signatories to show |
+| `signatory_count` | number, 1–8 | 3 | A cap: the **last** N entries print, in chain order |
 | `show_date` | boolean | true | Show the date under each name |
-| `align` | enum | `left` | Box alignment |
 
-The selection is **Created / Reviewed / Approved** — position 1 is always the
-procurement request's creator; for `signatory_count ≥ 2` the last approval step
-is labeled Approved; for `≥ 3` the second-to-last is labeled Reviewed; beyond
-that, extra slots are appended (still labeled Approved) pulling from earlier in
-the chain. A short chain renders fewer than `signatory_count` — it never pads
-with blank boxes. There's no field list to configure here; the algorithm is
-fixed server-side.
+Each box: the signature image (`entry.signature`, a PNG data URL) or a blank
+signing line when it is null, the name in bold, `entry.role`, then the date.
+Boxes are spread across the block: 1 → right; 2 → left and right; 3+ → first
+left, last right, the rest centred. The Created/Reviewed/Approved labels and the
+`align` option are gone.
 
 ### 1.4 `document_title` (all types)
 
@@ -397,7 +397,7 @@ mobile_money[]: { component, bank_name, paybill_number, account_number }  # invo
 payment_account:{ bank_name, branch, account_name, account_number }    # receipt
 transactions[]: { transaction_date, transaction_number, method, amount }  # receipt
 lpo:            { title }                                              # lpo
-approval_chain[]: { name, date }                                       # lpo — raw, see §1.3
+approval_chain[]: { name, role, date, signature }                     # lpo — signers only, see §1.3
 signoff:        { prepared_by, prepared_at }                           # voucher, remittance
 withholding_columns[]: [ "WHT Professional", … ]                       # voucher — see §1.6
 summary:        { is_advance, total_collections, total_expenses,
@@ -553,7 +553,7 @@ Block-specific extras you'll see in `config_schema`:
 - `fiscal_qr`: `size_mm`, `align`, `caption`, `show_cu_invoice_number`, `show_cu_serial_number`
 - `divider_line`: `orientation` (`horizontal|vertical`), `line_color`, `line_width`, `margin_top`, `margin_bottom`
 - `free_text`: `content`
-- `signatories`: `signatory_count`, `show_date`, `align` (§1.3)
+- `signatories`: `signatory_count`, `show_date` (§1.3)
 - `component_allocations`: `show_total_row` (default true), `total_label` (default "Total"), and `show_row_numbers` defaulting to **false** here
 - **Every table-presentation block** (`invoice_items`, `credit_note_items`,
   `lpo_items`, `tax_summary`, `payments`, `invoice_ageing`, `payment_details`,

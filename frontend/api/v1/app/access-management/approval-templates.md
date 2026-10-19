@@ -50,6 +50,7 @@ Create payload table:
 | `steps[].can_edit_approvable` | boolean | No | `false` | The newer name for `allowed_to_edit`; send either. When both are sent, this one wins |
 | `steps[].editable_fields` | array[object \| string] \| null | No | `null` | Which fields that grant covers, each `{ "field": "notes", "is_material": false }` (a bare `"notes"` still works) — see [The edit grant](#the-edit-grant) |
 | `steps[].is_checkpoint` | boolean | No | `false` | A later step's push-back lands here — see [Checkpoints](#checkpoints) |
+| `steps[].signs_document_signature` | boolean | No | `false` | This step's approver signs the printed document — see [Document signatures](#document-signatures) |
 | `always_requires_approval` | boolean | No | `false` | If `true`, bypass roles are ignored |
 | `bypass_role_ids` | array[int] | No | `[]` | Roles allowed to bypass workflow |
 | `post_approval_event` | string \| null | No | `null` | FQCN event class; must exist |
@@ -72,6 +73,7 @@ Example request:
     {
       "step_order": 2,
       "role_id": 22,
+      "signs_document_signature": true,
       "can_edit_approvable": true,
       "editable_fields": [
         { "field": "due_at", "is_material": true },
@@ -91,6 +93,7 @@ Each step in the response (on the template and on a resource's `approval_steps`)
 | `editable_fields` | Always objects `{ field, is_material }`, whatever shape was sent; `null` when no list was given |
 | `editable_field_names` | Just the names; `null` means **every field** (no list, `[]`, or `*`) |
 | `is_checkpoint` | Whether a later step's push-back lands here |
+| `signs_document_signature` | Whether this step's approver signs the printed document |
 
 ## Update Template
 
@@ -255,6 +258,35 @@ kept in the activity log.
 
 The flag is copied onto each `approval_steps` row when the chain starts, like the
 edit grant, so changing the template does not move a chain already in flight.
+
+## Document signatures
+
+`steps[].signs_document_signature` marks the steps whose approver signs the printed document.
+Only marked steps sign: a chain with no marked step prints no approval signatures at all, and the
+document's creator never signs. Where it is read:
+
+| Document | Where the signatures print |
+| --- | --- |
+| Letter of Offer (`App\Models\Loo`) | `{{approval_signatures}}` — every **approved** marked step of the current attempt, in `step_order` |
+| Direct LPO (`App\Models\FacilityProcurementLpo`) | The LPO `signatories` block and the public LPO page — approved marked steps of the current attempt |
+
+Each signer prints their saved profile signature (or a blank signing line), name and the step's
+role. A workflow LPO (raised from a procurement request) reads the same flag off the
+[procurement request step templates](../property-management/settings.md#request-step-templates-inside-a-group)
+instead.
+
+Like the checkpoint, the flag is copied onto each `approval_steps` row when the chain starts, so
+changing the template does not move a chain already in flight. Chains started before the flag
+existed, or before a template was changed, are brought into line by:
+
+```bash
+php artisan approvals:stamp-signing-steps [--company=ID] [--dry-run]
+```
+
+It copies the flag from the current templates onto existing steps (approval steps matched on
+template, `step_order` and role; procurement request steps on their template group and title),
+both ways, and re-resolves `{{approval_signatures}}` on every offer it touched that has not been
+sent (a hand-typed value stands). Printed LPOs are built live, so they follow on their next print.
 
 ## Attempts
 

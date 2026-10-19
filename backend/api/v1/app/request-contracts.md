@@ -487,6 +487,7 @@ Class: `App\Data\ProcurementRequestStepTemplateData`
 | `description` | No | `Spatie\LaravelData\Optional|string|null` | - | - |
 | `select_preferred_vendor` | No | `Spatie\LaravelData\Optional|bool|null` | - | - |
 | `handle_procurement` | No | `Spatie\LaravelData\Optional|bool|null` | - | - |
+| `signs_document_signature` | No | `Spatie\LaravelData\Optional|bool|null` | - | - |
 
 ## ProcurementRequestStepTemplateGroupData
 

@@ -161,7 +161,7 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 
 | Tag | Name | Format | Description | Resolved from |
 |---|---|---|---|---|
-| `{{approval_signatures}}` | Approval Signatures | `html` | The last two approvals of the offer's current approval chain side by side, the earlier on the left: each approver's signature (or a blank signing line), name and role. Empty until a step is approved, and refreshed as the chain moves. | **Computed.** `ApprovalSignaturesTable` off `Loo::approvalSteps()`. See [Approval signatures](#approval-signatures) below. |
+| `{{approval_signatures}}` | Approval Signatures | `html` | The approvals of the steps marked `signs_document_signature`, side by side across the page in chain order: each approver's signature (or a blank signing line), name and role. Empty until a marked step is approved, and refreshed as the chain moves. | **Computed.** `ApprovalSignaturesTable` off `Loo::approvalSteps()`. See [Approval signatures](#approval-signatures) below. |
 
 ## System <sub>`system` · 4 tags</sub>
 
@@ -214,15 +214,26 @@ tenant pays on signing. Rows, in this order:
 
 ## Approval signatures
 
-`{{approval_signatures}}` prints the **last two `approved` steps of the current approval attempt**
-(the highest two `step_order`s) as a full-width table of two cells: the earlier approval on the
-left and the later one on the right. With only one approval it sits in the left cell and the right
-cell is blank. With none, the tag resolves to `null`.
+`{{approval_signatures}}` prints **every `approved` step of the current approval attempt whose
+approval template step is marked `signs_document_signature`**, in `step_order`, as one full-width
+table row with a cell per signer. Unmarked steps never sign, however they voted, and a chain with no
+marked step resolves to `null` - see
+[Document signatures](../../../access-management/approval-templates.md#document-signatures).
+
+The signers are spread across the width, each cell `100 / n`% wide:
+
+| Signers | Layout |
+| --- | --- |
+| 1 | right |
+| 2 | left, right |
+| 3 | left, centre, right |
+| n | first left, last right, the ones between centred |
 
 Each cell holds:
 
 1. the approver's signature, `<img src="data:image/png;base64,…">` about 60px high, when the user
-   (`acted_by_id`) has saved one on their profile; otherwise a blank signing line;
+   (`acted_by_id`) has saved one on their profile; otherwise a blank signing line (an underlined
+   run of spaces, so it follows the cell's alignment);
 2. the approver's name, bold;
 3. the role the step was addressed to (`ApprovalStep.role.name`).
 
