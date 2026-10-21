@@ -11,6 +11,8 @@ definition of one — a vendor asked to upload a jobcard against an LPO holds on
 ## Endpoints
 
 - `GET /api/v1/vendor/pending-tasks`
+- `GET /api/v1/vendor/pending-tasks/resource-types`
+- `GET /api/v1/vendor/pending-tasks/facilities`
 
 ## List my pending tasks
 
@@ -31,6 +33,15 @@ Supported query params:
 - Filters:
   - `filter[user_group_id]` — exact. The portal the task was scoped to; `null` means unscoped.
   - `filter[taskable_type]` — exact. Fully-qualified model class of the row the task hangs off.
+  - `filter[resource_type]` — the record behind the task, by **bare model name**
+    (`FacilityProcurementLpo`, `Loo`, ...). An approval task matches on the record being
+    approved, not on `ApprovalStep`. Several names may be comma-separated. A name the server
+    does not know returns an empty page, not an error. The names on offer come from
+    `resource-types` below.
+  - `filter[facility_id]` — exact. The property the task concerns: the same id as the row's
+    `context.property.id`, stamped when the task is raised. Tasks about no property (a payment
+    voucher, a responsibility transfer) have none and never match. The properties on offer come
+    from `facilities` below.
 - Sorts: `sort=due_at|created_at` (prefix with `-` to reverse). Defaults to newest first.
 - Includes: `include=user`, `include=approvalStep`, `include=taskable`
 - Pagination: `per_page` (defaults to the app's configured page size).
@@ -111,3 +122,44 @@ Tasks are **never** written over HTTP. There is no create, update or delete endp
   leaves a permanent phantom entry in someone's list.
 
 This mirrors the alert contract documented in `docs/frontend/api/v1/app/alerts.md`.
+
+## Kinds of record among my tasks
+
+`GET /api/v1/vendor/pending-tasks/resource-types`
+
+The options of the type filter: each kind of record among the caller's open tasks in this portal,
+once, with how many tasks it has. Same scoping and authorization as the list (caller-scoped, no
+permission). Sorted by label. An approval task counts under the record being approved.
+
+```json
+{
+  "data": [
+    { "value": "FacilityProcurementLpo", "label": "Facility Procurement Lpos", "count": 2 }
+  ]
+}
+```
+
+Send `value` back as `filter[resource_type]`. An empty `data` means no open tasks.
+
+## Properties among my tasks
+
+`GET /api/v1/vendor/pending-tasks/facilities`
+
+The options of the property filter: each property among the caller's open tasks in this portal,
+once, with how many tasks concern it. Same scoping and authorization as the list (caller-scoped,
+no permission).
+Sorted by name. An approval task counts under the property of the record being approved; a task
+about no property is not listed.
+
+```json
+{
+  "data": [
+    { "value": 4, "label": "Kahawa House", "count": 3 },
+    { "value": 9, "label": "Riverside Apartments", "count": 1 }
+  ]
+}
+```
+
+`value` is the facility id and `label` its name.
+
+Send `value` back as `filter[facility_id]`. An empty `data` means no open task concerns a property.
