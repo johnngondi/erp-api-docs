@@ -198,10 +198,13 @@ Treat `5xx` as backend/system failure:
   - `docs/frontend/app/property-management/facilities/facilities.md`
   - `docs/frontend/app/property-management/facilities/floor_generation.md`
   - `docs/frontend/app/property-management/facilities/budget-settings.md`
+  - `docs/frontend/api/v1/app/billing-addresses.md` (property billing and shipping addresses)
 - Tickets:
   - `docs/frontend/app/property-management/tickets.md`
 - Procurement:
   - `docs/frontend/app/property-management/procurement.md`
+- FRC sanctions list (quick action):
+  - `docs/frontend/app/property-management/frc-sanctions.md`
 - Finance:
   - `docs/frontend/app/property-management/finance.md`
 - Settings:
@@ -287,5 +290,7 @@ All three are readable from every portal, are scoped to the signed-in user, and 
   - `docs/frontend/app/users/tenants.md`
 - Vendors:
   - `docs/frontend/app/users/vendors.md`
+- Billing addresses (tenants, suppliers, landlords and properties):
+  - `docs/frontend/api/v1/app/billing-addresses.md`
 - User group/role/permission docs:
   - See `Access Management Docs` section above.

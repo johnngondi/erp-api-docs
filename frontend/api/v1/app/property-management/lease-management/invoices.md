@@ -14,6 +14,7 @@ Base route:
 - `PUT/PATCH /invoices/{invoice}`
 - `PATCH /invoices/{invoice}/cancel`
 - `PATCH /invoices/{invoice}/backdate`: change the invoice's ledger date. See [Change Invoice Date (Backdate)](#change-invoice-date-backdate)
+- `PUT/PATCH /invoices/{invoice}/supporting-document`: attach, replace or remove just the supporting document. See [Supporting document](#supporting-document)
 - `POST /invoices/{invoice}/sign`
 - `POST /invoices/{invoice}/dispute`
 - `DELETE /invoices/{invoice}/dispute`
@@ -178,14 +179,80 @@ List rows and the show payload carry:
   rejection or cancellation releases it. Nothing needs to be done by hand.
 - The invoice still reads `unpaid` / `partially paid` and still appears in
   `filter[status]=unpaid,partially paid`.
-- A new receipt allocation, credit note or reallocation increase on a held invoice is refused
-  (`422`) only when it is more than `available_balance`. When nothing is held, the rules are
-  unchanged.
-- `permissions.pay` and `permissions.issueCreditNote` are `false` only when something is held
-  and nothing is available.
-- In pickers, show the available amount ("200.00 available, 800.00 held by pending
-  documents") and cap the input at it. A pending receipt being edited holds money of its own:
-  its cap on an invoice is `available_balance` plus what it already has there.
+- **Receipts may go above `available_balance`.** A new receipt, an edit of a pending one or a
+  reallocation that puts more on a held invoice than is available is accepted. It overpays the
+  invoice once posted, and the overpaid part carries forward to the lease's next invoice (see
+  [Receipts → Overpaying an invoice](./receipts.md#overpaying-an-invoice)). Documents already
+  awaiting approval still post in full when approved, even onto an invoice that is paid by then.
+- **A credit note raised by a user may not go above `available_balance`** (`422`), because a
+  credit note may never credit more than is billed and unpaid. A credit note already awaiting
+  approval is applied in full when approved, even if receipts have paid the invoice meanwhile;
+  the invoice then goes below zero and carries forward like any overpayment.
+- `permissions.pay` is `false` only once the invoice `balance` is zero or below.
+  `permissions.issueCreditNote` is also `false` when something is held and nothing is available.
+- In receipt pickers, show the available amount ("200.00 available, 800.00 held by pending
+  documents") and **warn** when the input is above it; do not cap it. A pending receipt being
+  edited holds money of its own: its available amount on an invoice is `available_balance` plus
+  what it already has there. In credit-note forms, cap the input at `available_balance`.
+
+### Where the paid amount came from
+
+`GET /invoices/{invoice}` explains `paid` line by line, including money carried over from another
+invoice.
+
+```json
+{
+  "id": 9010,
+  "total": "5000.00000",
+  "paid": "5000.00000",
+  "balance": "0.00000",
+  "payments": [
+    {
+      "id": 3301,
+      "amount": "2000.00000",
+      "receipt": { "id": 2501, "transaction_number": "RCPT-1005" },
+      "carried_from_invoice": { "id": 9001, "total": "5000.00000", "status": { "value": "paid", "color": "success" } },
+      "carried_forward": []
+    },
+    {
+      "id": 3310,
+      "amount": "0.00000",
+      "receipt": { "id": 2600, "transaction_number": "RCPT-1100" },
+      "carried_from_invoice": null,
+      "carried_forward": [
+        { "id": 3320, "amount": "1200.00000", "invoice": { "id": 9022, "total": "5000.00000" } }
+      ]
+    }
+  ],
+  "credit_applications": [
+    {
+      "id": 502,
+      "amount": "3000.00000",
+      "applied_at": { "raw": "2026-11-01T00:00:00Z", "formatted": "01 Nov, 2026", "diff": "now" },
+      "credit_note": { "id": 77, "notes": "Opening balance", "total": "-8000.00000", "status": { "value": "applied", "color": "success" } }
+    }
+  ]
+}
+```
+
+- **`payments[]`** are receipt allocations on this invoice.
+  - **`carried_from_invoice`** is set when the money is an overpayment that moved here from
+    another invoice when this one was processed (see
+    [Receipts → Overpaying an invoice](./receipts.md#overpaying-an-invoice)). Show it as "Receipt
+    RCPT-1005, carried from Invoice #9001". The receipt's collections stay on the original
+    invoice, where the money was received.
+  - **`carried_forward[]`** goes the other way. It lists the parts of this allocation that later
+    moved on to other invoices, with each part's amount and the invoice it went to. The
+    allocation's own `amount` is what stayed here. An allocation whose whole amount moved on
+    reads `0` here and keeps its `carried_forward` rows, so the audit trail is complete.
+  - Carry-overs made before 2026-10-21 have `carried_from_invoice: null` and no
+    `carried_forward`: the source was not recorded then.
+- **`credit_applications[]`** list every credit note that paid part of this invoice, with the
+  amount it paid here, including credit notes raised on another invoice or raised open (see
+  [Credit notes → Applications](./credit-notes.md#applications-which-invoices-a-credit-note-paid)).
+  `credits` is unchanged. It still lists only the credit notes whose `invoice_id` is this invoice.
+- `paid` = sum of `payments[].amount` + sum of `credit_applications[].amount` (within rounding).
+  Invoices paid before 2026-10-21 may not add up exactly; see the notes above.
 
 ## CU number validation
 
@@ -258,6 +325,7 @@ Request body:
 | `cu_invoice_number` | No | string | Optional |
 | `cu_serial_number` | No | string | Optional |
 | `cu_invoice_verify_url` | No | string | Optional |
+| `supporting_upload_id` | No | integer | One upload id (`uploads.id`) backing the invoice: a quote, a work order, an agreed charge. Optional. See [Supporting document](#supporting-document) |
 
 `items[]` fields:
 
@@ -307,6 +375,27 @@ The 422 is keyed to the item:
 
 A lease with no spaces at all answers 422 on `lease_id`, since there is nothing to bill against. An
 inactive catalogue component answers 422 on its item.
+
+### Which leases can be invoiced
+
+A manual invoice can be raised on an `active`, `suspended` or `terminated` lease. A `pending` or
+`rejected` lease answers **422** on `lease_id`, and nothing is written:
+
+```json
+{
+  "message": "This lease is pending. Invoices can only be raised on active, suspended or terminated leases.",
+  "errors": {
+    "lease_id": [
+      "This lease is pending. Invoices can only be raised on active, suspended or terminated leases."
+    ]
+  }
+}
+```
+
+A pending lease is billed only once it is approved or activated. At that point its deposits and
+opening balances are raised, and the billing cycle picks it up. The billing cycle and
+`POST .../leases/{lease}/generate-invoice-for-next-period` stay limited to `active` leases. Hide or disable
+**Raise Invoice** while the lease is `pending` or `rejected`.
 
 ### Components a manual invoice can bill
 
@@ -410,7 +499,63 @@ Example response:
 
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}`
 
-Use the same payload shape as create.
+Body: the header - `due_at`, `notes`, `cu_invoice_number`, `cu_serial_number`,
+`cu_invoice_verify_url` - and, optionally, `items`. **A field left out keeps its value** (row 138;
+before, the CU fields and an opening balance's `transaction_at` were cleared by any edit that did not
+send them), so send just what the form shows. `lease_id` may be left out; if sent it must be the
+invoice's own (`422` - an invoice cannot be moved to another lease). `lease_id` is returned on the
+invoice.
+
+- **`items` sent:** they are the invoice's new lines, complete. The old lines are replaced and
+  `amount`, `tax`, `total` and `balance` worked out again, as on create. Each item names its lease
+  line with `lease_item_component_id` (or a catalogue `lease_component_id`, resolved as on create),
+  with `notes`, `quantity`, `amount` (unit cost) and `tax_id`. A lease line may appear as often as
+  the invoice already bills it - a generated invoice whose period straddles an escalation has one
+  line per rate on the same lease line - and otherwise once.
+- **`items` left out:** the lines stay as they are; only the header changes.
+- **Lines that cannot be replaced here** (`422` on `items`, header edits still work): an invoice that
+  bills a deposit ("Change the deposit instead.") or an opening balance ("Change the opening balance
+  instead."), a utility invoice (its lines carry meter readings), and one with payments or credit
+  notes against it.
+- **`permissions.updateLines`** says up front whether `items` will be accepted: `true` when the
+  invoice may be edited and its lines are not one of the kinds above. When it is `false` (and
+  `permissions.update` is `true`), show the lines read-only and send the header without `items`.
+- `paid` is never taken from the body (it used to be written, defaulting to 0).
+
+Before row 138 this endpoint saved the header only and dropped whatever lines it was sent.
+
+**Only a `pending` invoice is edited** (row 138). Once approved (or cancelled, rejected) the edit is
+refused with `403` `"Only a pending invoice can be edited."`, whatever the caller's permissions, and `permissions.update` is `false`.
+Hide the Edit action unless it is `true`. An invoice returned for changes is still `pending`, so its creator
+can answer it, and the edit sends it round its chain again. Who may edit a pending one: the update
+permission, the creator, whoever it was returned to, and an approver whose current step lends editing
+rights (limited to the step's fields when the step names them).
+
+An approver whose step names fields saves them through `PATCH invoices/{invoice}/step-fields` - see
+[approvals](../../access-management/approvals.md#saving-only-the-steps-fields-step-fields-row-138).
+
+## Supporting document
+
+An invoice raised by hand can carry **one** supporting document (row 171), the way a credit note does.
+It is **optional**. Invoices the system raises itself (monthly billing, deposits, utility billing,
+imports) have none.
+
+- **Create:** upload the file through the uploads endpoint, then send its id as `supporting_upload_id`
+  with `POST /invoices`. Only an upload **you** made can be attached: anyone else's answers `422`,
+  `errors.supporting_upload_id: ["Attach a document you uploaded yourself."]`. An unknown id answers
+  `422` on the same key.
+- **Edit while pending:** in `PUT /invoices/{invoice}`, leave `supporting_upload_id` out to keep the
+  document. Send an id to replace it, or `null` to remove it.
+- **Its own endpoint:** `PUT/PATCH /invoices/{invoice}/supporting-document` with
+  `{ "supporting_upload_id": 512 }` (or `null` to remove), without resending the rest of the invoice.
+  The key must be sent. Saving here resubmits an invoice that was sent back for changes, as a full
+  edit does. Response: `{ "data": { "message": "Supporting document updated successfully.", "invoice": { ... } } }`.
+- **Once approved it is fixed:** an approved invoice is no longer edited (row 138), so both the edit and
+  the document endpoint answer `403` "Only a pending invoice can be edited."
+- **Read it** as `supporting_upload_id` and `supporting_upload` (an upload object, with `file_name`
+  and `source_url`) on the invoice: in create, show and update responses.
+- **The tenant sees it** on their invoice in the tenant portal. It is **not** attached to the invoice
+  email.
 
 ## Cancel Invoice
 

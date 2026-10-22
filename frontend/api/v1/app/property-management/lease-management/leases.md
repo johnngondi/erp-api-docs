@@ -19,6 +19,8 @@ Base route:
 - `POST /leases/{lease}/renew`: start a renewal of a lease that is ending. See
   [Renew a lease](#renew-a-lease)
 - `POST /leases/{lease}/generate-invoice-for-next-period`
+- `POST /leases/{lease}/letting-fee`: bill the lease's letting (or re-letting) fee. See
+  [Generate the letting fee](#generate-the-letting-fee)
 - `GET /leases/{lease}/invoice-components`: what a manual invoice on the lease can bill. See
   [Invoices](invoices.md#components-a-manual-invoice-can-bill)
 
@@ -165,6 +167,45 @@ created `active` exactly as before, so this can be deployed ahead of the configu
 
 Use the same payload shape as create.
 
+**A `pending` or `active` lease is edited** (row 138; an active lease is edited the way an addendum
+would change it, and the edit applies straight away, with no approval). A `suspended`, `terminated`
+or `rejected` lease is refused with `403` `"Only a pending or active lease can be edited."`, whatever
+the caller's permissions. A lease returned for changes is still `pending`, so its creator can answer
+it, and the edit sends it round its chain again.
+
+- Gate the **Edit** button on `permissions.edit`, not `permissions.update`. `update` still means
+  "may work on this lease" — deposits, escalations, opening balances, documents, the exit notice,
+  activate/suspend/terminate, generating the next invoice — all of which go on after the lease is
+  live, so it stays `true` on a lease that can no longer be edited.
+- Who may edit a lease: `update-lease` and the lease's creator, on a pending or active lease; on a
+  pending one also whoever it was returned to for changes, and an approver whose current step lends
+  editing rights. When that step limits them to
+  certain fields, a body carrying any other field is refused with `403`, naming the fields allowed
+  and the ones refused.
+  Such an approver saves their fields through `PATCH leases/{lease}/step-fields` - see
+  [approvals](../../access-management/approvals.md#saving-only-the-steps-fields-step-fields-row-138).
+- **Tenant and property** (row 138). Sending the lease's own values is always fine.
+  - **Pending lease:** a wrong tenant is corrected in place: nothing is billed yet. The property can be
+    changed only once the lease has **no units**, because its units are spaces on the old property.
+    With units it answers `422` on `facility_id`: "Remove the lease's units first, then change the
+    property and add units on the new one." So remove the units, change the property, then add units
+    on the new one.
+  - **A property change restarts the approval.** If the lease is waiting on its approval chain, the
+    chain starts again from the first step, put in front of the new property's approvers. Steps
+    already approved for the old property are cleared. If nobody on the new property holds the first
+    step's role, the edit is refused with `422` naming the role and the property.
+  - **Active lease:** both are fixed. A different `user_id` or `facility_id` answers `422`: "The tenant /
+    property of an active lease cannot be changed." Its invoices, receipts, deposits and statements
+    belong to that tenant and property.
+- The start date and term stay editable - the end
+  date is worked out from them on save - but `next_due_at` and any escalation dates are saved as sent,
+  so move them in the form when the start date moves.
+- **The edit never changes the status.** A `status` in the body is ignored; status moves only
+  through approval and the status actions below. (Before row 138 the payload's default `active` was
+  written, so editing a pending lease activated it behind its approval chain.)
+- With no lease approval template, and for leases promoted from a Letter of Offer, a lease is
+  created `active`, and is edited as an active lease.
+
 ## Lease Status Actions
 
 No request body required:
@@ -285,9 +326,9 @@ month.*
   `null`. When `renew` is `false` because of it, link to that application instead. It is on
   the detail only, not on the list.
 
-The other `permissions` keys are the lease's own abilities (`view`, `update`, `delete`,
-`activate`, `terminate`, `suspend`) and were always there; they are listed here because this
-is the first place the key is documented.
+The other `permissions` keys are the lease's own abilities (`view`, `update`, `edit`,
+`delete`, `activate`, `terminate`, `suspend`, `billLettingFee`). `edit` (row 138) is whether the lease record
+itself may be edited — see [Update Lease](#update-lease); the rest were always there.
 
 ## Generate Invoice For Next Period
 
@@ -335,6 +376,30 @@ Success response:
 
 - `message`: `Invoice for next period generated successfully.`
 - `invoice`: the created `FacilityInvoice`.
+
+## Generate the letting fee
+
+`POST /api/v1/app/{company}/property-management/lease-management/leases/{lease}/letting-fee`
+
+Bills the landlord the lease's letting fee (a renewal: re-letting fee) as activation would have: a
+bill from the company under the property's letting fee service contract, posted at once, with its
+customer invoice. How the fee is worked out, its tax and its notes are in
+[Customer invoices](../finance/customer-invoices.md#where-customer-invoices-come-from).
+
+Request body: none.
+
+Gate the **Generate Letting Fee** button on `permissions.billLettingFee` (lease detail only). It is
+`true` when the caller holds `generate-customer-invoice`, is allocated to the property, and the lease
+has **no letting fee bill that is not cancelled**. A lease whose letting fee bill was cancelled can be
+billed again.
+
+Responses:
+
+| Status | When |
+|---|---|
+| `200` | `message`: `Letting fee billed.`; `bill`: the bill (`FacilityBillResource`, with `customer_invoice`) |
+| `403` | No permission, not allocated, or the lease already has a letting fee bill: `This lease already has a letting fee bill.` |
+| `422` | Nothing to bill. `lease`: `No letting fee was billed: the property's active management contract charges none, or the company vendor or letting fee expense type is not set.` |
 
 ## Lease Items and Components
 

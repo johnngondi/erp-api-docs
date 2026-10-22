@@ -1174,3 +1174,8 @@ Update space route:
 - If `residential_units` is sent as `[]`, backend attempts to remove all unit types; any type with `allocated > 0` is blocked.
 - If `residential_units` is sent with rows containing `id`, those rows are updated in place.
 - Rows without `id` are created as new unit types.
+
+## Onboarding a property from a sheet
+
+To set up a whole property at once - blocks, floors, units, homeowners, tenants, leases, arrears
+and meters - see [Property onboarding import](./property-import.md).

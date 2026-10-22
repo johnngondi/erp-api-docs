@@ -18,4 +18,5 @@ Authentication:
 - `docs/frontend/api/v1/vendor/finance/bill.md`
 - `docs/frontend/api/v1/vendor/finance/payment-voucher.md`
 - `docs/frontend/api/v1/vendor/users-settings.md`
+- `docs/frontend/api/v1/vendor/billing-addresses.md`
 - `docs/frontend/api/v1/vendor/document-templates.md`

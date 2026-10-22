@@ -15,10 +15,13 @@ Base prefix:
   - `docs/frontend/app/property-management/facilities/meter-reading-extraction.md`
   - `docs/frontend/app/property-management/facilities/space-occupancy.md`
   - `docs/frontend/app/property-management/facilities/budget-settings.md`
+  - `docs/frontend/api/v1/app/billing-addresses.md` (`facilities/{facility}/billing-addresses`)
 - Tickets
   - `docs/frontend/app/property-management/tickets.md`
 - Procurement
   - `docs/frontend/app/property-management/procurement.md`
+- FRC sanctions list (quick action)
+  - `docs/frontend/app/property-management/frc-sanctions.md`
 - Finance
   - `docs/frontend/app/property-management/finance.md`
   - `docs/frontend/app/property-management/finance/bill.md`

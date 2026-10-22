@@ -89,7 +89,7 @@ Every key is always present on every portal.
 }
 ```
 
-- `permissions`: every `view-*`, `create-*`, `generate-*` and `export-*` permission your App roles
+- `permissions`: every `view-*`, `create-*`, `generate-*`, `export-*` and `manage-*` permission your App roles
   give you in this company, across all modules, each name once.
 - `modules`: the same names grouped by module. `modules["Property Management"]` equals
   `data.permissions` of `GET /api/v1/app/{company}/property-management`, and

@@ -84,22 +84,46 @@ exists wherever any figure changes.
 
 `loos.rent_breakdown`, one entry per period. Each row carries a `label`/`amount` pair
 as well as its structured figures. `{{rent_breakdown}}` prints the `components` of every
-row as a table (see [the rent tags](#the-rent-tags)); the shape itself is unchanged and is
-what the editor shows for hand corrections.
+row as a table (see [the rent tags](#the-rent-tags)); the shape itself is what the editor
+shows for hand corrections.
+
+**The period figures cover the escalating components only.** Every line in `components`
+carries `escalates` (boolean): `true` when its component has an escalation row with a rate
+above 0 and at least one escalation date inside the term. A row's `net`, `tax`, `monthly`,
+`quarterly`, `annual`, `total` and `amount` add up the `escalates: true` lines only. A
+charge that does not escalate (typically service charge, parking) is stated by its own tags
+(`monthly_service_charge`, `service_charge`, the parking tags) and is not folded into the
+period totals. **Fallback:** when no component escalates at all, the figures add up every
+line, so an all-flat schedule still states what the tenant pays.
+
+Every priced component keeps its line in `components` regardless, with its own escalated
+figures: the [deposits](#deposits) read the last period's lines (the service-charge deposit
+comes off the service-charge line), the [money computations](loo-tags.md#money-computations)
+the first period's, and the spaces panel every period's. A client totalling a period should
+use the row's own figures, not sum `components`.
+
+A schedule stored before 16 October 2026 has no `escalates` key and its figures cover every
+line; it takes the new shape the next time it is recomputed (any edit to a draft or pending
+offer, or `php artisan loos:recompute-rent-schedules`). A line without the key counts towards
+the figures and prints.
 
 ```json
 [{
   "period": 1,
   "label": "Year 1 (1st October 2026 - 30th September 2027)",
-  "amount": 4896000,
+  "amount": 4176000,
   "starts_at": "2026-10-01", "ends_at": "2027-09-30", "months": 12,
-  "monthly": 408000, "quarterly": 1224000, "annual": 4896000,
-  "net": 4320000, "tax": 576000, "total": 4896000,
+  "monthly": 348000, "quarterly": 1044000, "annual": 4176000,
+  "net": 3600000, "tax": 576000, "total": 4176000,
   "components": [
-    {"lease_component_id": 3, "name": "Rent", "monthly_net": 300000, "monthly_tax": 48000, "monthly_gross": 348000}
+    {"lease_component_id": 3, "name": "Rent", "escalates": true, "monthly_net": 300000, "monthly_tax": 48000, "monthly_gross": 348000},
+    {"lease_component_id": 4, "name": "Service Charge", "escalates": false, "monthly_net": 60000, "monthly_tax": 0, "monthly_gross": 60000}
   ]
 }]
 ```
+
+Rent escalates here and service charge does not, so the figures are the rent's alone; the
+service-charge line is still stored.
 
 `ends_at` is the last day the period covers, not the first day of the next one — a
 clause reads "to 30th September", never "to 1st October".
@@ -110,20 +134,24 @@ All five read the stored schedule. The four first-period figures come off row 1.
 
 | Tag | Is |
 |---|---|
-| `rent_first_period` | everything payable across the whole first period |
+| `rent_first_period` | the escalating components across the whole first period |
 | `rent_first_period_monthly` | the same, per month |
 | `rent_first_period_quarterly` | per quarter |
 | `rent_first_period_annual` | per annum |
-| `rent_breakdown` | every period, as an HTML table: one row per component, per month / per quarter / per annum |
+| `rent_breakdown` | every period, as an HTML table: one row per escalating component, per month / per quarter / per annum |
 
-All are tax-inclusive and cover rent, service charge, parking and signage together.
+All are tax-inclusive and read the period's own figures, so they cover the **escalating
+components only** (every component when nothing escalates — see [Stored shape](#stored-shape)).
+`rent_breakdown_monthly` reads the same figures.
 
 **`rent_breakdown` is a table, not prose.** For each period it prints a header row with
-the period label, then one row per component (across all granted spaces together, never
-per space) with the component's figure per month, per quarter (×3) and per annum (×12),
-tax included, escalated as the period states, and a **Total** row from the period's own
-`monthly` / `quarterly` / `annual`. A hand-corrected period that carries no `components`
-prints only its Total row.
+the period label, then one row per escalating component (across all granted spaces
+together, never per space) with the component's figure per month, per quarter (×3) and per
+annum (×12), tax included, escalated as the period states, and a **Total** row from the
+period's own `monthly` / `quarterly` / `annual`, which is therefore the sum of the rows
+above it. Lines with `escalates: false` are not printed; when no line escalates every line
+prints, and a line without the key (a schedule stored before the flag) prints. A
+hand-corrected period that carries no `components` prints only its Total row.
 
 **The markup is the editor's own table shape**, the same as the bank-account table the
 imported templates carry: no `th`, every cell a paragraph holding a span that names the
@@ -140,8 +168,7 @@ and `total` classes ride along only for the PDF stylesheet.
   </tr>
   <tr class="period"><td colspan="4"><p style="…"><span style="…;font-weight:bold">Year 1 (1st October 2026 - 30th September 2027)</span></p></td></tr>
   <tr><td>…Rent…</td><td>…KES 348,000.00…</td><td>…KES 1,044,000.00…</td><td>…KES 4,176,000.00…</td></tr>
-  <tr><td>…Service Charge…</td><td>…KES 60,000.00…</td><td>…KES 180,000.00…</td><td>…KES 720,000.00…</td></tr>
-  <tr class="total"><td>…Total…</td><td>…KES 408,000.00…</td><td>…KES 1,224,000.00…</td><td>…KES 4,896,000.00…</td></tr>
+  <tr class="total"><td>…Total…</td><td>…KES 348,000.00…</td><td>…KES 1,044,000.00…</td><td>…KES 4,176,000.00…</td></tr>
   <tr class="period"><td colspan="4">…Year 2 (…)…</td></tr>
   ...
 </tbody></table>
@@ -307,10 +334,21 @@ The first three are strings, not numbers: the clause prints them verbatim.
 `signatory_type` (`landlord` | `trustees`, default `landlord`), `trustees_count`
 (`0`, only meaningful when the signatory type is `trustees`).
 
-**Legal** — `has_lawyer` (`false`), `submitted_to_lawyer_at`, `legal_fees`,
+**Legal** — `has_lawyer`, `submitted_to_lawyer_at`, `legal_fees`,
 `disbursement_fee`, `stamp_duty_fee`, `other_legal_fees`, `legal_fee_notes` (text, up to
 2000 characters), `legal_fee_updated_at`, `legal_fee_recorder_id`, `fee_note_file_id` (an
-upload; not a tag). Written by [Submit to lawyer](#submit-to-lawyer) and never by an edit:
+upload; not a tag).
+
+`has_lawyer` is **"Has legal fees"**, and it is the offer's own. Generation starts it at the
+property's default (`facilities.bill_legal_fees`); after that staff may turn it off for this
+offer, or on where the property would not bill, through `PATCH loos/{loo}`. It — not the
+property's flag — is what [Submit to lawyer](#submit-to-lawyer), the
+[legal fee note](#legal-fee-note) and the billing at [promotion](#promote) read.
+
+The six fee note fields (`legal_fees`, `disbursement_fee`, `stamp_duty_fee`,
+`other_legal_fees`, `legal_fee_notes`, `fee_note_file_id`) are written **only by the
+lawyer**, through the [legal fee note](#legal-fee-note); the offer's edit refuses them (see
+[Editing](#editing)). Written by [Submit to lawyer](#submit-to-lawyer) and never by an edit:
 `assigned_lawyer_id` (the Internal Counsel the offer was handed to),
 `submitted_to_lawyer_by_id`, and `legal_fee_invoice_id` (the invoice the fees were billed on
 once the lease raised from the offer went active — see [Promote](#promote)). There is still no
@@ -714,12 +752,13 @@ that paragraph is one act of review:
 {
   "offer_content": "<p>Revised offer for {{tenant_name}}.</p>",
   "rent_deposit_months": 3,
-  "legal_fees": 45000,
+  "has_lawyer": false,
   "tag_values": [ { "tag_key": "tenant_name", "resolved_value": "Acme Traders Limited" } ]
 }
 ```
 
-Every LOO-side field is editable, **including the auto-computed ones**. A tag
+Every LOO-side field is editable, **including the auto-computed ones** — except the legal
+fee figures, which are the lawyer's (below). A tag
 correction sets `is_overridden`, which is what stops an ordinary re-resolution
 putting the computed value back.
 
@@ -748,11 +787,15 @@ sanitised before it is stored: only `table`, `thead`, `tbody`, `tr`, `th`, `td`,
 font, weight, alignment and spacing (see [the rent tags](#the-rent-tags)). Every other
 tag's value is stored as sent and escaped when the document is rendered.
 
-`legal_fee_updated_at` and `legal_fee_recorder_id` are stamped by the server
-whenever a fee moves (`legal_fees`, `disbursement_fee`, `stamp_duty_fee` or
-`other_legal_fees`), and are not accepted in the payload. `legal_fee_notes` and
-`other_legal_fees` are editable here too; the lawyer normally records them through
-[Legal fee note](#legal-fee-note), which stamps the same way.
+**The legal fees are not editable here.** `legal_fees`, `disbursement_fee`,
+`stamp_duty_fee`, `other_legal_fees`, `legal_fee_notes` and `fee_note_file_id` are
+**prohibited** on this endpoint: sending any of them is a `422` naming each one sent ("Legal
+fees are recorded by the assigned lawyer through the legal fee note."), and nothing in the
+request is saved. The person preparing the offer decides whether it has legal fees
+(`has_lawyer`, still editable here) and [submits it to the lawyer](#submit-to-lawyer); only
+the lawyer records the figures, through the [legal fee note](#legal-fee-note).
+`legal_fee_updated_at` and `legal_fee_recorder_id` are stamped by the server when the note is
+recorded, and are never accepted in a payload.
 
 Only while `status` is `draft` or `pending_approval`. An offer in a tenant's
 hands is fixed, and so is a `rejected` one.
@@ -792,11 +835,13 @@ on the list and on the tenant portal. The edit grant itself is described in
 No body. Hands the offer to the company's Internal Counsel to review and record the legal fee
 note. Needs `update-loo`, and the offer must be able to go — read `can_submit_to_lawyer`:
 
-- the property bills legal fees (`facilities.bill_legal_fees`);
+- the offer has legal fees (`has_lawyer`, "Has legal fees" — which starts as the property's
+  `bill_legal_fees` and may be changed on the offer; the property's flag itself is not read);
 - the offer is `draft` or `pending_approval`;
 - it has not been submitted already (`assigned_lawyer_id` is null). **It goes once.**
 
-Anything else is a `403`.
+Anything else is a `403`. (Should the endpoint be reached on an offer with no legal fees anyway,
+it is a `422` on `loo`: "This offer has no legal fees. Turn on Has legal fees first.")
 
 **Who gets it.** The holders of the role in the `internal_counsel_role_id` setting (default:
 **Internal Counsel**) — those allocated to the offer's property when there are any, otherwise
@@ -854,11 +899,12 @@ The lawyer records the fee note: what the legal work costs and the file it comes
 the setting names — no permission of its own. Read `permissions.recordLegalFeeNote` (who you
 are) together with `can_record_legal_fee_note` (the offer's state).
 
-**When.** While the property bills legal fees and the offer is `draft` or `pending_approval`.
+**When.** While the offer has legal fees (`has_lawyer`) and is `draft` or `pending_approval`.
 It may be recorded **again** in that window; the note is recorded whole, so a fee left out is
 cleared rather than kept from the previous note. Once the offer is approved it is a `403`.
 
-It stamps `legal_fee_recorder_id`/`legal_fee_updated_at` (as a staff edit of the fees would),
+This is the only way the fee figures are written: the offer's `PATCH` refuses them. It stamps
+`legal_fee_recorder_id`/`legal_fee_updated_at`,
 clears the lawyer's "Legal review:" task, and notifies whoever submitted the offer to the lawyer
 and whoever generated it (never the lawyer). The response is `{ message, loo }`, the offer as
 `GET loos/{loo}` returns it, with `legal_fee_total` and `legal_fee_recorded`.
@@ -1130,17 +1176,27 @@ signing after the lease exists is exactly what should happen.
 Refused when the offer has not been sent, when it has already been promoted, and when it grants no
 spaces.
 
-**Legal fees.** When the property bills legal fees and the offer's fee note totals more than
-zero (`legal_fee_total`), promotion adds a **zero-cost line** for the legal fees lease component
-to the lease's first space, and the fees are billed **once the lease is active**: approved through
-its chain or activated by hand, or straight away when the lease is raised active. One invoice,
+**Legal fees.** When the offer has legal fees (`has_lawyer`, not the property's
+`bill_legal_fees`) and its fee note totals more than zero (`legal_fee_total`), promotion
+adds a **zero-cost line** for the legal fees lease component to the lease's first space,
+and the fees are billed **once the lease is active**: approved through its chain or
+activated by hand, or straight away when the lease is raised active. One invoice,
 notes `Legal fees`, one line for `legal_fee_total` with **no tax added**, the line noted
 "Legal fees per fee note {file} ({our_ref})". `legal_fee_invoice_id` is then set on the offer, and
 an offer already billed is not billed again.
 
 The component is the one in the `legal_fees_lease_component_id` setting, else the active component
-flagged `is_legal_fees_deposit`, else the active one named "Legal Fees". When none resolves, the
-property does not bill legal fees, or the total is zero, nothing is billed and **the promotion still
+flagged `is_legal_fees_deposit`, else the active one named "Legal Fees".
+
+**Where the tenant pays them.** Legal fees are the company's money. When the property's management
+contract has `collection_account_holder = landlord`, the offer tells the tenant to pay them into the
+company's own account in the `legal_fee_collection_account_id` setting rather than the property's
+collection account: `{{collection_accounts}}` lists the legal fees component under it, and
+`{{money_computations}}` prints the legal fees deposit in a section of its own (see
+[sections per collection account](loo-tags.md#sections-per-collection-account)). With the agent
+holding the account, no contract, or the setting empty (or naming an account since closed), legal
+fees are collected with the rent. When none resolves, the
+offer has no legal fees, or the total is zero, nothing is billed and **the promotion still
 goes through** — legal fees never hold a lease up. A failure raising the invoice is logged and
 rolled back on its own, without failing the lease's approval.
 

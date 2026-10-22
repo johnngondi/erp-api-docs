@@ -187,6 +187,35 @@ which is issued outside this action, follows the same rule: `IssueLpoToVendorSer
 for a placed order (`lpo`). A lease's deposit and opening balance documents are not even raised
 while the lease is pending (see the lease deposits and opening balances API docs).
 
+### Recipients: billing addresses
+
+Document emails go to the party's billing addresses, not straight to `users.email`. They are
+`DocumentIssuedNotification` (invoice, credit note, receipt, payment voucher, remittance),
+`InvoiceReminderNotification` and `LpoIssuedNotification`, and each one implements the marker
+`App\Contracts\Notifications\RoutesToBillingAddress`.
+
+- **To.** `User::routeNotificationForMail($notification)` returns
+  `BillingAddresses::mailRecipient($user)` for a marked notification. That is
+  `[email => name]` of the user's default billing address, or `users.email` when the default
+  has no email or the user has no addresses. It returns null when neither is set, so the
+  document is not sent.
+- **CC.** `DocumentEmail::toMailMessage($notifiable)` copies every billing address of the
+  recipient marked `always_cc` (`BillingAddresses::ccFor()`). The list is deduplicated, and the
+  To address is left out. The three notifications pass the notifiable. Previews and other
+  callers pass none, so they get no copies.
+- **Recipient checks.** The check that a recipient can receive the email routes through the
+  notification:
+  - `SendDocumentEmailAction::canReceiveEmail()`
+  - `DeliversOnDefaultChannels::withEmail()` (LPO)
+  - `invoices:send-issued`
+  - `invoices:send-reminders`
+
+  So a party whose only email is on a billing address still gets the document.
+- **Current addresses.** The emails read the addresses on file when they are sent, not the ones
+  stamped on the document, so a reminder reaches the current contact.
+- **Unchanged.** Every other email (welcome, PIN, approvals, LPO cancelled) goes to
+  `users.email`. SMS and WhatsApp keep using `users.phone`.
+
 ## Adding an email type
 
 1. A notification implementing `SendsEmail` (and `HasNotificationCompany` for branding and the

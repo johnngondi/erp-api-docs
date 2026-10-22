@@ -56,6 +56,10 @@ Supported file headers:
 Validation behavior:
 
 - Invalid rows are returned with `has_error: true`.
+- A row whose lease is `pending` or `rejected` is an error row:
+  `"Lease ID 101 is pending. Invoices can only be raised on active, suspended or terminated leases."`
+  `import-process` skips the same row with the same message and lists it under `errors`, so a
+  lease that changed status between the two calls is still refused.
 - Rows with recoverable issues can return `has_warning: true`.
 - Utility charge amount formula:
   - `(current_reading - previous_reading) * charge_rate`

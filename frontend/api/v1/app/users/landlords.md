@@ -13,6 +13,7 @@ Base prefix:
 - `GET /landlords/{landlord}`
 - `PUT/PATCH /landlords/{landlord}`
 - `DELETE /landlords/{landlord}`
+- `POST /landlords/{landlord}/quickbooks-sync`
 
 ## List Landlords
 
@@ -118,6 +119,7 @@ Example request:
           "type": "fixed",
           "rate": 25000
         },
+        "letting_fee_components": [1, 2], // optional lease component ids; see letting_fee_components below
         "wages": {
           "has_wages": true,
           "items": [
@@ -440,13 +442,40 @@ Request payload fields:
 | `facility_id`           | Yes      | integer        | Must belong to the selected landlord |
 | `management_fee_type`   | Yes      | enum           | `none`, `percentage`, `fixed` |
 | `management_fee_rate`   | Yes      | number         | Numeric. `none` stores as `0` |
-| `letting_fee_type`      | Yes      | enum           | `none`, `percentage`, `fixed` |
+| `letting_fee_type`      | Yes      | enum           | `none`, `percentage`, `fixed` (months of the charges), `custom` (an amount) |
 | `letting_fee_rate`      | No       | number/string  | Number or: `half_month_rent`, `one_month_rent`, `two_month_rent` |
-| `re_letting_fee_type`   | Yes      | enum           | `none`, `percentage`, `fixed` |
+| `re_letting_fee_type`   | Yes      | enum           | `none`, `percentage`, `fixed` (months of the charges), `custom` (an amount) |
 | `re_letting_fee_rate`   | No       | number/string  | Number or: `half_month_rent`, `one_month_rent`, `two_month_rent` |
+| `letting_fee_components` | No      | array of integer | Lease component ids (`lease_components.id`) the letting / re-letting fee is charged on. `null` or `[]` = every component on the lease. Left out on update = unchanged |
 | `wages`                 | No       | object         | Any wage structure object |
 | `contract_upload_id`    | **Yes on create** | integer   | Upload reference. See below |
 | `uploads`               | No       | array of integer | Supporting documents — addendums, extensions. Each must exist in `uploads.id`. See below |
+
+### What a letting fee is charged on
+
+A letting or re-letting fee is taken on **one month of the lease's charges**: the sum of what the
+lease bills monthly for the components in `letting_fee_components` (rent, service charge, parking,
+signage...), or for every component on the lease when the contract names none. Deposits never count.
+
+| Fee type | Fee |
+|---|---|
+| `percentage` | `rate %` × 12 × one month of the charges (a percentage of a year) |
+| `fixed` | `rate` × one month of the charges: the `half_month_rent` / `one_month_rent` / `two_month_rent` rates are stored as `0.5` / `1` / `2` |
+| `custom` | `rate`: the amount entered, whatever the lease charges |
+| `none` | nothing |
+
+Example: a lease billing rent 100,000, service charge 20,000 and parking 5,000 a month.
+
+| `letting_fee_components` | One month | `percentage` 8.33 | `fixed` `one_month_rent` |
+|---|---|---|---|
+| `null` (all) | 125,000 | 124,950 | 125,000 |
+| `[1, 2]` (rent, service charge) | 120,000 | 119,952 | 120,000 |
+| `[1]` (rent) | 100,000 | 99,960 | 100,000 |
+
+Contracts imported from EPMAS carry what EPMAS charged on (rent and service charge, or rent only),
+set by `php artisan management-contracts:backfill-letting-fee-components {company} --from-epmas`
+(or `--map=<csv>` of `contract_id,components` with component names joined by `|`; `--export=<csv>`
+writes that file; `--dry-run`). A contract that already has components is left as it is.
 
 ### The signed document is required
 
@@ -497,6 +526,73 @@ Documents keep the name they were uploaded with — there is no document type to
 The response exposes them as `uploads`, an array of the standard upload resource.
 
 
+
+## Customer and QuickBooks
+
+Every landlord is a **customer** of the company: the party its management and letting fee invoices
+are billed to. The customer record is created with the landlord (`POST /landlords`, including
+elevating an existing user) or on its next update, one per landlord per company. It is the first
+record of the Finance & Accounting module; until that module takes over from QuickBooks, the
+customer also carries its link to the company's QuickBooks Online company
+(see [QuickBooks Online](../property-management/finance/quickbooks.md) for connecting).
+
+**When it is synced.** Once the company is connected, creating or updating a landlord queues a
+QuickBooks sync of its customer after the request commits. The request itself never waits for
+QuickBooks or fails because of it.
+
+**How the QuickBooks customer is found.**
+
+1. A customer already linked keeps its QuickBooks customer.
+2. Otherwise the QuickBooks customer whose **Tax/Resale no.** (`PrimaryTaxIdentifier`) is the
+   landlord's `tax_pin`, else the one whose email equals the landlord's `email`. QuickBooks masks the
+   Tax/Resale no. it returns (`P051234567X` reads back as `XXXX234567X`), so the PIN is compared on
+   the characters QuickBooks shows: it matches only when exactly one customer fits. Two customers
+   sharing the visible tail fall through to the email.
+3. One found either way is **updated** with the landlord's name (as company name), email, phone,
+   tax PIN and address, so QuickBooks carries the PIN from then on.
+4. Nobody found: it is **created**, with the landlord's name as display name. QuickBooks needs
+   display names to be unique, so a name already taken is retried as `Name (PIN)`.
+
+### Sync now
+
+`POST /api/v1/app/{company}/users/landlords/{landlord}/quickbooks-sync`
+
+Runs the sync straight away and returns the customer. Needs `update-landlord`.
+
+```json
+{
+  "data": {
+    "message": "Landlord synced to QuickBooks.",
+    "customer": {
+      "id": 31,
+      "user_id": 304,
+      "quickbooks": {
+        "customer_id": "58",
+        "display_name": "Joyce Wanjiku",
+        "matched_by": "pin",
+        "synced_at": { "raw": "2026-10-19T09:20:00.000000Z", "formatted": "19 Oct, 2026", "diff": "moments ago" },
+        "error": null
+      }
+    }
+  }
+}
+```
+
+`quickbooks.matched_by`: `pin`, `email`, `created` or `linked` (pointed at an existing QuickBooks customer by `quickbooks:link-customers`), `null`
+while not linked.
+
+Errors:
+
+- `404` the user is not a landlord.
+- `422` `QuickBooks is not connected for this company.`
+- `422` with QuickBooks' message when it refuses the customer (also recorded in `customer.quickbooks.error`).
+
+### On the landlord
+
+`GET /landlords/{landlord}` returns `customer` (the object above), or `null` for a landlord with no
+customer in this company yet (one is created on its next update or **Sync now**). Not yet in
+QuickBooks: `customer.quickbooks.customer_id` is `null`, and a failed background sync shows its
+reason in `customer.quickbooks.error`; offer **Sync now**.
 
 ## Delete Landlord
 

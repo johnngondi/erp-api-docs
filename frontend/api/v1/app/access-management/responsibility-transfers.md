@@ -90,6 +90,18 @@ Every status object is the house `{ value, color }` pair. `completed` is `primar
   - Every offered role must be one the caller holds in the company, or one they are named for
     (`facility_role`) on one of the offered properties. Otherwise `422` on `new_roles`, naming the
     roles.
+- **A temporary transfer goes one level only.** What the caller was *lent* by a temporary transfer
+  still in force cannot be transferred on: if A lends B a property, B cannot pass it to C.
+  - A property B is allocated to only because of that transfer: `422` on `new_facilities`, `You
+    hold <properties> only through a temporary transfer, so you cannot transfer them on.`
+  - A role B is named for on the offered properties only because of that transfer: `422` on
+    `new_roles`, `You hold <roles> on these properties only through a temporary transfer, so you
+    cannot transfer them on.`
+  - What B held before, holds company-wide, or was given by a **permanent** transfer is B's own and
+    can be transferred as usual. Once the temporary transfer ends, what it lent is gone anyway.
+  - The `422` names the properties or roles; show it beside the picker. To mark them up front, a
+    user's active incoming temporary transfers (`GET /{id}` returns their `items`) list what each one
+    lent: a `facility_user` item is a lent property, a `facility_role_*` item a lent role on one.
 - **Many incoming at once** is normal. `mine/incoming` returns an array.
 - The recipient must be an **active member of the same company and the same department** as the
   transferer. Department is matched exactly, null included. Anything else is `422` on `to_user_id`.
@@ -133,7 +145,7 @@ Supported query params:
 | `new_roles` | int[] | no | `[]` | Role ids to hold on those facilities. Must belong to this company and be held by the caller (company-wide, or named on one of the offered properties). |
 | `is_permanent` | bool | no | `false` | A permanent transfer has no expiry, cannot be reclaimed, and completes on acceptance. |
 | `timestamp_to` | datetime | conditional | `null` | Required when `is_permanent` is false, must be in the future. Prohibited when it is true. |
-| `include_pending_tasks` | bool | no | `false` | Hands the transferer's work on the transferred properties over instead of sharing it. See [What accept hands over](#what-accept-hands-over). |
+| `include_pending_tasks` | bool | no | `false` | Hands the transferer's work on the transferred properties over instead of sharing it. See [What accept hands over](#what-accept-hands-over). Always `true` on a permanent transfer, whatever is sent: show it ticked and locked when "permanent" is chosen. |
 
 Sample payload:
 
@@ -204,7 +216,7 @@ transfer's `handovers` ledger, which is what reclaim and auto-return restore fro
    The step's pending tasks are re-raised to match its new actors, so the recipient can act on it
    at once. Review steps (a document returned to its creator) are never re-addressed; they follow
    the creator in point 3. Ledger `approval_step_actors` / `procurement_step_actors`.
-5. **Direct pending tasks** (`include_pending_tasks: true` only): tasks of the transferer tied to a
+5. **Direct pending tasks** (`include_pending_tasks: true`, which a permanent transfer always is): tasks of the transferer tied to a
    transferred property that are not already covered by points 3-4 (not a step's task, not a
    procurement request's) move to the recipient. Invoices, credit notes and exit notices are tied
    through their lease's property. Ledger `pending_task`.
@@ -315,6 +327,11 @@ array) and `incoming_transfers` (a count) for polling. See
   "to_user": { "id": 42, "name": "..." },
   "new_roles": [3],
   "new_facilities": [7, 9],
+  "offered_roles": [{ "id": 3, "name": "Procurement Manager" }],
+  "offered_facilities": [
+    { "id": 7, "name": "Kahawa Side Tower" },
+    { "id": 9, "name": "Garden Court" }
+  ],
   "is_permanent": false,
   "include_pending_tasks": true,
   "status": { "value": "active", "color": "success" },
@@ -339,6 +356,12 @@ array) and `incoming_transfers` (a count) for polling. See
   "handovers": []
 }
 ```
+
+`offered_facilities` and `offered_roles` are `new_facilities` and `new_roles` with their names, in the
+same order, on every read (list, `mine/*`, show and the action responses). Show these names on the
+request: the recipient holds none of the offered properties until they accept, so they cannot look
+the names up from the property list. A property deleted since keeps its name; a record that no longer
+exists at all has `name: null`.
 
 `items` is present on `show`, `accept`, `reclaim` and `withdraw`; `handovers` (with each
 `subject`) on `show`, `accept` and `reclaim`, where the reversed rows show what came back. Neither is on the list or `mine/*` reads.
@@ -431,7 +454,7 @@ still exists, and `null` once it is gone. `name` is the first non-empty of the r
 | --- | --- |
 | `403` | Wrong person for the action: not the recipient on accept/decline, not the transferer on reclaim/withdraw, not a participant on `show`. |
 | `404` | The transfer does not belong to route `{company}`. |
-| `422` | Validation, plus: `new_facilities` overlapping one of the caller's open transfers, a property the caller is not allocated to, a role the caller does not hold (`new_roles`), a recipient outside the company or department (`to_user_id`), reclaiming a permanent transfer, withdrawing one that is no longer pending, or answering a transfer that is no longer pending (`status`). |
+| `422` | Validation, plus: `new_facilities` overlapping one of the caller's open transfers, a property the caller is not allocated to, a role the caller does not hold (`new_roles`), a property or role the caller holds only through a temporary transfer (`new_facilities` / `new_roles`), a recipient outside the company or department (`to_user_id`), reclaiming a permanent transfer, withdrawing one that is no longer pending, or answering a transfer that is no longer pending (`status`). |
 
 Apply shared auth, tenancy, query, and error handling guidance from:
 

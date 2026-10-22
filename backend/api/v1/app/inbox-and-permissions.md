@@ -136,7 +136,9 @@ The tenant, vendor and landlord portals run 1 and 3 only.
 
 Module-agnostic. `modules` is keyed by permission `tag`. Each entry is exactly what that module's
 dashboard returns under `data.permissions`: the caller's `app` roles in `{company}`, their `app`-group
-permissions with that tag, narrowed to `view-*`, `create-*`, `generate-*` and `export-*` names.
+permissions with that tag, narrowed to `view-*`, `create-*`, `generate-*`, `export-*` and `manage-*`
+names (`manage-*` since 2026-10-20, for settings with no record to carry instance permissions, e.g.
+`manage-quickbooks`).
 `permissions` is the flat, de-duplicated union of every module. It is a superset of the Property
 Management dashboard's array. `modules` is always a JSON object, `{}` when the caller has nothing.
 

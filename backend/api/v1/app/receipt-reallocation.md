@@ -60,11 +60,11 @@ so it never appears.
 the receipt has not been allocated to.
 
 `held_amount`, `available_balance` and `pending_holds` describe what documents awaiting approval
-hold on the invoice (`FacilityInvoice::heldAmount()` / `pendingHolds()`, enforced through
-`App\Services\PropertyManagement\Billing\InvoiceHeldBalance`). When something is held,
-`validateAllocations()` refuses any increase over what this receipt already has there that is
-larger than `available_balance`. Keeping or removing money is always allowed, and with nothing
-held overpayment is unchanged.
+hold on the invoice (`FacilityInvoice::heldAmount()` / `pendingHolds()`). They are for display
+only: a reallocation may overpay a held invoice like any other, because a pending receipt or
+credit note still posts in full when approved (`ApplyReceiptAllocationAction` with
+`overpayPaidInvoice`, `ProcessCreditNoteAction::applyToInvoice()`). The overpaid part carries
+forward through `ApplyLeaseOverpaymentAction`.
 
 `collections_frozen` is `true` when the receipt has been remitted — see below.
 
@@ -91,7 +91,6 @@ Returns `{ "message": "Receipt reallocated successfully", "receipt": { ... } }`.
 | Receipt has been reversed | A reversed receipt cannot be reallocated. |
 | Receipt has allocations awaiting approval | This receipt has allocations awaiting approval and cannot be reallocated yet. |
 | Invoice fails the eligibility rules above | Invoice #N cannot be allocated to this receipt… |
-| More added to a held invoice than its available balance | Invoice #N has X available; Y is held by documents awaiting approval (…). |
 | Same invoice listed twice | Invoice #N is listed more than once. |
 | An amount is `<= 0` | Allocation amount for invoice #N must be greater than zero. |
 | The split does not equal the receipt amount | The allocations must add up to the full receipt amount of X. |

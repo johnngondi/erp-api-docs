@@ -112,14 +112,34 @@ Example response:
 | Key | Condition | Message |
 |---|---|---|
 | `allocations` | An invoice is not on a lease of `facility_id` | Some of the allocated invoices do not belong to leases in the selected property. |
-| `allocations` | An allocation is more than the invoice's available balance while documents awaiting approval hold part of it | Invoice #9001 has 400.00 available; 600.00 is held by documents awaiting approval (receipt #2500 RCPT-1004). |
-| `invoice` | An invoice has no balance left | Invoice with invoice_id 9001 is already paid for fully |
+| `allocations` | An invoice has no balance left (paid or already overpaid) | Invoice with invoice_id 9001 is already paid for fully |
 
-The second rule is the held balance described under
-[Invoices → Amounts held](./invoices.md#amounts-held-by-documents-awaiting-approval). Amounts are
-compared in the invoice currency. The invoice list carries `available_balance` and
-`pending_holds`, so the picker can cap the input instead of letting the request fail. When
-nothing holds the invoice, this rule does not apply.
+### Overpaying an invoice
+
+An allocation may be more than the invoice's balance, and more than its `available_balance`
+while documents awaiting approval hold part of it (see
+[Invoices → Amounts held](./invoices.md#amounts-held-by-documents-awaiting-approval)). It is
+never refused for that and never cut down. The whole allocation goes onto the invoice when the
+receipt is confirmed:
+
+- the invoice `balance` goes below zero (it reads `paid`);
+- the full amount becomes lease collections, spread over the invoice's components by the
+  property's allocation method (by `order`, the excess goes to the highest-priority component),
+  so all of it is remittable;
+- the tenant statement is credited the full amount against the lease;
+- the overpaid part carries forward when the lease's next invoice is processed.
+
+Documents that were already awaiting approval on the invoice still post in full when approved,
+so they may overpay it further. Nothing has to be redone.
+
+**UI:** warn, do not block. When an allocation is above the invoice's `available_balance`,
+show for example "250.00 is more than this invoice has available and will carry forward to the
+tenant's next invoice." Compare in the invoice currency; the list carries
+`available_balance` and `pending_holds`.
+
+Money left on the receipt itself (an `amount` above the sum of `allocations`) is unallocated and
+is not remittable until it is put on an invoice. See
+[Applying unallocated money](#applying-unallocated-money).
 
 ## Update Receipt
 
@@ -136,9 +156,11 @@ full with the **same body as Create**: `facility_id`, `transaction_number`,
 `pending`. Omit `pop_message` / `pop_upload_id` to keep the current proof of payment (see
 **Proof of payment** below for what sending them means).
 
-The same `422` rules as Create apply, with one difference: the receipt's own pending allocations
-never count against it. On each invoice it may use the available balance plus what it already
-holds there. Only what *other* pending documents hold is protected.
+The same `422` rules as Create apply, except that an invoice the receipt already has a pending
+allocation on is not refused for having no balance left: another document may have paid it in
+the meantime, and this receipt still overpays it when approved. The overpayment warning is
+worked out the same way, with the receipt's own pending allocations added back to
+`available_balance`.
 
 Who may do it: anyone with `update-facility-receipt`, or, while the receipt is returned for
 changes, its creator and the person who submitted it for approval.
@@ -345,6 +367,50 @@ specified in full in:
 `docs/frontend/app/property-management/lease-management/receipt-reallocation.md`
 
 Show the action only when `receipt.permissions.reallocate === true`.
+
+## Applying unallocated money
+
+Money that is on the tenant's account but not on an invoice line is not remittable: remittance
+is built from lease collections, and those only exist once money is allocated to an invoice. A
+console command finds that money and puts it where it belongs. There is no endpoint; it is run
+by hand on the server.
+
+```bash
+php artisan receipts:apply-unallocated            # report only, nothing changes
+php artisan receipts:apply-unallocated --apply    # post it
+php artisan receipts:apply-unallocated --company=3 --receipt=2501 --receipt=2502
+```
+
+It works through three kinds of money, in this order, lease by lease:
+
+1. **Overpaid invoices.** An invoice whose `balance` is below zero while a newer or older invoice
+   on the same lease is still open (the overpayment arrived after the next invoice was
+   processed, so nothing carried it). The overpaid part moves onto the open invoices, oldest
+   first, exactly as it would have when the next invoice was processed.
+2. **Unallocated receipt money.** A confirmed receipt with a `balance` above zero. It goes onto
+   the tenant's open invoices in the receipt's property, oldest first, each up to its
+   `available_balance`. What is left overpays the lease's latest invoice and carries forward
+   from there. When the tenant has more than one lease in the property, that leftover is not
+   placed (there is no telling which lease it belongs to) and the report says so.
+   - The full amount becomes lease collections, so it is remittable, also on a receipt that
+     was remitted before (the unallocated part was never in that remittance).
+   - The receipt's "Unallocated Receipt #…" statement line is replaced by a credit against the
+     lease, on the same date, so the tenant is not credited twice. Anything left unplaced keeps
+     its unallocated line, for the smaller amount.
+3. **Credit notes not fully applied** (`unapplied`, `partially applied`). They are drawn down
+   against the lease's open invoices, oldest first, the same way a newly processed invoice
+   draws them down.
+
+The report lists one row per item. A report run changes nothing.
+
+| Column | Meaning |
+|---|---|
+| Amount | what is found: the overpaid part, the unallocated receipt balance, or the unspent credit |
+| Would apply / Applied | how much of it goes onto open invoices |
+| To invoices | each receiving invoice with its amount, e.g. `#217916: 1446.84, #217920: 300` (receipt rows in the receipt currency, the rest in the lease currency) |
+| Left | what no open invoice can take |
+| Left goes to | where `Left` stays and what happens to it: an overpayment stays on its invoice and an unspent credit on its credit note, each carrying to the lease's next invoice when it is processed (with the lease's next due date); unallocated receipt money stays on the receipt |
+| Note | why something was not placed, or, for receipt money that overpays the lease's latest invoice, that it carries on from there |
 
 ## Change Receipt Date (Backdate)
 

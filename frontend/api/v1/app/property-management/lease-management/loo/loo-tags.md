@@ -10,7 +10,7 @@ the registry's *shape*; this file is its *contents*. The catalogue is also serve
 live at `GET lease-management/loo-tags`, and that endpoint — not this page — is what
 a client should build against.
 
-**84 tags across ten categories.**
+**86 tags across ten categories**, plus the generated [per-component first-period tags](#per-component-first-period-tags).
 
 ## How to read the "Resolved from" column
 
@@ -53,7 +53,7 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 | `{{tenant_address}}` | Tenant Address | — | The applicant's full address: physical address, P.O. Box and city; for a renewal or addendum prepared from a lease, the address on the lease holder's own application. | **Computed.** `applicant_physical_address`, then `P.O. Box {applicant_postal_address}-{applicant_postal_code}`, then the city, joined with commas, skipping blanks and a part already printed (a physical address that ends in the city does not get the city again): `Kilimani Road, P.O. Box 4567-00100, Nairobi`. A postal address already stored as `P.O. Box …` keeps its prefix. **Unresolved on an offer prepared from a lease:** the lease path routes back through the holder's own applications, and which one wins is undecided; a renewal prepared from a renewal application resolves like a new lease. |
 | `{{landlord_name}}` | Landlord Name | — | The facility owner, falling back to the landlord default accounts record. | **Path.** `facility.landlord.name` — the same on all three types. |
 | `{{landlord_address}}` | Landlord Address | — | The landlord's full address: physical address, P.O. Box and city. | **Computed.** The landlord user's `address`, then `P.O. Box {postal_address}-{postal_code}` (the fields on the [landlord record](../../../users/landlords.md)), then the landlord's city, joined with commas and skipping blanks — the same on all three types. A landlord carried over from the previous system has `address` already reading `P.O. Box {box}-{code}, {town}`; that prints once, with nothing repeated. |
-| `{{guarantors}}` | Guarantors | — | Every guarantor on the application with their details; for a renewal or addendum prepared from a lease, those on the lease holder's own application. | **Computed.** One entry per guarantor — name, `ID No.` / `Passport No.` / `Business Licence No.` by registration type, `P.O. Box …`, city, email, phone, blanks skipped — joined with `; `: `Jane Wanjiru, ID No. 12345678, P.O. Box 90-00100, Nairobi, jane@example.test, 0712 345 678; Peter Otieno, …`. **Unresolved on an offer prepared from a lease:** the lease path routes back through the holder's own applications, and which one wins is undecided. |
+| `{{guarantors}}` | Guarantors | `html` | Every guarantor on the application with their details; for a renewal or addendum prepared from a lease, those on the lease holder's own application. | **Computed.** One block per guarantor, line by line — name, `P.O. Box: …,`, the city in capitals, `Email: …` — blanks skipped, blocks parted by a blank line. No ID or phone number: the ID is printed on `{{guarantors_signature}}`, and the phone is not part of the offer. **Unresolved on an offer prepared from a lease:** the lease path routes back through the holder's own applications, and which one wins is undecided. |
 | `{{tenant_postal_address}}` | Tenant Postal Address | — | The applicant's postal address (P.O. Box). | **Path.** `lease_application.applicant_postal_address`. `null` on a Loo prepared from a lease. |
 | `{{tenant_postal_code}}` | Tenant Postal Code | — | The postal code of the applicant's postal address. | **Path.** `lease_application.applicant_postal_code`. `null` on a Loo prepared from a lease. |
 | `{{tenant_city}}` | Tenant City | — | The applicant's city. | **Path.** `lease_application.city.name`. `null` on a Loo prepared from a lease. |
@@ -96,22 +96,24 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 | `{{termination_notice_rent_in_lieu_months}}` | Rent in Lieu of Notice (Months) | — | Months of rent payable in lieu of termination notice. | **Path.** `loo.termination_notice_rent_in_lieu_months` — the same on all three types. |
 | `{{parking_security_deposit_months}}` | Parking Deposit Months | — | Months of parking fee held as deposit. | **Path.** `loo.parking_security_deposit_months` — the same on all three types. |
 
-## Financials <sub>`financials` · 21 tags</sub>
+## Financials <sub>`financials` · 23 tags</sub>
 
 | Tag | Name | Format | Description | Resolved from |
 |---|---|---|---|---|
-| `{{rent_first_period}}` | First Period Rent | `currency` | Everything payable for the first period before any escalation - rent, service charge, parking and signage together, tax included. Read from the Loo's stored rent breakdown. | **Computed.** The stored schedule's first period, `total`. Tax inclusive, all components. Re-resolved whenever the granted spaces change. |
-| `{{rent_first_period_monthly}}` | First Period Rent (Monthly) | `currency` | The first period figure expressed per month, tax included. | **Computed.** The stored schedule's first period, `monthly`. Tax inclusive. Re-resolved whenever the granted spaces change. |
-| `{{rent_first_period_quarterly}}` | First Period Rent (Quarterly) | `currency` | The first period figure expressed per quarter, tax included. | **Computed.** The stored schedule's first period, `quarterly`. Tax inclusive. Re-resolved whenever the granted spaces change. |
-| `{{rent_first_period_annual}}` | First Period Rent (Annual) | `currency` | The first period figure expressed per annum, tax included. | **Computed.** The stored schedule's first period, `annual`. Tax inclusive. Re-resolved whenever the granted spaces change. |
+| `{{rent_first_period}}` | First Period Rent | `currency` | What the rent costs for the whole first period before any escalation, tax included: the rent component(s) only - service charge and the other components have their own tags. Read from the rent lines of the first period of the Loo's stored rent breakdown; a period stored without its component lines prints the period's own total. | **Computed.** The stored schedule's first period: the `components[]` lines whose lease component is flagged `is_rent`, their `monthly_gross` added up (tax inclusive) × the period's `months`. Not the period's own `total`, which adds up every escalating component and so takes in the service charge whenever it is priced on the spaces. Falls back to the period's `total` when the period carries no lines or no rent line (a schedule corrected by hand without its components, an offer with no rent component). The same rule holds for the three per-frequency tags below. Re-resolved whenever the granted spaces change. |
+| `{{rent_first_period_monthly}}` | First Period Rent (Monthly) | `currency` | The first period's rent per month, tax included: the rent component(s) only - service charge and the other components have their own tags. | **Computed.** The first period's rent lines, `monthly_gross` added up. Tax inclusive. Falls back to the period's `monthly`. Re-resolved whenever the granted spaces change. |
+| `{{rent_first_period_quarterly}}` | First Period Rent (Quarterly) | `currency` | The first period's rent per quarter (three months), tax included: the rent component(s) only - service charge and the other components have their own tags. | **Computed.** The monthly rent figure above × 3. Tax inclusive. Falls back to the period's `quarterly`. Re-resolved whenever the granted spaces change. |
+| `{{rent_first_period_annual}}` | First Period Rent (Annual) | `currency` | The first period's rent per annum (twelve months), tax included: the rent component(s) only - service charge and the other components have their own tags. | **Computed.** The monthly rent figure above × 12. Tax inclusive. Falls back to the period's `annual`. Re-resolved whenever the granted spaces change. |
 | `{{service_charge}}` | Service Charge | `currency` | The applicable service charge for the granted spaces. | **Computed.** Live total of the service-charge components across the granted spaces, net of tax. Re-resolved whenever the granted spaces change. |
 | `{{monthly_service_charge}}` | Monthly Service Charge | `currency` | Service charge payable per month. | **Path.** `loo.monthly_service_charge` — the same on all three types. Re-resolved whenever the granted spaces change. |
 | `{{quarterly_service_charge}}` | Quarterly Service Charge | `currency` | Service charge payable per quarter. | **Path.** `loo.quarterly_service_charge` — the same on all three types. Re-resolved whenever the granted spaces change. |
 | `{{annual_service_charge}}` | Annual Service Charge | `currency` | Service charge payable per year. | **Path.** `loo.annual_service_charge` — the same on all three types. Re-resolved whenever the granted spaces change. |
 | `{{service_charge_security_deposit}}` | Service Charge Security Deposit | `currency` | Security deposit held against service charge: the deposit months times the final period's service charge per month. | **Path.** `loo.service_charge_security_deposit` — the same on all three types. The column is `rent_deposit_months` × the last schedule period's service charge per month, net of tax; re-derived whenever the granted spaces or the months change. |
 | `{{rent_security_deposit}}` | Rent Security Deposit | `currency` | Security deposit held against rent: the deposit months times the final period's rent per month. | **Path.** `loo.rent_security_deposit` — the same on all three types. The column is `rent_deposit_months` × the last schedule period's rent per month, net of tax; re-derived whenever the granted spaces or the months change. |
-| `{{rent_breakdown}}` | Rent Breakdown | `html` | A table of what is payable in every period from the first to the end of the term: each component per month, per quarter and per annum, escalated period by period, with a total per period. Computed from the escalation schedule and stored on the Loo, so a reviewer can correct a period by hand. | **Computed.** The **stored** `rent_breakdown`, rendered as an HTML table in the editor's own table shape (styled `p`/`span` cells, like the bank-account table): a header row, then per period a label row, a row per component across all spaces with `monthly_gross` ×1 / ×3 / ×12, and a Total row. Re-resolved whenever the granted spaces change. See [the rent tags](loo.md#the-rent-tags). |
-| `{{rent_breakdown_monthly}}` | Rent Breakdown (Monthly) | `list` | The same periods as the rent breakdown, each printed per month and per annum. | **Computed.** The **stored** `rent_breakdown`, one line per period: `First Period KES 120,000.00 per month or KES 1,440,000.00 per annum`, then `Next Period` and `Last Period`. Re-resolved whenever the granted spaces change. |
+| `{{rent_breakdown}}` | Rent Breakdown | `html` | Kept for the templates already written against it; prefer escalation_breakdown, which prints the identical table. Every escalating component per period - per month, per quarter and per annum, escalated period by period - with the period's total. Computed from the escalation schedule and stored on the Loo, so a reviewer can correct a period by hand. | **Computed.** Kept for existing templates; `{{escalation_breakdown}}` is the preferred name and prints exactly the same markup. The **stored** `rent_breakdown`, rendered as an HTML table in the editor's own table shape (styled `p`/`span` cells, like the bank-account table): a header row, then per period a label row, a row per **escalating** component across all spaces (`escalates: true`; every component when none escalates) with `monthly_gross` ×1 / ×3 / ×12, and a Total row off the period's own figures, which cover the same lines. Non-escalating lines (service charge, parking) stay stored but are not printed. Re-resolved whenever the granted spaces change. See [the rent tags](loo.md#the-rent-tags). |
+| `{{rent_breakdown_monthly}}` | Rent Breakdown (Monthly) | `list` | Kept for the templates already written against it; prefer escalation_breakdown_monthly, which also names each escalating component. The same periods as the rent breakdown, each printed per month and per annum. | **Computed.** Kept for existing templates, output unchanged; `{{escalation_breakdown_monthly}}` is the preferred name. The **stored** `rent_breakdown`, one line per period: `First Period KES 120,000.00 per month or KES 1,440,000.00 per annum`, then `Next Period` and `Last Period`. Reads the period's `monthly` / `annual`, so escalating components only (every component when none escalates). Re-resolved whenever the granted spaces change. |
+| `{{escalation_breakdown}}` | Escalation Breakdown | `html` | Every escalating component per period, with the period's total. Charges that do not escalate are stated separately. | **Computed.** The same table as `{{rent_breakdown}}`, through the same builder (`RentBreakdownTable` over the stored `rent_breakdown`): per period a label row, a row per escalating component (`RentScheduleBuilder::linesInTotals()`: the `escalates: true` lines, every line when none escalates) at ×1 / ×3 / ×12 of `monthly_gross`, and the period's Total. The preferred name for the table. Re-resolved whenever the granted spaces change. |
+| `{{escalation_breakdown_monthly}}` | Escalation Breakdown (Monthly) | `list` | Every period on one line: each escalating component per month, then the period's total per month and per annum. Charges that do not escalate are stated separately. | **Computed.** The **stored** `rent_breakdown`, one line per period, labelled `First Period`, `Next Period`, `Last Period`. Two or more escalating components: `First Period: Rent KES 28,331.84 and Promotion Fee KES 1,000.00 per month — KES 29,331.84 per month or KES 351,982.08 per annum`. One: `First Period: Rent KES 28,331.84 per month or KES 339,982.08 per annum`. Components are the period's `components[]` filtered by `linesInTotals()`, each at its `monthly_gross` (tax inclusive); the total is the period's own `monthly` / `annual`. A period corrected by hand without its lines prints `First Period: KES … per month or KES … per annum`. Re-resolved whenever the granted spaces change. |
 | `{{apply_fitout_period_service_charge}}` | Service Charge During Fit-out | `yes_no` | Whether service charge is payable during the fit-out period. | **Path.** `loo.apply_fitout_period_service_charge` — the same on all three types. |
 | `{{rent_and_service_charge_distinct}}` | Rent and Service Charge Billed Separately | `yes_no` | Whether rent and service charge are presented as distinct amounts. | **Path.** `loo.rent_and_service_charge_distinct` — the same on all three types. |
 | `{{utility_security_deposit}}` | Utility Security Deposit | `currency` | Security deposit held against utilities. | **Path.** `loo.utility_security_deposit` — the same on all three types. Re-read whenever the granted spaces change, but the column itself is **never recomputed** — nothing on the offer can derive it, so it stays exactly as staff entered it. |
@@ -120,7 +122,7 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 | `{{deposit_to_pay}}` | Deposit Payable | `currency` | The deposit the tenant still has to pay (the top-up on a renewal): the rent, service-charge and utility deposits less what is already held, never below zero. | **Computed.** `max(0, rent_security_deposit + service_charge_security_deposit + utility_security_deposit − deposit_held)`. |
 | `{{currency}}` | Currency | — | The currency the offer is priced in, as its code: `KES`. | **Path.** `facility.reportingCurrency.code` — the same on all three types. |
 | `{{has_vat}}` | VAT Applicable | `yes_no` | Whether the quoted amounts attract VAT. | **Path.** `loo.has_vat` — the same on all three types. |
-| `{{money_computations}}` | Money Computations | `html` | A table of what the tenant pays on signing - item, amount, tax and total: the first billing cycle's rent, service charge and every other priced component, the fit-out period service charge when it applies, the security deposit (net of any deposit held on a renewal), the legal fees deposit, and the total payable on signing. | **Computed.** `MoneyComputationsTable`, a `table.money-computations` in the same cell shape as `rent_breakdown`, columns Item / Amount / Tax / Total. See [Money computations](#money-computations) below for every row. Re-resolved whenever the granted spaces change, on every save of the offer, and when a legal fee note is recorded. |
+| `{{money_computations}}` | Money Computations | `html` | A table of what the tenant pays on signing - item, amount, tax and total: the first billing cycle's rent, service charge and every other priced component, the fit-out period service charge when it applies, the security deposit (net of any deposit held on a renewal), the legal fees deposit, and the total payable on signing. | **Computed.** `MoneyComputationsTable`, a `table.money-computations` in the same cell shape as `rent_breakdown`, columns Item / Amount / Tax / Total. See [Money computations](#money-computations) below for every row. When the rows are paid into more than one bank account it prints one numbered section per account, each with its own total, before the grand total - see [Sections per collection account](#sections-per-collection-account). Re-resolved whenever the granted spaces change, on every save of the offer, and when a legal fee note is recorded. |
 
 ## Legal <sub>`legal` · 7 tags</sub>
 
@@ -134,7 +136,7 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 | `{{legal_fee_recorder}}` | Legal Fee Recorded By | — | Name of the user who recorded the legal fee figures. | **Path.** `loo.legalFeeRecorder.name` — the same on all three types. |
 | `{{stamp_duty_fee}}` | Stamp Duty | `currency` | Stamp duty payable on the lease. | **Path.** `loo.stamp_duty_fee` — the same on all three types. |
 
-## Execution & Signatures <sub>`execution` · 5 tags</sub>
+## Execution & Signatures <sub>`execution` · 7 tags</sub>
 
 | Tag | Name | Format | Description | Resolved from |
 |---|---|---|---|---|
@@ -143,6 +145,8 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 | `{{has_landlord_signature}}` | Landlord Signature Present | `yes_no` | Whether the landlord signature block is printed on the document. | **Path.** `loo.has_landlord_signature` — the same on all three types. |
 | `{{signatory_type}}` | Signatory Type | — | Whether the landlord signs or the trustees do. | **Path.** `loo.signatory_type` — the same on all three types. |
 | `{{trustees_count}}` | Number of Trustees | — | How many trustee signature blocks to print. Only meaningful when the signatory type is trustees. | **Path.** `loo.trustees_count` — the same on all three types. |
+| `{{guarantors_signature}}` | Guarantors Signature Block | `html` | A signing block per guarantor, stacked with a blank line between them. | **Computed.** A borderless three-column table (`signing-block guarantor-signatures`): the name in bold over a dotted signing line; a column of `}`; then a dotted line, `PP/ID No.: …`, `P.O. Box: …`, the town in capitals on its own line, `Date.: ……` and a closing dotted line. `null` when the application names no guarantors, and on an offer prepared from a lease. |
+| `{{tenant_signature}}` | Tenant Signature Block | `html` | The tenant's signing block, laid out like a guarantor's, with the tax PIN as well. | **Computed.** The same table (`signing-block tenant-signature`), its right column `PP/ID No.: …` (`Reg. No.: …` for a business licence), `PIN No.: …`, `P.O. Box: …` and the town. Read off the application (`applicant_name`, `registration_number`, `applicant_tax_pin`, the applicant's P.O. Box and city); on an offer prepared from a lease, off the lease holder (`name`, `business_registration_number` as `Reg. No.`, `tax_pin`, `address`, city). `null` with no name to sign. |
 
 ## Banking <sub>`banking` · 8 tags</sub>
 
@@ -156,6 +160,7 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 | `{{collection_bank}}` | Collection Bank | — | The bank holding the property's collection account. | **Path.** `facility.collectionAccount.bankBranch.bank.name` — the same on all three types. |
 | `{{collection_bank_branch}}` | Collection Bank Branch | — | The branch of the property's collection account. | **Path.** `facility.collectionAccount.bankBranch.name` — the same on all three types. |
 | `{{collection_bank_code}}` | Collection Bank Code | — | The branch code of the property's collection account, for transfers. | **Path.** `facility.collectionAccount.bankBranch.code` — the same on all three types. |
+| `{{collection_accounts}}` | Collection Accounts | `html` | Where each charge is paid: one row per collection account on the property, listing the components it collects (rent, service charge, legal fees...) | **Computed.** `CollectionAccountsTable`, a `table.collection-accounts`, columns Components / Bank / Branch / Code / Account name / Account number. The components are the distinct lease components across the granted spaces in first-met order, plus the legal fees component (`LegalFeeComponentResolver`) when `has_lawyer`. Each goes to the property's active `collection`/`both` link whose `lease_components` names it, else the unrestricted one (oldest first, as `defaultCollectionAccount()`), and rows group by bank account, so one account collecting everything prints one row. The legal fees component is the exception: when the property's management contract has `collection_account_holder = landlord` and the company's `legal_fee_collection_account_id` setting names an active account, it is listed under that account instead (`CollectionAccountResolver`, the rule `money_computations` shares). Components no account covers share a trailing row with blank account cells. Empty when the offer charges nothing or no component resolves to an account. Re-resolved whenever the granted spaces change and on every save of the offer. The five singular `collection_*` tags still name the default account. |
 
 ## Approval <sub>`approval` · 1 tag</sub>
 
@@ -196,7 +201,9 @@ tenant pays on signing. Rows, in this order:
   `biannual` → Half-Year (6), `annually` → Year (12). On an offer with no application cycle, the
   cycle of the lease being renewed is used, and otherwise a month.
 - **Per-month figures** come from the **first period of the stored `rent_breakdown`**: each component's
-  `monthly_net` and `monthly_tax`. Escalation never touches the first period. When there is no stored
+  `monthly_net` and `monthly_tax`, read off every line in `components` (escalating or not - the period's own
+  figures cover the escalating components only, so they are never used here). Escalation never touches the
+  first period. When there is no stored
   schedule (no start date or term yet), or a reviewer rewrote the first period without its
   components, the granted `loo_space_components` are used instead: `amount` net, and tax at the row's
   own `tax_id` (`taxes.value` is a fraction, 0.16 = 16%).
@@ -211,6 +218,44 @@ tenant pays on signing. Rows, in this order:
   first, so the column adds up as printed.
 - Money prints in the property's reporting currency, `KES 1,234.56`. A table with no rent, no
   service charge and nothing payable at all resolves to `null`.
+
+### Sections per collection account
+
+Every row is paid into a bank account, by the same rule `{{collection_accounts}}` prints
+(`CollectionAccountResolver`):
+
+| Row | Paid into |
+|---|---|
+| First {Cycle} Rent | the account of the first rent component in the schedule |
+| First {Cycle} Service Charge | the account of the first service-charge component |
+| First {Cycle} {Component} | that component's account (a component since deleted: the property's general account) |
+| Fit-out Period Service Charge | the service charge's account |
+| Security Deposit, and its two renewal lines | the rent's account - a deposit is held with the rent it secures. With no rent granted, the property's general account |
+| Legal Fees Deposit | the company's `legal_fee_collection_account_id` account when the management contract has `collection_account_holder = landlord` and the setting names an active account of the company; else the legal fees component's account like any other charge |
+
+A component's account is the property's active `collection`/`both` link whose `lease_components`
+names it, else the unrestricted one (oldest first), else none. The general account is the oldest
+unrestricted link's.
+
+The rows are grouped by bank account, groups in the order their first row is met; the rows no
+account covers form one group.
+
+- **One group** (everything paid into one account, or the property has no account at all): the
+  single table above, unchanged.
+- **Several groups**: after the header row, for each group in turn
+  1. a bold heading row spanning all four columns (`<tr class="section"><td colspan="4">`):
+     `1. Payable to {Bank}, {Branch} · A/C {account number} ({account name})` - each part left out
+     when the account lacks it - or `1. Payable as advised` for the rows no account covers;
+  2. the group's rows, in their usual order;
+  3. a bold `<tr class="section-total">` row, `Total payable to {same account}` (or
+     `Total payable as advised`), with the group's total in the Total column - its component rows
+     added up, the renewal working lines never.
+
+  The bold, double-underlined **Total Payable on Signing** follows the last group; it equals the
+  group totals added together.
+
+The legal fees deposit row is always stated, so with a landlord-held collection account and the
+setting filled it has a section of its own even before a fee note is recorded (at 0).
 
 ## Approval signatures
 
@@ -235,6 +280,41 @@ offer picks it up the next time its chain moves.
 The signature is stored in `loo_tag_values` as part of the value, because the value is what the
 editor preview, the PDF and the tenant's copy print. The sanitiser lets an `img` through only with
 a `data:` PNG/JPEG/GIF source whose bytes really are an image, never a URL.
+
+## Per-component first-period tags
+
+Alongside the fixed tags above, the registry holds **four generated tags per active lease
+component**, so a clause can print what any one component costs in the first period of the rent
+schedule - `{{service_charge_first_period_monthly}}`, `{{parking_first_period_total}}` and so on.
+They are not listed in `loo_tags.json` and are not counted in the totals above: they follow the
+lease components a company has, and `GET lease-management/loo-tags` serves them with the rest,
+each carrying the `lease_component_id` it prices (`null` on every fixed tag).
+
+| Key | Label | Figure |
+|---|---|---|
+| `{slug}_first_period_monthly` | {Name} · First Period (Monthly) | The component's first-period lines, `monthly_gross` added up (tax inclusive) |
+| `{slug}_first_period_quarterly` | {Name} · First Period (Quarterly) | Monthly × 3 |
+| `{slug}_first_period_annual` | {Name} · First Period (Annual) | Monthly × 12 |
+| `{slug}_first_period_total` | {Name} · First Period (Total) | Monthly × the first period's `months` |
+
+All four are category `financials`, format `currency`, `is_computed: true`, `maps_to: null`.
+
+- **The slug** is the component's name lowercased with underscores (`Service Charge` →
+  `service_charge`). Where another component already owns that slug, the component's id follows
+  it: `parking_14_first_period_total`. A component keeps its slug while its name still gives it.
+- **No duplicates of the fixed tags.** A component whose slug would land on a fixed tag gets no
+  generated tags at all: `Rent` would give `rent_first_period_monthly`, which the fixed rent tags
+  already hold and print. Use `{{rent_first_period*}}` for it.
+- **They follow the components.** Creating, updating, activating or deactivating a lease component
+  re-syncs the rows (`LeaseComponentTagRegistry::sync()`). A rename moves the keys and labels, and
+  the values already stored under the old keys move with them; a template written against the old
+  token must be updated. An inactive or deleted component's tags are removed with their stored
+  values. Existing installs get them from the `2026_10_16_100360` migration; a fresh install seeds
+  them with `php artisan db:seed --class=LeaseComponentLooTagSeeder` after the components.
+- **Resolution.** Read off the first period of the stored schedule (built live when none is
+  stored), so they agree with `{{rent_breakdown}}`. A component the offer does not price prints
+  blank, and so does every per-component tag when the first period carries no component lines.
+  Re-resolved whenever the granted spaces change.
 
 ## A note on `is_computed`
 

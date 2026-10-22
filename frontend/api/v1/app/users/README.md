@@ -12,6 +12,8 @@ Base prefix:
   - `docs/frontend/app/users/tenants.md`
 - Vendors
   - `docs/frontend/app/users/vendors.md`
+- Billing addresses (`{tenants|vendors|landlords}/{user}/billing-addresses`)
+  - `docs/frontend/api/v1/app/billing-addresses.md`
 
 ## Implementation Notes
 

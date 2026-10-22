@@ -24,7 +24,7 @@ Staff (this domain):
 - `GET /lease-applications`
 - `POST /lease-applications/invite` — send a prospective tenant the link to register and apply (see [Invite an applicant](#invite-an-applicant))
 - `GET /lease-applications/{application}`
-- `PUT/PATCH /lease-applications/{application}` — staff edit, while the application is open (see [Staff edit](#staff-edit))
+- `PUT/PATCH /lease-applications/{application}` — staff edit, while the application is open or, for the person drafting an offer from it, while that offer is editable (see [Staff edit](#staff-edit))
 - `DELETE /lease-applications/{application}`
 - `PATCH /lease-applications/{application}/review`
 - `GET /lease-applications/{application}/vetting-results` — staff-only vetting summary
@@ -264,10 +264,25 @@ the Edit action only when it is `true`. It is the same window
 [spaces](#when-the-allocation-may-be-changed) and [documents](#submit-a-document)
 already follow: the decision was made against what the application said.
 
+**Reopened to the offer's initiator.** The person who generated a Letter of Offer from
+the application (the offer's `generated_by`) may keep editing the `approved` application
+while that offer is `draft` or `pending_approval`, without `update-lease-application`.
+The property must still be allocated to them. The offer only displays the applicant's
+details, bank and guarantors, so they are corrected here, and every save re-reads them
+onto the draft offer's tags (a value typed over by hand on the offer stands). Once the
+offer is `approved` or `sent` the application is locked again. Nobody else gets the
+window: other staff, even with `update-lease-application`, still get `403` on an
+approved application. The `403` message is *"Only a pending application, one under
+review, or one whose offer you are drafting can be edited."* `permissions.staffUpdate`
+reflects this, so the offer's initiator sees the Edit action and others do not.
+
 **Effect.** As with the applicant's own edit, saving sends the application back to
 `pending` for the reviewer to look at again. Any earlier review comment is cleared, and
 the review task is raised again for the reviewer role (see
 [Review Application](#review-application)). Every change is recorded in the activity log.
+An edit through the offer window is the exception: it is a correction, not a
+resubmission, so the application stays `approved` with its reviewer, comment and tasks
+as they were.
 
 Response `200`: `{ "message": "Lease Application updated successfully.", "data": { ...the application } }`
 
@@ -904,6 +919,14 @@ refresh from the answer.
 **When:** while the application is **pending or under review**. Approved and rejected close
 both, the same window as spaces. Read `permissions.submitDocument` and
 `permissions.manageGuarantors`; both mean *update permission, application still open*.
+
+**Except for the offer's initiator.** As with [the staff edit](#staff-edit),
+whoever generated a Letter of Offer from the application may still attach documents and
+add, correct or remove guarantors on the `approved` application while that offer is
+`draft` or `pending_approval`, without `update-lease-application`. A guarantor change is
+re-read onto the draft offer's `guarantors` and `guarantors_signature` tags. Both flags are
+`true` for that person in that window and `false` for everyone else on an approved
+application. Spaces are not reopened: the offer's spaces are edited on the offer.
 
 **A staff upload is the same act as the applicant's**, because it runs the same code: the
 document resets to `pending`, the previous result and reason are cleared, verification is

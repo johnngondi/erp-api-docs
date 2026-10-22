@@ -9,9 +9,10 @@ Base route:
 ## Endpoints
 
 - `GET /payment-vouchers`
-- `GET /payment-vouchers/create` (options preview)
+- `GET /payment-vouchers/create` (options preview; `payment_voucher_id` adds a voucher's own payables for its edit form)
 - `POST /payment-vouchers`
 - `GET /payment-vouchers/{paymentVoucher}`
+- `PUT /payment-vouchers/{paymentVoucher}` — edit while `pending` (see [Edit a payment voucher](#edit-a-payment-voucher))
 - `DELETE /payment-vouchers/{paymentVoucher}`
 - `PATCH /payment-vouchers/{paymentVoucher}/cancel`
 - `PATCH /payment-vouchers/{paymentVoucher}/release`
@@ -107,6 +108,55 @@ Sample list response (`FacilityPaymentVoucherResource`). `public_url` is the vou
 |---|---|---|---|
 | `payable_id` | Yes | integer | Expense/Remittance id depending on `payable_as` |
 | `amount` | Yes | number | Must not exceed payable balance/remittable amount |
+
+## Edit a payment voucher
+
+`PUT /api/v1/app/{company}/property-management/finance/payment-vouchers/{paymentVoucher}`
+
+Only while the voucher is `pending` — before it is released (row 138). Needs
+`update-facility-payment-voucher`, or to be the voucher's creator.
+
+Body: **the same payload as create**, sent whole. The items sent replace the voucher's items:
+
+- Creating a voucher already marks what it pays: a bill's `paid` goes up by the item's amount, a
+  remittance becomes `paid`. The edit takes that back for the old items (the bill's `paid` goes down
+  again, a remittance goes back to `unpaid`) and applies the new items the same way create does.
+- `amount` is checked against the bill's balance **plus what this voucher already pays on that bill**, so
+  sending the voucher back unchanged, or raising an item's amount up to the bill's full balance, passes.
+- The status stays `pending`. Nothing reaches the vendor statement until the voucher is released.
+
+Response `200`: `{ "data": { "message": "Payment voucher updated successfully.", "payment_voucher": { ... } } }`
+
+Errors:
+
+- `403` — `"Only a pending payment voucher can be edited."`, or no edit right.
+- `422` — validation, as on create.
+
+Building the edit form: call the options endpoint with the voucher's id,
+`GET /payment-vouchers/create?payable_as=…&payable_user_id=…&payment_voucher_id={id}`. Alongside what
+is still open it returns the bills or remittances this voucher already pays - even ones it pays in
+full - in the same shape, and every option carries `voucher_amount`:
+
+- `voucher_amount`: what this voucher pays on it, in the voucher's currency; `null` when it is not on
+  this voucher. Tick the options where it is set and prefill their amount with it.
+- Bills: `payable_amount` includes what this voucher pays on the bill (remaining balance + this
+  voucher's payment, in the bill's currency), so it is the most the edited voucher can pay on it.
+  `paid` and `balance` are the bill's own figures, with this voucher's payment already in them.
+- Remittances: `remittable_amount` as on create; the amount must still equal it.
+
+The voucher's own items are offered only while the query names the voucher's own payee
+(`payable_as` and `payable_user_id`). `payment_voucher_id` needs the edit right on that voucher
+(`403` otherwise). Without it the endpoint behaves as before.
+
+## Flags, printing and delete
+
+- `permissions.update` is `true` only on a `pending` voucher the user may edit.
+- `permissions.delete` is `true` only on a `pending` or `cancelled` voucher, matching what
+  `DELETE` accepts.
+- A `pending` or `cancelled` voucher cannot be printed: the template render endpoints refuse it with
+  `422` on `resource_id` (`"... is pending and cannot be printed."`), the same rule as invoices, credit
+  notes, receipts and LPOs. Hide the print action unless the status is `paid`. The payee's public page
+  already hid pending vouchers.
 
 ## Pay payload (`PaymentAdviceData`)
 

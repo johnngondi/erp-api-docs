@@ -155,8 +155,8 @@ item prices:
 - on **every** `GET /requests/{procurementRequest}/steps/{step}` by an actor of that step, including
   after a later step sent the request back;
 - when a price changes (`PUT .../purchase-items/{item}/prices/{price}`);
-- when the item's `vendors`, `currency_id` or regulated `base_price` changes
-  (`PUT .../purchase-items/{item}`);
+- when the item's `vendors`, `currency_id` or `base_price` changes (`PUT .../purchase-items/{item}`;
+  a new base price is first written to every supplier's price row);
 - when an operator runs `procurement:recompute-purchase-options` (see
   [Maintenance commands](#maintenance-commands)).
 
@@ -482,9 +482,11 @@ Endpoints:
 - `GET /lpos`
 - `POST /lpos` — raise a **direct** LPO (see below)
 - `GET /lpos/{lpo}`
+- `PUT /lpos/{lpo}` — edit a **direct** LPO while it is `pending` (see [Edit a direct LPO](#edit-a-direct-lpo))
+- `PATCH /lpos/{lpo}/step-fields` — save only the fields an approval step opened
+- `DELETE /lpos/{lpo}` — delete an LPO that was never issued (see [Delete an LPO](#delete-an-lpo))
+- `PATCH /lpos/{lpo}/cancel` — cancel an LPO the supplier has received (see [Cancel an LPO](#cancel-an-lpo))
 - `PUT /lpos/{lpo}/review`
-
-`PUT/PATCH /lpos/{lpo}` and `DELETE /lpos/{lpo}` are registered by the resource route but not implemented.
 
 ### Permissions
 
@@ -492,14 +494,11 @@ Endpoints:
 |---|---|
 | `view-facility-procurement-lpo` | List and read LPOs (staff: on allocated properties; suppliers: their own) |
 | `create-facility-procurement-lpo` | Raise a direct LPO (`POST /lpos`) |
-| `update-facility-procurement-lpo` | Edit an LPO. The LPO's creator, and an approver granted edit rights on the current step, may also edit |
-| `delete-facility-procurement-lpo` | Delete an LPO. The LPO's creator may also delete |
-| `cancel-facility-procurement-lpo` | Cancel an LPO |
-| `review-document-facility-procurement-lpo` | Accept a supplier's jobcard / delivery note (`PUT /lpos/{lpo}/review`) |
+| `update-facility-procurement-lpo` | Edit a pending direct LPO. The LPO's creator, an approver granted edit rights on the current step, and whoever it was returned to for changes may also edit |
+| `delete-facility-procurement-lpo` | Delete a pending or rejected LPO. The LPO's creator may also delete |
+| `cancel-facility-procurement-lpo` | Cancel an issued LPO, or a delivered one whose bill is still pending, on an allocated property; shown as `permissions.cancel` |
+| `review-document-facility-procurement-lpo` | Accept a supplier's jobcard / delivery note (`PUT /lpos/{lpo}/review`); shown as `permissions.reviewDocument` |
 | `submit-doc-facility-procurement-lpo` | Supplier portal: submit the jobcard / delivery note |
-
-No endpoint is wired to update, delete or cancel yet; the permissions and policy abilities exist so roles
-can be set up ahead of them.
 
 ### Workflow LPOs and direct LPOs
 
@@ -525,7 +524,7 @@ property scoping, bills and the printed LPO treat them the same way.
 - Filters:
   - `filter[search]` — free text over id, title, notes, supplier, request title and property name
   - **Exact**: `filter[facility_id]`, `filter[is_direct]` (`1`/`0`), `filter[type]` (`work`, `purchase`)
-  - `filter[vendor_id]`, `filter[expense_category_id]`, `filter[status]`, `filter[delivered_at]`, `filter[rating]`,
+  - `filter[vendor_id]`, `filter[expense_category_id]`, `filter[expense_type_id]`, `filter[expense_sub_type_id]` (row 169), `filter[status]`, `filter[delivered_at]`, `filter[rating]`,
     `filter[amount]`, `filter[total]`, `filter[created_at]`
 - Sort:
   - `sort=id,created_at,delivered_at,amount,total,rating,status`
@@ -700,6 +699,169 @@ Errors:
 - `403` — missing permission, or not allocated to `facility_id`.
 - `422` — validation, keyed by field (`items.0.cost`, `comparables.1`, `expense_sub_type_id`, ...).
 
+### Edit a direct LPO
+
+`PUT /api/v1/app/{company}/property-management/procurement/lpos/{lpo}`
+
+Only while the LPO is `pending` (row 138). Only a direct LPO is ever pending — a workflow LPO is issued as
+`lpo` straight away — so a workflow LPO is never editable. Once approved the LPO has gone to the supplier
+and is not edited; cancel it instead.
+
+Body: **the same payload as [Create a direct LPO](#create-a-direct-lpo)**, sent whole. The items are
+replaced by the ones sent and the totals recalculated the same way. `comparables` is the complete list: a
+quotation left off is detached. The status stays `pending`.
+
+- An approver whose current step lends them editing rights may edit without the permission; if the step
+  limits them to certain fields, a body carrying any other field is refused with `403`, naming the fields
+  allowed and the ones refused. Such an approver saves their fields through
+  `PATCH /lpos/{lpo}/step-fields` - see
+  [approvals](../access-management/approvals.md#saving-only-the-steps-fields-step-fields-row-138).
+- Editing an LPO that was returned for changes sends it round its approval chain again.
+- The approval chain is told what changed: material fields notify everyone on the chain, the rest notify
+  the LPO's creator.
+
+Response `200`:
+
+```json
+{
+  "data": {
+    "message": "LPO updated successfully.",
+    "lpo": { "id": 41, "status": { "value": "pending", "color": "warning" }, "...": "as Show an LPO" }
+  }
+}
+```
+
+Errors:
+
+- `403` — `"Only a pending LPO can be edited."`, `"Only a directly raised LPO can be edited."`, no edit
+  right, or not allocated to `facility_id`.
+- `422` — validation, as on create.
+
+`permissions.update` on the LPO is `true` exactly when this call would be allowed.
+
+### Delete an LPO
+
+`DELETE /api/v1/app/{company}/property-management/procurement/lpos/{lpo}`
+
+Only an LPO that was never issued: `pending` or `rejected`. Its items, its approval chain and the tasks that
+chain raised go with it. An LPO the supplier has (`lpo`, `delivered`, `cancelled`) is refused with `403`
+`"Only a pending or rejected LPO can be deleted."`.
+
+Response `200`: `{ "data": { "message": "LPO deleted successfully." } }`
+
+`permissions.delete` on the LPO follows the same rule.
+
+### Cancel an LPO
+
+`PATCH /api/v1/app/{company}/property-management/procurement/lpos/{lpo}/cancel`
+
+```json
+{ "reason": "Supplier cannot deliver before the end of the month." }
+```
+
+`reason` is required (3 to 1000 characters). It is saved on the LPO and sent to the supplier and to the
+people notified in-app.
+
+Which LPOs can be cancelled:
+
+| LPO status | Its bill | Cancel |
+|---|---|---|
+| `lpo` (issued) | none yet | Allowed |
+| `delivered` | `pending` | Allowed. The bill is deleted |
+| `delivered` | `cancelled` | Allowed. The bill stays as it is |
+| `delivered` | `unpaid`, `partially-paid`, `paid` | Refused |
+| `delivered` | merged into a bigger bill | Refused |
+| `pending`, `rejected` | - | Refused: delete it instead |
+| `cancelled` | - | Refused |
+
+How a refusal comes back:
+
+- **The LPO's status** (pending, rejected, already cancelled) is a `403` whose `message` says why.
+  `permissions.cancel` is false for these, so the button never shows.
+- **The bill** (posted, paid or merged) is a `422` keyed on `status`:
+
+  ```json
+  {
+    "message": "Bill #41 is unpaid. A delivered LPO can only be cancelled while its bill is pending.",
+    "errors": { "status": ["Bill #41 is unpaid. A delivered LPO can only be cancelled while its bill is pending."] }
+  }
+  ```
+
+  `permissions.cancel` stays true here, so the modal can show why; `cancellation.can_cancel` is false.
+- **A missing reason** is a `422` keyed on `reason`.
+- **No permission, or not allocated to the property,** is a `403` "This action is unauthorized."
+
+What a cancel does:
+
+- The LPO becomes `cancelled`, with `cancelled_at`, `cancelledBy` and `cancellation_reason`.
+- A pending bill is deleted.
+- The supplier's "upload jobcard" task is cleared.
+- The supplier, the LPO's creator and its approvers are notified (see
+  [Notifications when an LPO is cancelled](#notifications-when-an-lpo-is-cancelled)).
+- The LPO still prints, under a red **CANCELLED** watermark.
+
+Response `200`:
+
+```json
+{
+  "data": {
+    "message": "LPO cancelled successfully.",
+    "lpo": {
+      "id": 93,
+      "status": { "value": "cancelled", "color": "danger" },
+      "cancelled_at": { "raw": "2026-10-20T09:15:00.000000Z", "formatted": "20 Oct, 2026", "diff": "1 second ago" },
+      "cancellation_reason": "Supplier cannot deliver before the end of the month.",
+      "cancelledBy": { "id": 12, "name": "Jane Wambui" }
+    }
+  }
+}
+```
+
+#### The warning before the cancel
+
+`GET /lpos/{lpo}` carries a `cancellation` object, so the confirmation modal can say what will happen to the
+bill without another call:
+
+```json
+"cancellation": {
+  "can_cancel": true,
+  "blocked_reason": null,
+  "bill": {
+    "id": 41,
+    "status": { "value": "pending", "color": "warning" },
+    "merged_into_bill_id": null,
+    "outcome": "deleted"
+  },
+  "message": "Cancelling this LPO also deletes its pending bill #41. The supplier will be told the order is cancelled."
+}
+```
+
+- `bill` is `null` when the LPO has no bill (an issued LPO never does).
+- `bill.outcome` is `deleted` or `already_cancelled`, and `null` when the cancel is refused.
+- `message` is ready to show in the modal: what will happen, or why the cancel is refused
+  (the same text as `blocked_reason`).
+- Show the Cancel button on `permissions.cancel`: the viewer holds the permission, is allocated to the
+  property, and the LPO is issued or delivered. Let the confirm go through only when `can_cancel` is true;
+  otherwise show `message`, which says why the bill blocks it.
+
+`cancellation` is on the detail response only, not on list rows.
+
+### Notifications when an LPO is cancelled
+
+| Who | Notification `type` | Channels |
+|---|---|---|
+| The LPO's supplier | `App\Notifications\PropertyManagement\Procurement\LpoCancelledNotification` | database, mail, SMS |
+| The LPO's creator, and whoever started or acted on its approval chain | `App\Notifications\PropertyManagement\DocumentCancelledNotification` | database |
+| For an LPO from a procurement request: the request's creator and whoever acted on its steps | `App\Notifications\PropertyManagement\DocumentCancelledNotification` | database |
+
+The supplier's email attaches the cancelled copy of the LPO, with the watermark. Whoever cancelled is not
+notified. The in-app notice is the same one every cancelled document sends; see
+[Document templates](document-templates-frontend.md) for the list.
+
+`data` for `LpoCancelledNotification`: `lpo_id`, `procurement_request_id`, `facility_name`, `total`,
+`delivery_at`, `reason`. For `DocumentCancelledNotification`: `document_type`, `document_id`, `reason`
+(may be null), `cancelled_by`.
+
 ### Notifications when an LPO is issued
 
 An LPO is *issued* when it reaches `lpo`: a workflow LPO on the step that generates it, a direct LPO on
@@ -766,6 +928,10 @@ Purpose:
 
 - Used by App users to accept a vendor-submitted jobcard / delivery document. It marks the LPO `delivered`
   and generates the supplier bill for it (once per LPO).
+
+Who: holders of `review-document-facility-procurement-lpo` - `403` otherwise (row 138; before, the call had
+no check and any staff user could make it). Gate the Review action on `permissions.reviewDocument`, not
+`permissions.update`, which is now `true` only while an LPO is pending.
 
 Request body (`CloseLpoData`; `document_number` and `document_upload_id` are taken from the LPO, and
 `delivered_at` is set to now):
@@ -1116,7 +1282,7 @@ Purchase item create payload:
 | `tax_id` | No | integer | Must exist in `taxes.id` |
 | `currency_id` | No | integer | Must exist in `currencies.id` |
 | `is_regulated` | No | boolean | Default `false` |
-| `base_price` | No | number | Default `0` |
+| `base_price` | No | number | Default `0`. On update, a changed value is written to **every** supplier's price row at every property |
 | `vendors` | No | array | Supplier user ids. Each must belong to the supplier group and must not be **terminated** |
 
 **Who may be attached.** `vendors` was only checked against `users.id`, so any user could be named -
@@ -1162,6 +1328,7 @@ twice at a property, and never twice as an option on a purchase request.
 | A supplier is removed from `vendors` | Their rows are deleted **at every property**, and their option disappears from purchase requests still waiting on the procurement step |
 | `vendors: []` | Every price row of the item is deleted |
 | `vendors` omitted on update | Suppliers and prices are left untouched |
+| `base_price` changes on update | Every price row of the item, for every supplier at every property, is set to the new base price (regulated or not); options of purchase requests still waiting on the procurement step follow. Sending the same `base_price` back changes nothing |
 
 `vendors` is the **complete list**, not an addition, the same as `uploads` on contracts.
 

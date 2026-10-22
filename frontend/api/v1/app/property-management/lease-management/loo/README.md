@@ -128,6 +128,7 @@ may read the templates may read the vocabulary they are written in.
 | `lease_maps_to` | string \| null | Source path when prepared from a **lease**; `NULL` means `maps_to` serves both |
 | `default_format` | string \| null | Seeds the editor's FORMAT picker |
 | `is_computed` | boolean | Derived rather than read straight off a column |
+| `lease_component_id` | integer \| null | Set on the tags generated per lease component (its first-period figures - see [loo-tags.md](./loo-tags.md#per-component-first-period-tags)); `null` on every fixed tag |
 
 Categories (`App\Enums\LooTagCategory`), with how many tags each holds:
 
@@ -137,7 +138,7 @@ Categories (`App\Enums\LooTagCategory`), with how many tags each holds:
 | `parties` | Parties | 10 |
 | `property` | Property | 7 |
 | `lease_terms` | Lease Terms | 19 |
-| `financials` | Financials | 21 |
+| `financials` | Financials | 23 |
 | `legal` | Legal | 7 |
 | `execution` | Execution & Signatures | 5 |
 | `banking` | Banking | 8 |
@@ -222,7 +223,7 @@ the tag's `default_format`.
 | `yes_no` | `Yes` / `No` |
 | `list` | prose, not bullets: `A, B and C` |
 | `raw` / `null` | the value as it stands; whole floats lose their decimals, integers never gain separators |
-| `html` | a block of trusted markup the resolver built (`rent_breakdown`, `money_computations` and `approval_signatures`, all tables; the last carries `<img>` signatures as `data:` URLs). The **editor must insert it as HTML**, not as text: a `tags_content` row whose `tag.default_format` is `html` holds markup. The renderer does the same and escapes every other tag's value |
+| `html` | a block of trusted markup the resolver built (`rent_breakdown`, `money_computations`, `collection_accounts` and `approval_signatures`, all tables; the last carries `<img>` signatures as `data:` URLs). The **editor must insert it as HTML**, not as text: a `tags_content` row whose `tag.default_format` is `html` holds markup. The renderer does the same and escapes every other tag's value |
 | anything else | a PHP date format |
 
 **The premises tags read `loo_spaces`.** `floor_unit` (`Ground Floor - Shop 4`),

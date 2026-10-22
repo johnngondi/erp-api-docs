@@ -133,7 +133,7 @@ Each block declares:
   paginating sections)
 - `resolveLabel($fieldKey, $config)` — 3-tier label resolution (see §5)
 
-### Blocks shipped (37)
+### Blocks shipped (50)
 
 **Shared / layout — all six types**
 
@@ -153,6 +153,40 @@ Each block declares:
 | `payee_details` | payment voucher | `payee.name`, `.tax_pin`, `.address` — who the voucher pays (a user, per the voucher's `payable_as`) |
 | `tenant_details` | invoice, receipt, credit note | `tenant.name`, `.lease_id`, `.tax_pin`, `.phone`, `.email`, `.unit`. `unit` is the distinct `facility_spaces.name` of the lease's items (see §5.1), **not** the property name |
 | `vendor_details` | lpo | `vendor.name`, `.tax_pin`, `.phone`, `.email`, `.address` |
+
+**Billing address blocks**
+
+One block per party, all built on the abstract `Blocks/BillingAddressBlock`, all
+`fields` presentation with the same six fields under their own payload object:
+`<path>.name` (Name), `.contact_person` (Contact Person), `.email` (Email),
+`.phone` (Phone), `.physical_address` (Address), `.tax_pin` (KRA PIN). Each
+prints the address the document stamped when it was issued, else the party's
+current default address, else the party's own details (see §4.6). The Blade
+partials (`document-blocks/{key}.blade.php`) all include
+`document-blocks/partials/billing-address.blade.php`.
+
+| Block | Payload path | Types | Default heading |
+| --- | --- | --- | --- |
+| `property_billing_address` | `property.billing_address` | invoice, credit note, receipt, lpo, remittance | Property billing address |
+| `property_shipping_address` | `property.shipping_address` | lpo (palette label "Deliver to") | Deliver to |
+| `tenant_billing_address` | `tenant.billing_address` | invoice, credit note, receipt | Bill to |
+| `landlord_billing_address` | `landlord.billing_address` | invoice, credit note, receipt, lpo, remittance | Landlord billing address |
+| `vendor_billing_address` | `vendor.billing_address` | lpo (palette label "Supplier billing address") | Supplier billing address |
+| `payee_billing_address` | `payee.billing_address` | payment voucher | Payee billing address |
+| `customer_billing_address` | `customer.billing_address` | customer invoice | Bill to |
+
+- `config_schema.heading_text.default` is the default heading. A block whose
+  config has no `heading_text` key prints that default; an empty `heading_text`
+  hides the heading.
+- `hidesWhenEmpty()` is true: when the document has no such party (the payload
+  object is `null`), the block renders nothing and the renderer drops its box,
+  border and `min_height` too.
+- The seeded layouts for new companies place them under the party block
+  (`tenant_billing_address` under `tenant_details` on invoice/credit note/receipt,
+  `vendor_billing_address` and `property_shipping_address` on the LPO,
+  `payee_billing_address` on the voucher, `landlord_billing_address` on the
+  remittance, `customer_billing_address` on the customer invoice). Existing
+  templates are not upgraded; the blocks are in the designer palette.
 
 **Per-type detail blocks**
 
@@ -214,11 +248,17 @@ company:        { name, tax_pin, address, postal_address, phone, email, website,
                   accent_color, text_color_on_accent_bg, timezone }
                 # services, the palette and timezone are print-only (see §8.1) and are not
                 # in the bindable field catalog; the rest are
-landlord:       { name, tax_pin, phone, email }
-property:       { name, address, lr_number, city, country }
-tenant:         { name, lease_id, tax_pin, phone, email, unit }        # invoice/cn/receipt
-vendor:         { name, tax_pin, phone, email, address }               # lpo
-payee:          { name, tax_pin, address, phone, email }               # payment voucher
+landlord:       { name, tax_pin, phone, email, billing_address }
+property:       { name, address, lr_number, city, country, billing_address,
+                  shipping_address }                                   # shipping_address: lpo only
+tenant:         { name, lease_id, tax_pin, phone, email, unit, billing_address }  # invoice/cn/receipt
+vendor:         { name, tax_pin, phone, email, address, billing_address }        # lpo
+payee:          { name, tax_pin, address, phone, email, billing_address }        # payment voucher
+customer:       { name, tax_pin, phone, email, address, postal_address, postal_code,
+                  billing_address }                                    # customer invoice
+                # every billing_address / shipping_address is
+                # { name, contact_person, email, phone, physical_address, tax_pin },
+                # or null when the document has no such party. See §4.6
                 # settlement: document adds debit_account, debit_account_name, debit_bank,
                 # method, payment_advice_number; items[] is { voucher_number, payee, bank,
                 # branch, account_name, account_number, reference, amount }; totals.amount
@@ -289,6 +329,9 @@ config `with`). Shared logic lives in `Payload/Concerns/`:
   external network fetch (which would stall Browsershot).
 - `ResolvesLandlordPayload` — `landlord`/`property` blocks, from
   `facility.landlord` (a `User`) and the `Facility` itself.
+- `ResolvesBillingAddressPayload` — the `<party>.billing_address` and
+  `property.shipping_address` objects, their schema entries and sample values,
+  all through `App\Support\PropertyManagement\BillingAddresses` (see §4.6).
 - `FormatsDocumentNumbers` — the D1 `prefixed()` helper.
 - `BuildsTaxSummary` — groups an item collection by `taxType`, summing
   `amount`→`taxable` and `tax`→`tax`.
@@ -449,6 +492,45 @@ without a `#` gutter.
 The footer itself is `partials/table.blade.php`'s optional `$footerRows` —
 `[['label' =>, 'value' =>, 'grand' => bool]]`, rows with a null value dropped,
 `grand` rendering bold. Every other table block omits it and is unchanged.
+
+### 4.6 Billing addresses
+
+Every billing-address object comes from
+`BillingAddresses::forDocument($document, $role, $party)`, in this order:
+
+1. the address the document stamped for that role when it was issued
+   (`document_billing_addresses`, read with `withTrashed()` so a replaced address
+   still prints);
+2. else the party's current default address (for `property_shipping`, the
+   property's shipping address, falling back to its default);
+3. else the party's own details: for a user, name, email, phone,
+   `PostalAddress::compose()` of address/P.O. Box/city and `tax_pin`; for a
+   property, its name, `physical_address` + city, and the landlord's `tax_pin`.
+
+It is `null` only when the document has no such party.
+
+| Mapper | Key | Role | Party |
+| --- | --- | --- | --- |
+| Invoice, credit note | `property.billing_address` | property | `lease.facility` |
+| | `tenant.billing_address` | tenant | `lease.user` |
+| | `landlord.billing_address` | landlord | `lease.facility.landlord` |
+| Receipt | `property.billing_address` | property | `facility` |
+| | `tenant.billing_address` | tenant | `payingUser` |
+| | `landlord.billing_address` | landlord | `facility.landlord` |
+| LPO | `property.billing_address` | property | `facility` |
+| | `property.shipping_address` | property_shipping | `facility` |
+| | `vendor.billing_address` | vendor | `vendor` |
+| | `landlord.billing_address` | landlord | `facility.landlord` |
+| Payment voucher | `payee.billing_address` | payee | `payableUser` |
+| Remittance | `property.billing_address` | property | `facility` |
+| | `landlord.billing_address` | landlord | `landlord` |
+| Customer invoice | `customer.billing_address` | customer | `customer.user` |
+
+Each type's config `with` eager-loads `billingAddressLinks.billingAddress` and
+each party's `defaultBillingAddress` (the LPO also loads
+`facility.billingAddresses` for the shipping address), so printing does not
+query per field. The public document pages (`resources/views/public/*`) read the
+same keys through `public.partials.billing-address`.
 
 ---
 
@@ -631,9 +713,12 @@ type-specific message from the type's `label` (e.g. `Receipt not found for this
 company.`).
 
 **Statuses that cannot be printed.** Invoices, receipts, credit notes and LPOs
-cannot be printed while they are `pending`, `rejected` or `cancelled`. A render of
-one returns `422` keyed on `resource_id`, e.g. `Invoice #12 is cancelled and cannot
-be printed.` The rule sits on the model: each of the four implements
+cannot be printed while they are `pending` or `rejected`, nor a payment voucher
+while it is `pending`. A render of one returns `422` keyed on `resource_id`, e.g.
+`Invoice #12 is rejected and cannot be printed.` A `cancelled` document does print:
+`DocumentRenderer` passes `cancelled` to the shell (`documents/template.blade.php`),
+which lays a fixed, translucent red **CANCELLED** watermark over every page. The
+rule sits on the model: each of these implements
 `App\Contracts\PrintableDocument` through `App\Models\Concerns\RestrictsPrinting`
 and lists its `UNPRINTABLE_STATUSES`. Both the company render endpoint and the
 portal render endpoint call `DocumentRenderer::ensurePrintable()` before rendering.
@@ -774,8 +859,9 @@ and access is enforced by each portal's ownership query (**not** the permission-
   scope (tenant: `lease.user_id`; receipts also via `paying_user_id`; vendor:
   `vendor_id`). A foreign/unknown id returns `404`. The template must also belong to
   the document's company and apply to its facility, else `403`.
-- **Status** — an owned invoice, receipt, credit note or LPO that is `pending`,
-  `rejected` or `cancelled` returns `422` keyed on `resource_id` (see §8).
+- **Status** — an owned invoice, receipt, credit note or LPO that is `pending` or
+  `rejected` returns `422` keyed on `resource_id` (see §8). A cancelled one prints
+  with its watermark.
 - No `?preview=1` here — portals always render a real, owned document. Shared logic
   lives in `App\Http\Controllers\Api\V1\Concerns\PortalDocumentController`; each
   portal subclass only supplies its `scopes()` map.

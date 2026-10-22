@@ -108,9 +108,10 @@ Notes for rendering:
 
 - `held_amount`, `available_balance` and `pending_holds` are the invoice's held balance (see
   [Invoices → Amounts held](./invoices.md#amounts-held-by-documents-awaiting-approval)). When
-  `held_amount > 0`, cap the row at `allocated_from_this_receipt + available_balance` (converted
-  to the receipt currency) and show the holds. The server refuses an increase above that with a
-  `422` on `allocations`. With nothing held, overpaying a row is allowed as before.
+  `held_amount > 0`, show the holds, and **warn** (do not block) when a row goes above
+  `allocated_from_this_receipt + available_balance` (converted to the receipt currency): the
+  excess overpays the invoice and carries forward to the tenant's next invoice. The server
+  accepts it; documents awaiting approval on the invoice still post in full when approved.
 
 - `invoices` is already filtered to what this receipt may be allocated to — same property,
   same tenant, still open, or already carrying this receipt's money. **Do not filter further.**

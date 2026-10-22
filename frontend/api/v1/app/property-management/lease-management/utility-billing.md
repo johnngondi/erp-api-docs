@@ -15,6 +15,8 @@ Base route:
 - `POST /charges/utility-billing-extract` — read the uploaded provider bill with AI (step 1)
 - `POST /charges/utility-billing-fetch` — preview computed rows (+ a `cache_key`) (step 2)
 - `POST /charges/utility-billing-process` — bill tenants + raise the provider bill (step 3)
+- `GET /charges/utility-billings` — the utility billing history: past runs, with a totals row (row 156)
+- `GET /charges/utility-billings/{utilityBilling}` — one run, per tenant, with its meters (row 156)
 
 The UI is a 3-step wizard: **extract** the provider bill document, **fetch** the per-lease
 meter readings/preview (the tenant rate is derived here from the utility's distribution
@@ -466,8 +468,13 @@ A row without `meters[]` (a preview cached before this change) falls back to a s
 line, `Electricity — Direct Consumption: Prev:522 Curr:566 Cons: 44`, linked to the row's
 first meter.
 
-A lease is skipped only when its `utility_billed_at` falls **inside the current period**
-(on or after the first of the current month). A lease with no `utility_billed_at` has simply
+A lease is skipped only when it was already billed **for this utility** inside the current period
+(on or after the first of the current month): its `utility_billed_at` falls in the period **and**
+one of its invoices raised in the period carries a utility line for this utility. Each utility is
+billed once a period on its own, so billing water does not stop the same tenants' electricity. A
+cancelled or rejected invoice does not count, so cancelling a wrong utility bill reopens that
+utility for the period. The skip reads `Lease 93 skipped: Water already billed for this period.`
+A lease with no `utility_billed_at` has simply
 never been billed and is read as *last billed in the previous period*, so it qualifies — a
 lease onboarded today bills on the very first run, and a lease last billed in an earlier
 period reopens on its own. The `leases:reset-utility-billing` command is therefore no longer
@@ -506,6 +513,7 @@ still created and a warning is returned.
   "message": "Billed 4 lease(s). Skipped 1.",
   "invoice_ids": [9001, 9002, 9003, 9004],
   "bill_id": 555,
+  "utility_billing_id": 31,
   "summary": {
     "billed_leases": 4,
     "skipped_leases": 1,
@@ -573,11 +581,144 @@ php artisan utility-billing:bill-unbilled-readings --notes="Catch-up"    # prefi
   earlier run is skipped unless both are given.
 - No provider bill is raised: the provider was billed by the run the reading missed. No
   indirect-consumption line is written either.
-- A lease already billed inside the current month is skipped (same rule as the processor), and
+- A lease already billed for this utility inside the current month is skipped (same rule as the
+  processor), and
   a meter whose unbilled reading is **older** than a billed one is left alone: that consumption
   was already charged from the initial (or an earlier billed) reading up to the later one.
 - Each billed reading is stamped `billed_at` and the lease `utility_billed_at`, so a second
   run finds nothing and the next regular run starts from the reading just billed.
+
+## Utility billing history (row 156)
+
+Every billing processed from the billing screen is saved as a **run**: one property, one utility,
+the provider bill it was billed against, and what it billed, as it stood. `utility-billing-process`
+returns the run's `utility_billing_id`, and each invoice it raised carries it.
+
+- **History starts with the first billing after this release.** Earlier billings were never saved
+  and are not rebuilt.
+- Readings billed by the `utility-billing:bill-unbilled-readings` command (outside the screen)
+  belong to no run, so they are not in the history.
+- A billing that billed no lease and raised no provider bill is not kept.
+
+**Who:** `view-utility-billing` or `create-utility-billing`, on the properties the user is
+allocated to; otherwise `403`. Processing a billing still needs `create-utility-billing`, so show
+**New Utility Billing** only to `create` holders. Each row also carries the provider bill's
+`bill_date`, `bill_number` and `bill_tax_invoice_number` (each `null` when not entered on the
+billing screen) - useful to tell two months of the same property apart, with `created_at` as the
+fallback.
+
+### List the runs
+
+`GET /charges/utility-billings` — newest first, paginated (`per_page`).
+
+| Filter | Kind |
+| --- | --- |
+| `filter[id]`, `filter[facility_id]`, `filter[utility_id]`, `filter[created_by_id]` | exact (comma list for several) |
+| `filter[created_between]=2026-10-01,2026-10-31`, `filter[bill_date_between]=…` | date range |
+| `filter[created_at]`, `filter[bill_date]` | partial (e.g. `2026-10`) |
+
+Sorts: `id`, `created_at`, `bill_date`, `consumed`, `amount`, `tax`, `total` (`-` for descending).
+
+```json
+{
+  "data": [
+    {
+      "id": 31,
+      "facility": { "id": 61, "name": "Kahawa Side Tower" },
+      "utility": { "id": 4, "name": "Water" },
+      "distribution_method": "utility provider rate",
+      "charge_rate": 25,
+      "notes": "October water",
+      "bill_id": 555,
+      "bill_date": "2026-10-15",
+      "bill_number": "NWC-88213",
+      "total_bill_amount": 14500,
+      "billed_leases": 2,
+      "skipped_leases": 0,
+      "total_previous": 2100,
+      "total_current": 2600,
+      "consumed": 500,
+      "indirect_consumed": 0,
+      "amount": 12500,
+      "tax_amount": 2000,
+      "total": 14500,
+      "created_by": { "id": 1, "name": "Jane Admin" },
+      "created_at": { "raw": "2026-10-20T08:15:00.000000Z", "formatted": "20 Oct, 2026", "diff": "2 hours ago" }
+    }
+  ],
+  "filters": {
+    "utilities": [{ "id": 6, "name": "Electricity" }, { "id": 4, "name": "Water" }],
+    "facilities": [{ "id": 61, "name": "Kahawa Side Tower" }]
+  },
+  "totals": {
+    "runs": 7, "total_previous": 14700, "total_current": 18200, "consumed": 3500,
+    "indirect_consumed": 0, "amount": 87500, "tax_amount": 14000, "total": 101500
+  },
+  "links": { "...": "pagination" },
+  "meta": { "...": "pagination" }
+}
+```
+
+- One row per run: Property (`facility.name`), Utility, Total previous, Total current, Consumed,
+  Amount, Tax (`tax_amount`), Total.
+- `totals` is the **totals row**: every run the filters match, not just this page.
+- `filters` are the options for the Utility and Property filters: the utilities and properties the
+  caller's runs cover, whatever filter is applied, so a view-only user (who cannot read the
+  lease-component settings) still gets them.
+- `consumed` is what was billed off the meters; `indirect_consumed` is the indirect share billed on
+  top (common areas, losses), when the utility bills it.
+- **New Utility Billing** opens the existing billing screen. After processing, open the run with the
+  returned `utility_billing_id`.
+
+### Open a run
+
+`GET /charges/utility-billings/{utilityBilling}`
+
+```json
+{
+  "data": {
+    "utility_billing": { "id": 31, "...": "the run, as in the list, plus tax and bill_upload" },
+    "leases": [
+      {
+        "lease_id": 93,
+        "label": "Lease #93 - Carol Wanjiru",
+        "tenant": { "id": 224, "name": "Carol Wanjiru" },
+        "invoice_id": 9001,
+        "invoice_status": { "value": "unpaid", "color": "warning" },
+        "previous": 1300,
+        "current": 1650,
+        "consumed": 350,
+        "indirect_consumed": 0,
+        "amount": 8750,
+        "tax": 1400,
+        "total": 10150,
+        "meters": [
+          {
+            "meter_id": 12,
+            "meter_number": "WM-A1",
+            "meter_name": "WM-A1",
+            "previous_reading": { "id": 70, "value": 1200, "read_at": "2026-09-20 09:00:00", "image": { "id": 501, "source_url": "…", "thumbnail_url": "…" } },
+            "current_reading": { "id": 71, "value": 1500, "read_at": "2026-10-20 09:00:00", "image": { "id": 502, "source_url": "…", "thumbnail_url": "…" } },
+            "consumed": 300,
+            "amount": 7500,
+            "tax": 1200,
+            "total": 8700
+          }
+        ]
+      }
+    ],
+    "totals": { "leases": 2, "previous": 2100, "current": 2600, "consumed": 500, "indirect_consumed": 0, "amount": 12500, "tax": 2000, "total": 14500 }
+  }
+}
+```
+
+- One row per tenant: `label` is "Lease# - Name". **View Invoice** opens `invoice_id`.
+- `meters` are the expandable rows, one per meter the tenant was billed on. Show them expandable
+  when there is more than one.
+- **Reading photo:** each reading carries its `image` (`null` when none was taken). Both the previous
+  and the current reading are sent; clicking a reading shows its photo.
+- `totals` is the totals row for the run's tenants.
+- A property the caller is not allocated to answers `403` "You are not allocated to this property."
 
 ## Frontend Error Handling
 

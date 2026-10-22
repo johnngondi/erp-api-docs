@@ -9,6 +9,7 @@ Base prefix:
 ## Resources
 
 - [Bills](./finance/bill.md)
+- [Customer Invoices](./finance/customer-invoices.md)
 - [Liability Bills](./finance/liability-bill.md)
 - [Bill Credit Notes](./finance/bill-credit-note.md)
 - [Expenses](./finance/expense.md)
@@ -18,6 +19,7 @@ Base prefix:
 - [Vendor Statements](./finance/vendor-statement.md)
 - [Bank Account Statements (Cashbook)](./finance/bank-account-statement.md)
 - [Facility Budgets](./finance/budget.md)
+- [QuickBooks Online](./finance/quickbooks.md)
 
 ## Notes
 

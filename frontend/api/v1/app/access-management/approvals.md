@@ -139,6 +139,67 @@ changes even without its update permission. Fields outside `editable_fields` are
 refused with **403** naming them, and the request is rejected whole — nothing is
 half-saved.
 
+### Saving only the step's fields (`step-fields`, row 138)
+
+When `editable_fields` names fields, the normal update endpoint cannot be used for
+invoices, credit notes, leases and LPOs: it takes the whole form, the fields the step
+did not open are refused, and leaving them out fails validation. Send just the fields
+being changed to:
+
+| Document | Endpoint (under `/api/v1/app/{company}/property-management`) |
+| --- | --- |
+| Invoice | `PATCH lease-management/invoices/{invoice}/step-fields` |
+| Credit note | `PATCH lease-management/credit-notes/{creditNote}/step-fields` |
+| Lease | `PATCH lease-management/leases/{lease}/step-fields` |
+| LPO | `PATCH procurement/lpos/{lpo}/step-fields` |
+
+Example: `PATCH .../credit-notes/42/step-fields` with `{ "cu_reference_number": "KRA-CU-0042" }`.
+
+Response `200`: `{ "data": { "message": "Changes saved.", "<key>": { ...the document } } }`, where
+`<key>` is `invoice`, `credit_note`, `lease` or `lpo`.
+
+Fields this endpoint accepts (anything else answers **422** "cannot be changed on its own here.
+Use the full edit."):
+
+| Document | Fields |
+| --- | --- |
+| Invoice | `due_at`, `notes`, `cu_invoice_number`, `cu_serial_number`, `cu_invoice_verify_url` |
+| Credit note | `due_at`, `notes`, `cu_reference_number`, `cu_invoice_number`, `cu_serial_number`, `cu_credit_note_verify_url` |
+| Lease | `billing_cycle`, `next_due_at`, `currency_id` |
+| LPO | `title`, `notes`, `delivery_at` (the technician is the supplier's to assign, in the supplier portal) |
+
+Amounts, items, the lease's tenant, property and term, and the LPO's supplier are worked
+out together, so they stay with the full edit; a step that opens only one of those cannot
+be answered field by field.
+
+Rules:
+
+- The same people as the full edit may use it, and only while the document is `pending` - a lease
+  `pending` or `active` (**403** "Only a pending … can be edited." otherwise). Someone editing through a step is
+  still held to `editable_fields` (**403** naming the fields).
+- An empty body is **422** on `fields`. Values are validated as on the full edit; dates are read
+  as the calendar day they mean.
+- The change is tracked and notified like a full edit, and a document returned for changes is
+  sent round its chain again.
+
+### `editable_fields` on the document, for the viewer
+
+Invoices, credit notes, leases and LPOs carry `editable_fields` on their detail response (not on list
+rows), the way the LOO does. It is about the person viewing:
+
+| Value | Meaning | Who gets it |
+| --- | --- | --- |
+| `null` | Every field - use the normal edit (`PUT`) | The update permission, the creator, whoever it was returned to for changes, and an approver whose step names no fields |
+| a list | Only these fields - save them to `…/step-fields` | An approver whose step names fields; the list is the step's fields that `step-fields` accepts, so it never unlocks a field the save would refuse |
+| `[]` | Nothing | Anyone else, and everyone once the document is no longer pending |
+
+One edit form serves all three: show the Edit button on `permissions.update` (`permissions.edit` on a
+lease), unlock what `editable_fields` allows, and send a list-holder's changes to `step-fields` with just
+the changed fields.
+
+The creator is never narrowed by a step they also sit on (as the LOO's author is not): they keep `null`
+and the full edit.
+
 ## Returned for changes
 
 A `review` from a step with **no checkpoint step before it** returns the document to the people

@@ -186,6 +186,13 @@ raised here and awaiting approval is itself a hold on the invoice until it is ap
 or cancelled. The rule applies to credit notes raised through this endpoint. Credits the system
 raises itself (invoice reversal, opening balances, exit notices) are not held up by it.
 
+Receipts are not held to that limit (see
+[Receipts → Overpaying an invoice](./receipts.md#overpaying-an-invoice)), so an invoice can be
+paid in full while a credit note on it is still awaiting approval. Approval then applies the
+whole credit note anyway: its lease billing and statement credit are for the full amount, and
+the invoice goes below zero. The overpaid part carries forward to the lease's next invoice like
+any overpayment. Approval is never refused because the invoice has since been paid.
+
 ## One invoice per credit note
 
 Every credit note reverses exactly one invoice, and `invoice_id` is the only record of which one.
@@ -199,6 +206,50 @@ Every credit note reverses exactly one invoice, and `invoice_id` is the only rec
   but `invoice_id` keeps pointing at the first one.
 - **Signing needs the invoice.** An open credit note cannot be signed on the ETR: the device needs
   the CU number of the invoice it reverses. See [Sign Credit Note](#sign-credit-note-etr).
+
+### Applications: which invoices a credit note paid
+
+`invoice_id` names one invoice, but a credit note can be spent on several. Every time credit is
+spent on an invoice, an **application** records it: the credit note, the invoice and the amount.
+This happens in these cases:
+
+- the credit note is approved against its own invoice;
+- an open or partly applied credit note is drawn down by a newly processed invoice;
+- a signed credit note is cancelled and its unspent part goes onto the re-issued invoice;
+- the `leases:apply-open-credit-notes` or `receipts:apply-unallocated` command draws it down.
+
+`GET /credit-notes/{creditNote}` carries them:
+
+```json
+{
+  "id": 77,
+  "total": "-8000.00000",
+  "paid": "-8000.00000",
+  "balance": "0.00000",
+  "applications": [
+    {
+      "id": 501,
+      "amount": "5000.00000",
+      "applied_at": { "raw": "2026-10-01T00:00:00Z", "formatted": "01 Oct, 2026", "diff": "3 weeks ago" },
+      "invoice": { "id": 9001, "total": "5000.00000", "balance": "0.00000", "status": { "value": "paid", "color": "success" } }
+    },
+    {
+      "id": 502,
+      "amount": "3000.00000",
+      "applied_at": { "raw": "2026-11-01T00:00:00Z", "formatted": "01 Nov, 2026", "diff": "now" },
+      "invoice": { "id": 9010, "total": "5000.00000", "balance": "2000.00000", "status": { "value": "partially paid", "color": "warning" } }
+    }
+  ]
+}
+```
+
+- `amount` is positive and in the invoice (lease) currency. The amounts add up to the absolute
+  `paid` of the credit note.
+- Credit applied before applications were recorded (before 2026-10-21) has one application
+  against `invoice_id` for the whole `paid` amount, with `applied_at: null`. It cannot be told
+  apart further, so show it as "recorded before tracking began".
+- Cancelling an unsigned credit note reverses each application on its own invoice and removes
+  it. A signed credit note keeps its applications (it stands, see below).
 
 ### Signs
 
@@ -226,11 +277,33 @@ doc).
 
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}`
 
-Use the same payload shape as create.
+**Only the header is saved**: `due_at`, `notes`, `cu_reference_number`, `cu_invoice_number`,
+`cu_serial_number`, `cu_credit_note_verify_url` and `supporting_upload_id`. Send just those you
+show (row 138):
+
+- **A field left out keeps its value**; sending `null` clears it (where it may be cleared). So
+  `{ "notes": "…" }` alone is a valid edit.
+- **`lease_id`, `invoice_id` and `items` are not needed** - the lease, the invoice and the lines never
+  change through this edit. Show the lines read-only and leave `items` out.
+- The response carries the credit note under `data.invoice` (a long-standing name, kept so nothing
+  breaks).
+
+The credit note resource now returns `notes`, `lease_id` and `invoice_id`, so the form can show and
+keep them.
+
+**Only a `pending` credit note is edited** (row 138). Once approved (or cancelled, rejected) the edit is
+refused with `403` `"Only a pending credit note can be edited."`, whatever the caller's permissions, and `permissions.update` is `false`.
+Hide the Edit action unless it is `true`. A credit note returned for changes is still `pending`, so its creator
+can answer it, and the edit sends it round its chain again. Who may edit a pending one: the update
+permission, the creator, whoever it was returned to, and an approver whose current step lends editing
+rights (limited to the step's fields when the step names them).
+
+An approver whose step names fields (for example the CU reference number) saves them through
+`PATCH credit-notes/{creditNote}/step-fields` - see
+[approvals](../../access-management/approvals.md#saving-only-the-steps-fields-step-fields-row-138).
 
 `supporting_upload_id` on update: leave the key out to keep the document attached, or send an id
-to replace it. It cannot be removed, and it can only change while the credit note is `pending` (a
-returned one included). See [Supporting document](#supporting-document).
+to replace it. It cannot be removed. See [Supporting document](#supporting-document).
 
 ## Supporting document
 
@@ -245,20 +318,10 @@ way a receipt carries its proof of payment (`pop_upload_id` / `pop_upload`).
   `errors.supporting_upload_id: ["A credit note needs its supporting document. Replace it rather than removing it."]`.
   A credit note raised before the document was required has none; it still edits normally, and one
   can be attached while it is pending.
-- **Fixed once approved.** When the credit note is approved (`unapplied`, `partially applied`,
-  `applied`) or closed (`cancelled`, `rejected`) the document is what the approver signed off on. Sending a different id, or `null`, then answers `422`:
-
-```json
-{
-  "message": "The supporting document cannot be changed once the credit note is approved.",
-  "errors": {
-    "supporting_upload_id": ["The supporting document cannot be changed once the credit note is approved."]
-  }
-}
-```
-
-  Leaving the key out, or sending the id already attached, is not a change, so the rest of the edit
-  still saves.
+- **Fixed once approved.** An approved (`unapplied`, `partially applied`, `applied`) or closed
+  (`cancelled`, `rejected`) credit note is not edited at all (row 138), so the document cannot change
+  either: both the edit and the document endpoint answer `403`
+  `"Only a pending credit note can be edited."`.
 - **Credit notes the system raises itself** (invoice reversals, negative opening balances, exit-notice
   settlements) never carry one.
 - **Tenants see it** on their own credit note (`GET /api/v1/tenant/billing/credit-notes/{creditNote}`
@@ -273,7 +336,8 @@ not the credit note's edit: the edit validates the whole credit note (lease, due
 items), and resending those "unchanged" is fragile - item costs come back negative and are refused,
 and the due date's `raw` is a UTC timestamp that saves a day early.
 
-- Same rules as above: required (replace, not remove), fixed once approved.
+- Same rules as above: required (replace, not remove), and only while the credit note is `pending`
+  (`403` once approved).
 - **Only a file the caller uploaded** can be attached - here and on create:
   `errors.supporting_upload_id: ["Attach a document you uploaded yourself."]`.
 - **A credit note sent back for changes is resubmitted** when this saves: the reviewer is asked
@@ -300,7 +364,8 @@ What happens depends on whether the credit note has been signed on the ETR (`etr
 **Not signed.** The credit note is withdrawn:
 
 - its lease billing entries are removed
-- the amount goes back onto the invoice's balance. If this credit note was the invoice's reversal,
+- each [application](#applications-which-invoices-a-credit-note-paid) goes back onto the balance of
+  the invoice it paid, and is removed. If this credit note was the invoice's reversal,
   `reversal_credit_note_id` is cleared and the invoice is open again
 - the tenant statement gets a `Cancelled Credit Note # {id} - {notes}` debit line
 
