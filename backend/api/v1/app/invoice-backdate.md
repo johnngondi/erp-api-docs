@@ -1,8 +1,8 @@
 # Invoice Backdate (Change Date)
 
-This moves an issued invoice to a different date in the tenant's ledger: the date its statement
-line and its lease billings are recorded under. It changes nothing else. The amount, the items,
-`due_at` and the invoice's own `created_at` (when the invoice was raised) all stay as they were.
+This moves an issued invoice to a different date: the invoice's own `created_at` and
+`transaction_at`, the date its statement line is recorded under, and the date of its lease
+billings. The amount, the items and `due_at` stay as they were.
 
 Base prefix: `/api/v1/app/{company}`
 
@@ -25,7 +25,7 @@ exposed on each record as `permissions.backdate` on `FacilityInvoiceResource`.
 |---|---|---|---|
 | `new_invoice_date` | Yes | date (`Y-m-d`) | Must be a valid date on or before today. |
 
-The statement line keeps its original time of day.
+The invoice and its statement line keep their original time of day.
 
 ## Rules
 
@@ -44,7 +44,8 @@ unlike receipts and bills no remittance blocks the move.
 | `TenantStatement` (the invoice's lines) | `transaction_at`, `created_at` | Set to the new date, keeping the line's time of day. |
 | `LeaseBilling` (rows with this `invoice_id`) | `transaction_date` | Set to the new date at midnight. Reports select billings with `whereBetween` on day boundaries, so a time of day would drop the last day of a period. |
 | `LeaseBilling` | `created_at` | Set to the new date, keeping the statement's time of day. |
-| `FacilityInvoice` | `created_at`, `due_at` | **Not** changed. |
+| `FacilityInvoice` | `created_at`, `transaction_at` | Set to the new date, keeping the time of day. `updated_at` is left alone. The invoice list, the view page and the PDF show the new date. |
+| `FacilityInvoice` | `due_at` | **Not** changed. |
 
 ## Response
 

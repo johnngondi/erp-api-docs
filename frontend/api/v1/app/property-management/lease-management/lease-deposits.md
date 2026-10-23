@@ -118,6 +118,11 @@ On a pending lease, update and delete change the row alone; there is no invoice 
 cancel. On any other lease, deposits bill at once. The `billed` request field is ignored: the
 server decides.
 
+The link runs the other way as well: **cancelling a deposit invoice deletes the deposit rows on
+it** (see Cancel Invoice under Invoices). The tenant was never charged, so the lease holds no
+deposit for them and `total_deposit_amount` drops. Refetch the deposits list after an invoice is
+cancelled from the invoices page.
+
 ## Update Lease Deposit
 
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/leases/{lease}/deposits/{leaseDeposit}`

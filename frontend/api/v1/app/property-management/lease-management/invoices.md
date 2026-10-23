@@ -572,6 +572,22 @@ On an invoice with payments allocated, `permissions.cancel` is still `true`, but
 refused with **422** and `status: ["This invoice has payments allocated to it. Reallocate them to
 another invoice before removing it."]`. Reallocate the payments first, then cancel.
 
+### Deposit invoices
+
+An invoice that bills lease deposits (one Deposit line, see Lease Deposits) carries the deposit
+rows with it. Cancelling it **deletes those deposit rows**: the tenant was never charged, so the
+lease no longer holds a deposit and its `total_deposit_amount` drops. The cancelled invoice can
+then be deleted like any other. Refresh the lease's deposits tab after cancelling.
+
+Deposit rows left behind by invoices cancelled before this rule are cleaned up on the server with
+a console command; there is no endpoint:
+
+```bash
+php artisan lease-deposits:delete-cancelled               # report only, nothing changes
+php artisan lease-deposits:delete-cancelled --apply       # delete them
+php artisan lease-deposits:delete-cancelled --company=3   # one company
+```
+
 Possible status values returned by API resource:
 
 - `pending` (`secondary`)
@@ -610,8 +626,8 @@ Behaviour:
 
 - The invoice's tenant statement lines (`transaction_at`, `created_at`) and its lease billings
   (`transaction_date`, `created_at`) move to the new date. Statement lines keep their time of day.
-- The invoice's own `created_at` and `due_at` never change, so the list's date column stays the
-  same. The move shows on the tenant statement and in billing reports.
+- The invoice's own `created_at` and `transaction_at` move too, so the list's date column, the view
+  page and the PDF all show the new date. `due_at` never changes.
 
 Success (`200`) returns `{ data: { message, invoice } }`. Upsert the invoice with it.
 
@@ -698,7 +714,7 @@ One endpoint, four outcomes, decided by the invoice.
 | **Payments allocated** | Refused. `permissions.delete` is `false`, so hide the action; a direct call returns **403**. The money is reallocated to another invoice first |
 | **Issued and carrying a CU number** | **Reversed**, not deleted. A credit note for the full value is raised and signed to ETR. The invoice survives |
 | **Live and unfiled** (unpaid, partially paid) | Refused — **cancel it first**. `permissions.delete` is `false`; a direct call returns **403** with `"Cancel this invoice before deleting it."` |
-| **Cancelled, pending or rejected** | Removed, along with its tenant statement entries and lease billings |
+| **Cancelled, pending or rejected** | Removed, along with its tenant statement entries, lease billings and any lease deposit rows it billed |
 
 ### Cancel before delete
 
