@@ -91,7 +91,9 @@ Most tables have a `status` column defined as a MySQL `enum(...)`. Each section 
 The company moved from EPMAS to PropERP at the end of September 2026. Consequences for analysis:
 
 - 107 tables have `old_system_id`: the id of the same record in EPMAS (`NULL` for anything created in PropERP).
-- Tenant and supplier balances were carried over as **opening-balance documents** dated at the cut-over (section 3, `lease_opening_balances`, and the invoices, credit notes and bills they created). Month-by-month history before the cut-over is not in this database.
+- Tenant and supplier balances were carried over as **opening-balance documents** dated at the cut-over (section 3, `lease_opening_balances`, and the invoices, credit notes and bills they created).
+- The tenant ledger before the cut-over (December 2018 to 30 Sep 2026) is kept **for reference only** in `lease_history_billings` and `lease_history_collections` (section 3), with cutover reconciliation rows that make it add up to the opening balances. It is never part of a balance: the live tables and every figure the application shows ignore it. Use it for trends, and combine it with live data only as the section 3 worked query does.
+- The property expense ledger and the landlord remittances before the cut-over are kept the same way in `facility_history_expenses` and `facility_history_remittances` (section 6). The live `facility_expenses` and `facility_remittances` start on 1 Oct 2026, so a series that runs across the cut-over takes history up to 30 Sep 2026 23:59:59 and live rows after it (section 6 worked query).
 - `relative_url` on many tables is the path of the record in the web app; ignore it.
 
 ### 0.10 Tables you can ignore
@@ -1568,7 +1570,12 @@ erDiagram
     lease_components ||--o{ lease_billings : lease_component_id
     leases ||--o{ tenant_statements : lease_id
     users ||--o{ tenant_statements : tenant_id
+    leases ||--o{ lease_history_billings : lease_id
+    leases ||--o{ lease_history_collections : lease_id
+    lease_components ||--o{ lease_history_billings : lease_component_id
 ```
+
+The EPMAS ledger before the cut-over is in `lease_history_billings` and `lease_history_collections`, two **reference-only** tables described at the end of this section. Nothing in the application reads them, and they are never part of a balance.
 
 ## leases
 
@@ -1824,7 +1831,7 @@ A positive amount is what the tenant owed; the application raises it as an invoi
 
 **Gotchas:**
 - Opening balance of a lease = `SUM(amount)` (net) or `SUM(billed_amount)` (gross); the app's `opening_balance` figure is the net sum.
-- The whole pre-2026-09-30 history of the old system is collapsed into these rows. There is no month-by-month billing history before that date anywhere in this database.
+- The whole pre-2026-09-30 history of the old system is collapsed into these rows. The month-by-month EPMAS ledger behind them is in `lease_history_billings` / `lease_history_collections` (reference only, see the end of this section); never add it to these rows.
 
 ## lease_billings
 
@@ -2012,6 +2019,94 @@ Live rows are `status <> 'rejected'`; "open" notices are `pending-review`.
 
 **Gotchas:** to list every lease a notice covers use the union of `tenant_exit_notices.lease_id` and its items' `lease_id`, since older notices have no items.
 
+## lease_history_billings
+
+> **Reference only. Never part of a balance.** This table holds the old EPMAS ledger for trend analysis. No screen, report, statement, arrears, ageing, remittance or dashboard figure in the application reads it. Adding it to `lease_billings`, `tenant_statements` or `lease_opening_balances` counts the pre-cut-over money twice.
+
+**One row per:** EPMAS billing row (`tenant_billings`) per non-zero charge on it, plus one cutover reconciliation row per lease and charge type. **Model:** `App\Models\LeaseHistoryBilling` (read-only). **Company-scoped:** yes. **Soft deletes:** no.
+**Rows in dev DB:** none until `php artisan history:import-epmas` is run; a dry run on dev computes 165,174 invoice and credit note rows and 6,596 reconciliation rows for 4,139 leases, dated 2018-12-31 to 2026-09-30.
+
+Written only by `history:import-epmas` (`docs/backend/epmas-history.md`), which rebuilds a lease's rows on every run. A lease is covered when it was imported from EPMAS (`leases.old_system_id = 'Tenant:<id>'`; the EPMAS tenant id is the lease id) and was created on or before the cut-over. Leases created later have no rows.
+
+`amount` is the net charge, `tax` its share of the EPMAS row's VAT (spread over the row's vatable charges in proportion to their size; VAT on a row with no vatable charge rides on a Rent row with `amount` 0), `total = amount + tax`. Signs are as in EPMAS: credit notes are negative, and some invoice rows are negative too (EPMAS credit invoices).
+
+**Entry type** (`entry_type`, DB enum `invoice, credit_note, cutover_reconciliation`):
+- `invoice` : an EPMAS invoice line.
+- `credit_note` : an EPMAS credit note line (negative).
+- `cutover_reconciliation` : one row per lease and component, dated 2026-09-30 23:59:59, equal to the live opening balance less what history adds up to (see below). Show it as its own line, never inside "billed".
+
+| Column | Type | Points to | Meaning |
+|---|---|---|---|
+| `id` | bigint | | Primary key |
+| `company_id` | bigint, nullable | companies.id | Company, copied from the lease. |
+| `lease_id` | bigint | leases.id | The lease (deleted with it). |
+| `facility_id` | bigint | facilities.id | The lease's property, copied so per-property trends need no join. |
+| `lease_component_id` | bigint | lease_components.id | Charge type. EPMAS columns map to Rent, Service Charge, Service, Electricity, Water, Parking, Signage, Promotion Fee, Deposit, Excess Service Charge. |
+| `entry_type` | enum | | See above. |
+| `transaction_date` | timestamp | | The EPMAS ledger date; the cut-over 23:59:59 on reconciliation rows. |
+| `reference` | varchar, nullable | | The EPMAS ledger `ref`; `Cutover reconciliation` on reconciliation rows. |
+| `document_number` | varchar, nullable | | The EPMAS invoice number or credit note number. |
+| `currency_id` | bigint, nullable | currencies.id | The EPMAS document's currency (USD on a handful of rows), else the lease currency. |
+| `amount`, `tax`, `total` | decimal(50,5) | | Net, tax and gross; see above. |
+| `source_table` | varchar | | `tenant_billings`, or `cutover_reconciliation`. |
+| `source_id` | bigint | | The EPMAS `tenant_billings.id`; the lease id on reconciliation rows. Unique with `source_table` and `lease_component_id`. |
+
+**Joins:**
+- `lease_history_billings.lease_id → leases.id`, `facility_id → facilities.id`, `lease_component_id → lease_components.id`, `currency_id → currencies.id` : many to one, all with DB constraints.
+- There is no link to `facility_invoices` or `facility_credit_notes`: EPMAS documents were never imported as documents.
+
+**The cutover reconciliation and its invariant.** History on its own does not add up to the opening balances: the opening balances were rounded to the cent, counted EPMAS payments that were later cancelled as collected, and spread VAT over the whole balance rather than row by row. The reconciliation row closes that gap, per lease and component, for amount, tax and total:
+
+`reconciliation = opening-balance ledger − (SUM(history billings) − SUM(confirmed history collections))`
+
+where the opening-balance ledger is the live `lease_billings` rows whose `invoice_id` or `credit_note_id` appears in `lease_opening_balances`, and unallocated collections count against Rent. So, for every lease and component, to the fifth decimal:
+
+`SUM(lease_history_billings.total) − SUM(confirmed lease_history_collections.total) = SUM(opening-balance lease_billings.total)`
+
+On dev the history nets to about 868.35 million, the reconciliation to about −8.91 million (−8.56 million of it payments EPMAS marks cancelled) and the two together to 859,441,645.64, the opening-balance ledger exactly. A component can carry a large reconciliation while its lease nets to almost nothing: where EPMAS posted a payment against rent that belonged to service charge, the VAT moves between the two.
+
+**Gotchas:**
+- Never sum this table into a balance. For a series that runs from 2018 into the live period, use the worked query "Billed and collected per month from 2018 to today" below: it takes history plus reconciliation, and live data **without** the opening-balance documents (history plus reconciliation already is them). Its running balance equals the live figure at every month from October 2026.
+- Filter `entry_type <> 'cutover_reconciliation'` for "billed"; report the reconciliation separately.
+- Amounts are in the row's `currency_id`. Dev is almost entirely KES; convert or group by currency when a property bills in USD.
+
+## lease_history_collections
+
+> **Reference only. Never part of a balance.** The same rule as `lease_history_billings`.
+
+**One row per:** EPMAS collection row (`tenant_collections`) per non-zero charge on it, plus one row for its unallocated money. **Model:** `App\Models\LeaseHistoryCollection` (read-only). **Company-scoped:** yes. **Soft deletes:** no.
+**Rows in dev DB:** none until the command is run; a dry run on dev computes 186,895 rows, dated 2018-08-15 to 2026-09-30.
+
+The EPMAS payment behind each row supplies the receipt number, mode, channel, payment date, currency and status.
+
+**Status** (`status`, DB enum `confirmed, cancelled`):
+- `confirmed` : counts as collected.
+- `cancelled` : the EPMAS payment carries `cancelled_at`. EPMAS writes the reversal of a cancelled payment as a negative row on a payment that is also cancelled, so both halves drop out together.
+Live rows are `status = 'confirmed'`, the same rule as `lease_collections`.
+
+| Column | Type | Points to | Meaning |
+|---|---|---|---|
+| `id` | bigint | | Primary key |
+| `company_id`, `lease_id`, `facility_id` | bigint | companies / leases / facilities | As in `lease_history_billings`. |
+| `lease_component_id` | bigint, nullable | lease_components.id | Charge type paid. **NULL = money the payment left unallocated** (no charge). |
+| `entry_type` | enum | | Always `payment`. |
+| `status` | enum | | See above. |
+| `transaction_date` | timestamp | | The EPMAS ledger date. |
+| `paid_at` | timestamp, nullable | | The payment date (`date_paid`, else the payment's own date). |
+| `reference` | varchar, nullable | | The EPMAS ledger `ref`. |
+| `document_number`, `receipt_number` | varchar, nullable | | The EPMAS receipt number (`rct_no`). |
+| `payment_mode`, `payment_channel` | varchar, nullable | | EPMAS `mode` (almost always empty) and `channel` (`m_pesa`, `cheque_dep_slip`, `rtgs`, `cash_dep_slip`, `withholding_vat`, `eft`, `withholding_rental`, ...). |
+| `is_withholding` | tinyint | | 1 = the payment settled the account with tax the tenant withheld, not money received: channel or mode `withholding_*` (or EPMAS's empty `withholding` / `withholding_rate`). The counterpart of `payment_methods.is_withholding`; what EPMAS remittances deducted as `withheld`. |
+| `currency_id` | bigint, nullable | currencies.id | The payment's currency, else the lease currency. |
+| `amount`, `tax`, `total` | decimal(50,5) | | Net, tax and gross collected; VAT spread as in `lease_history_billings`. |
+| `source_table`, `source_id` | varchar, bigint | | `tenant_collections` and its id. Unique with `lease_component_id`. |
+
+**Joins:** `lease_id → leases.id`, `facility_id → facilities.id`, `lease_component_id → lease_components.id` (nullable), `currency_id → currencies.id`; no link to `facility_receipts`.
+
+**Gotchas:**
+- Count `status = 'confirmed'` only. Unallocated money (NULL component) is collected money; the reconciliation counts it against Rent.
+- `is_withholding = 1` (channels `withholding_vat` and `withholding_rental`) settles the account with tax the tenant withheld rather than with money received; exclude those rows when you need cash only (on dev 308.96 million confirmed: about 281.7 million VAT and 27.2 million rental).
+
 ## Worked queries
 
 **Every active lease with its tenant, property, spaces, monthly rent and monthly service charge.**
@@ -2113,6 +2208,47 @@ ORDER BY l.next_due_at, l.id;
 ```
 
 Ran on dev (2026-10-22): 5 leases due now, 3 of them never billed by the cycle. Replace the date test with a month window on `next_due_at` to forecast: November 2026 has 1,199 monthly, 5 quarterly and 2 annual leases falling due.
+
+**Billed and collected per month from 2018 to today: EPMAS history, the cutover reconciliation and live data in one series.**
+
+History (`lease_history_billings`, reconciliation included, and confirmed `lease_history_collections`) plus live `lease_billings` **excluding the opening-balance documents** plus confirmed live `lease_collections`. The opening-balance documents are left out because history plus reconciliation already is them. Use `NOT EXISTS` for that exclusion: `NOT (invoice_id IN (...) OR credit_note_id IN (...))` drops every row, because one of the two columns is always NULL.
+
+```sql
+SELECT s.period,
+       SUM(s.billed)                                    AS billed,
+       SUM(s.reconciliation)                            AS cutover_reconciliation,
+       SUM(s.collected)                                 AS collected,
+       SUM(SUM(s.billed + s.reconciliation - s.collected))
+           OVER (ORDER BY s.period)                     AS running_balance
+FROM (
+    -- EPMAS history: invoices and credit notes, and the cutover reconciliation on its own line
+    SELECT DATE_FORMAT(h.transaction_date, '%Y-%m') AS period,
+           CASE WHEN h.entry_type = 'cutover_reconciliation' THEN 0 ELSE h.total END AS billed,
+           CASE WHEN h.entry_type = 'cutover_reconciliation' THEN h.total ELSE 0 END AS reconciliation,
+           0 AS collected
+    FROM lease_history_billings h
+    UNION ALL
+    -- EPMAS history: confirmed payments only
+    SELECT DATE_FORMAT(hc.transaction_date, '%Y-%m'), 0, 0, hc.total
+    FROM lease_history_collections hc
+    WHERE hc.status = 'confirmed'
+    UNION ALL
+    -- live billings, without the opening-balance documents (history + reconciliation already is them)
+    SELECT DATE_FORMAT(lb.transaction_date, '%Y-%m'), lb.total, 0, 0
+    FROM lease_billings lb
+    WHERE NOT EXISTS (SELECT 1 FROM lease_opening_balances o WHERE o.invoice_id = lb.invoice_id)
+      AND NOT EXISTS (SELECT 1 FROM lease_opening_balances o WHERE o.credit_note_id = lb.credit_note_id)
+    UNION ALL
+    -- live collections, confirmed only
+    SELECT DATE_FORMAT(lc.transaction_date, '%Y-%m'), 0, 0, lc.total
+    FROM lease_collections lc
+    WHERE lc.status = 'confirmed'
+) s
+GROUP BY s.period
+ORDER BY s.period;
+```
+
+Ran on dev (2026-10-23, with the history tables built in a session-only copy): 96 months with activity between 2018-08 and 2026-10, in 4 seconds. The running balance is 859,441,645.64 at 2026-09, the opening-balance ledger to the cent, and 1,578,195,677.36 at 2026-10, exactly `SUM(lease_billings.total)` less confirmed `lease_collections.total` today. September 2026 shows billed 100.66 million, collected 215.15 million and a cutover reconciliation of −8.91 million. Add `h.facility_id` / `lb.lease_id → leases.facility_id` to the inner selects and the `GROUP BY` for a per-property series, and `lease_component_id` (through `lease_item_components` for `lease_collections`) for a per-charge one. Amounts are summed as stored; see each table's currency note before mixing currencies.
 
 # 4. Lease applications and letters of offer (LOO)
 
@@ -3414,7 +3550,7 @@ Returned 910 rows over 825 invoices, 63,854,268.53 applied in total, `applied_at
 
 # 6. Supplier contracts, bills, expenses, remittances and landlord payouts
 
-This domain is the money that flows out of a property. A supplier (a `users` row in the `vendor` user group) holds a contract with a property (`facility_contracts`) and raises bills against it (`facility_bills`), or bills ad hoc or from a purchase order. A bill is `pending` until the supplier's invoice is posted; posting turns it into an expense of the property (`facility_expenses`), credits the supplier's payables ledger (`facility_vendor_statements`) and freezes the withholding tax deducted from it (`facility_bill_withholdings`). Every bill and expense is classified by its own `expense_category_id`, `expense_type_id` and `expense_sub_type_id` (the tree `expense_categories` to `facility_expense_types` to `facility_expense_sub_types`, with approved suppliers per sub-type in `facility_expense_sub_type_vendors`). At the end of a period the managing company nets the property's collections against its expenses and its own management fee in a remittance to the landlord (`facility_remittances`). Suppliers and landlords are paid through payment vouchers (`facility_payment_vouchers` and their items), which are batched into bank settlements (`facility_settlements`). Budgets (`facility_budgets`) compare budgeted income and expense per property and period with what was collected and spent. Three groups of tables are legacy and empty: payouts, ledgers, and (in the dev database only) everything from expenses onward, because the migration imported bills but not the expense, remittance or payment history.
+This domain is the money that flows out of a property. A supplier (a `users` row in the `vendor` user group) holds a contract with a property (`facility_contracts`) and raises bills against it (`facility_bills`), or bills ad hoc or from a purchase order. A bill is `pending` until the supplier's invoice is posted; posting turns it into an expense of the property (`facility_expenses`), credits the supplier's payables ledger (`facility_vendor_statements`) and freezes the withholding tax deducted from it (`facility_bill_withholdings`). Every bill and expense is classified by its own `expense_category_id`, `expense_type_id` and `expense_sub_type_id` (the tree `expense_categories` to `facility_expense_types` to `facility_expense_sub_types`, with approved suppliers per sub-type in `facility_expense_sub_type_vendors`). At the end of a period the managing company nets the property's collections against its expenses and its own management fee in a remittance to the landlord (`facility_remittances`). Suppliers and landlords are paid through payment vouchers (`facility_payment_vouchers` and their items), which are batched into bank settlements (`facility_settlements`). Budgets (`facility_budgets`) compare budgeted income and expense per property and period with what was collected and spent. Three groups of tables are legacy and empty: payouts, ledgers, and (in the dev database only) everything from expenses onward, because the migration imported bills but not the expense, remittance or payment history. That EPMAS history is kept **for reference only** in `facility_history_expenses` and `facility_history_remittances`, described at the end of this section's tables; nothing in the application but the reports built for it reads them.
 
 One fact shapes every query here: the managing company is itself a supplier. The `settings` row `default_vendor` (user 188 in dev) is the "system vendor" that bills the property for management fees, letting fees, salaries and wages, deposit refunds and recoveries from the landlord. 2,651 of the 3,365 bills in dev belong to it. Exclude it when you want third-party supplier spend.
 
@@ -4067,6 +4203,75 @@ Live rows are `deleted_at IS NULL`; the current budget of a property is the one 
 
 **Joins:** `facility_budget_id → facility_budgets.id`; `expense_type_id → facility_expense_types.id`.
 
+## facility_history_expenses
+
+> **Reference only. Never part of a balance.** The EPMAS property expense ledger before the cut-over. No remittance, budget, statement or existing report reads it; adding it to `facility_expenses` counts nothing twice only because the two never overlap in time (history up to 30 Sep 2026, live expenses from 1 Oct 2026) and the importer skips any EPMAS bill that has a live expense.
+
+**One row per:** EPMAS `property_expenses` row (one posted supplier bill) per non-zero category column. **Model:** `App\Models\FacilityHistoryExpense` (read-only). **Company-scoped:** yes. **Soft deletes:** no.
+**Rows in dev DB:** none until `php artisan history:import-epmas` is run; a run computes 28,649 rows for 98 properties, dated 2018-12 to 2026-09-30, totalling 4,054,175,579.88 (Service Charge 3,087.6 million, Rent 751.9 million, Service 214.7 million).
+
+Written only by `history:import-epmas` (`docs/backend/epmas-history.md`), which rebuilds a property's rows on every run. A property is covered when its EPMAS property became a facility (or a block of one); 70 retired EPMAS properties (14,064 rows, 1,289.6 million) did not and are left out. Every row is in KES on dev.
+
+`amount` is the EPMAS category column, `tax` the VAT (`billed − amount`, to the 4 decimals EPMAS's generated `billed` keeps), `total = amount + tax`. Signs as in EPMAS: credit bills are negative. `SUM(total)` equals `SUM(property_expenses.billed)` of the covered properties to the fifth decimal.
+
+| Column | Type | Points to | Meaning |
+|---|---|---|---|
+| `id` | bigint | | Primary key |
+| `company_id` | bigint, nullable | companies.id | Company, copied from the facility. |
+| `facility_id` | bigint | facilities.id | The property (EPMAS property, or block, resolved to its facility). |
+| `vendor_id` | bigint, nullable | users.id (no constraint) | The supplier, when the EPMAS supplier was imported as a user; NULL on 1,012 rows. |
+| `bill_id` | bigint, nullable | EPMAS `bills.id` (no constraint) | The EPMAS bill. The same id in `facility_bills` only for the bills still owed at the cut-over; most were never imported. |
+| `expense_type_id` | bigint, nullable | facility_expense_types.id | From the bill's EPMAS contract (ids kept by the migration). NULL on the 49 rows whose bill EPMAS no longer has. |
+| `expense_sub_type_id` | bigint, nullable | facility_expense_sub_types.id | From the contract; NULL for purchase-order bills. |
+| `expense_category_id` | bigint | expense_categories.id | Rent (1), Service Charge (2) or Service (3), from the EPMAS column (`rent`, `service_charge`, `services`/`service`). It is the side of the landlord's account EPMAS charged, the bill's own category, **not** the expense type's category. |
+| `transaction_date` | timestamp | | The EPMAS ledger date (posting date). |
+| `reference` | varchar, nullable | | The EPMAS ledger `ref`. |
+| `document_number` | varchar, nullable | | The supplier's invoice number, else the EPMAS bill number. |
+| `notes` | varchar, nullable | | The EPMAS ledger note (usually the expense type's name). |
+| `currency_id` | bigint, nullable | currencies.id | The bill's currency, else the property's reporting currency. |
+| `amount`, `tax`, `total` | decimal(50,5) | | Net, VAT, gross; see above. |
+| `source_table`, `source_id` | varchar, bigint | | `property_expenses` and its id. Unique with `expense_category_id`. |
+
+**Joins:** `facility_id → facilities.id`, `expense_type_id → facility_expense_types.id`, `expense_sub_type_id → facility_expense_sub_types.id`, `expense_category_id → expense_categories.id`, `currency_id → currencies.id` (DB constraints); `vendor_id → users.id` and `bill_id` without constraints. No link to `facility_expenses` or `facility_remittances`.
+
+**Gotchas:**
+- Classify by `expense_category_id`, never through `facility_expense_types.expense_category_id`: a Letting Fees (rent-type) bill is often charged to service charge and the other way round.
+- The ledger is kept as EPMAS has it: 582 rows (117.4 million) belong to bills EPMAS later cancelled, and 36 bills were posted to the ledger more than once. EPMAS deducted them as they stand; exclude them only if you have the EPMAS `bills` table to hand.
+- For a series that crosses the cut-over use this table up to 2026-09-30 23:59:59 and live `facility_expenses` (status not `pending`/`cancelled`, not deleted) after it, as the worked query below does.
+
+## facility_history_remittances
+
+> **Reference only. Never part of a balance.** The EPMAS landlord remittances before the cut-over. The same rule as `facility_history_expenses`.
+
+**One row per:** EPMAS `remittances` row that is not cancelled: a property's regular remittance for a month, or an advance paid before the month closed. **Model:** `App\Models\FacilityHistoryRemittance` (read-only). **Company-scoped:** yes. **Soft deletes:** no.
+**Rows in dev DB:** none until the command is run; a run computes 5,489 rows for 101 properties (2,828 submitted and 2,479 pending regular remittances, 181 submitted advances and 1 pending), periods from 2019 to 2026-09-30.
+
+**Status** (`status`, EPMAS's text, lower-cased):
+- `submitted` : approved and paid to the landlord. The only status that counts.
+- `pending` : a draft EPMAS opened for the month and never submitted; its figures are often stale.
+EPMAS `cancelled` remittances are not copied. Live rows are `status = 'submitted'`.
+
+| Column | Type | Points to | Meaning |
+|---|---|---|---|
+| `id` | bigint | | Primary key |
+| `company_id` | bigint, nullable | companies.id | Company, copied from the facility. |
+| `facility_id` | bigint | facilities.id | The property. |
+| `is_advance` | tinyint | | 1 = an advance: `period_from` = `period_to` = the moment it was paid, no collections or expenses. |
+| `status` | varchar | | See above. |
+| `period_from`, `period_to` | timestamp | | The month covered (an advance: the moment it was paid). |
+| `processed_at` | timestamp, nullable | | When it was submitted. |
+| `collected`, `expenses`, `withheld` | decimal(50,5) | | As in EPMAS: the period's collections, the expenses deducted (the management fee bill included) and the tax tenants withheld. |
+| `remittable_amount` | decimal(50,5) | | What the landlord was paid: EPMAS `amount`, = `collected − expenses − withheld − advances deducted` on a submitted regular remittance; the amount advanced on an advance. The counterpart of `facility_remittances.remittable_amount`. |
+| `currency_id` | bigint, nullable | currencies.id | The EPMAS property's currency, else the property's reporting currency. |
+| `reference` | varchar, nullable | | On an advance, the EPMAS id of the regular remittance it was deducted on; else NULL. |
+| `source_table`, `source_id` | varchar, bigint | | `remittances` and its EPMAS id; unique together. |
+
+**Joins:** `facility_id → facilities.id`, `currency_id → currencies.id`. No receipts or expenses are linked: EPMAS's own links were not imported.
+
+**Gotchas:**
+- Money paid to a landlord is `SUM(remittable_amount) WHERE status = 'submitted'`, regular and advance together: a regular remittance's amount is already net of the advances deducted on it (3,580.8 million on dev, 449.9 million of it advances).
+- `collected − expenses − withheld` is not `remittable_amount` when advances were paid in the month.
+
 ## Worked queries
 
 **Third-party supplier bills per property per month, with withholding deducted and the net payable to suppliers (company's own fee bills excluded).**
@@ -4175,6 +4380,39 @@ ORDER BY ec.name, et.name;
 ```
 
 Returned 31 rows (one per expense type, under Rent and Service Charge; Service and Utilities have no types yet). Example: Repairs & Maintenance has 16 sub-types, 94 approved suppliers (86 prequalified), 15 active contracts and 160 posted bills; Management Fees has 1 supplier (the system vendor), 101 active contracts and 1,308 posted bills.
+
+**Expenses per property, month and category from 2018 to today: EPMAS history up to the cut-over, live expenses after it.**
+
+History (`facility_history_expenses`) up to 2026-09-30 23:59:59 plus live `facility_expenses` after it, posted (status not `pending` or `cancelled`) and not deleted, which is the rule remittances and the Income & Expenditure report use. The two never overlap: live expenses start on 1 Oct 2026, and the importer leaves out any EPMAS bill that has a live expense.
+
+```sql
+SELECT s.facility_id, f.name AS property, s.period, ec.name AS category,
+       SUM(s.history)          AS history_expenses,
+       SUM(s.live)             AS live_expenses,
+       SUM(s.history + s.live) AS expenses
+FROM (
+    -- EPMAS history, up to the cutover (end of 30 Sep 2026)
+    SELECT h.facility_id, DATE_FORMAT(h.transaction_date, '%Y-%m') AS period,
+           h.expense_category_id, h.total AS history, 0 AS live
+    FROM facility_history_expenses h
+    WHERE h.transaction_date <= '2026-09-30 23:59:59'
+    UNION ALL
+    -- live expenses after the cutover: posted (not pending or cancelled), not deleted
+    SELECT e.facility_id, DATE_FORMAT(e.transaction_at, '%Y-%m'),
+           e.expense_category_id, 0, e.total
+    FROM facility_expenses e
+    WHERE e.deleted_at IS NULL
+      AND e.status NOT IN ('pending', 'cancelled')
+      AND e.transaction_at > '2026-09-30 23:59:59'
+) s
+JOIN facilities f ON f.id = s.facility_id
+LEFT JOIN expense_categories ec ON ec.id = s.expense_category_id
+GROUP BY s.facility_id, f.name, s.period, ec.name
+ORDER BY f.name, s.period, ec.name;
+```
+
+Ran (2026-10-23) on a copy of dev with the history tables built: 6,417 rows for 98 properties, 2018-12 to 2026-10, in under a second. History sums to 4,054,175,579.88 (`SUM(property_expenses.billed)` of the covered properties, exactly), live to 21,357,344.09 (97 expenses, all October 2026). August 2026 shows 64.36 million of history, September 60.37 million, October 21.36 million live. Drop `ec.name` from the select and `GROUP BY` for a per-property total, or `s.facility_id`/`f.name` for a portfolio one. History is in each row's `currency_id` and live expenses in the property's reporting currency; every row on dev is KES, so convert or group by currency before mixing elsewhere.
+
 
 # 7. Procurement: requests, quotes, purchase orders and the purchase catalogue
 
@@ -6544,6 +6782,8 @@ Ran on dev: 0 rows (there is no inventory in dev).
 | `facility_expense_types` | 6. 6. Supplier contracts, bills, expenses, remittances and landlord payouts | 31 |
 | `facility_expenses` | 6. 6. Supplier contracts, bills, expenses, remittances and landlord payouts | 0 |
 | `facility_floors` | 2. 2. Properties, space hierarchy, occupancy and utilities | 622 |
+| `facility_history_expenses` | 6. 6. Supplier contracts, bills, expenses, remittances and landlord payouts (reference only) | 0 until `history:import-epmas` runs |
+| `facility_history_remittances` | 6. 6. Supplier contracts, bills, expenses, remittances and landlord payouts (reference only) | 0 until `history:import-epmas` runs |
 | `facility_inventories` | 10. 10. Property operations: tickets, site visit reports and inventory | 0 |
 | `facility_inventory_categories` | 10. 10. Property operations: tickets, site visit reports and inventory | 6 |
 | `facility_invoice_component_receipt_allocations` | 5. 5. Tenant invoices, receipts, credit notes and bank accounts | 11 |
@@ -6608,6 +6848,8 @@ Ran on dev: 0 rows (there is no inventory in dev).
 | `lease_components_payment_priorities` | 3. 3. Leases, lease charges and tenant accounts | 0 |
 | `lease_deposits` | 3. 3. Leases, lease charges and tenant accounts | 3,519 |
 | `lease_escalations` | 3. 3. Leases, lease charges and tenant accounts | 1,798 |
+| `lease_history_billings` | 3. 3. Leases, lease charges and tenant accounts (reference only) | 0 until `history:import-epmas` runs |
+| `lease_history_collections` | 3. 3. Leases, lease charges and tenant accounts (reference only) | 0 until `history:import-epmas` runs |
 | `lease_item_components` | 3. 3. Leases, lease charges and tenant accounts | 11,908 |
 | `lease_items` | 3. 3. Leases, lease charges and tenant accounts | 6,562 |
 | `lease_opening_balances` | 3. 3. Leases, lease charges and tenant accounts | 8,185 |
@@ -6724,6 +6966,8 @@ Ran on dev: 0 rows (there is no inventory in dev).
 | `App\Models\FacilityExpenseSubTypeVendor` | `facility_expense_sub_type_vendors` |
 | `App\Models\FacilityExpenseType` | `facility_expense_types` |
 | `App\Models\FacilityFloor` | `facility_floors` |
+| `App\Models\FacilityHistoryExpense` | `facility_history_expenses` |
+| `App\Models\FacilityHistoryRemittance` | `facility_history_remittances` |
 | `App\Models\FacilityInventory` | `facility_inventories` |
 | `App\Models\FacilityInventoryCategory` | `facility_inventory_categories` |
 | `App\Models\FacilityInvoice` | `facility_invoices` |
@@ -6786,6 +7030,8 @@ Ran on dev: 0 rows (there is no inventory in dev).
 | `App\Models\LeaseComponentsPaymentPriority` | `lease_components_payment_priorities` |
 | `App\Models\LeaseDeposit` | `lease_deposits` |
 | `App\Models\LeaseEscalation` | `lease_escalations` |
+| `App\Models\LeaseHistoryBilling` | `lease_history_billings` |
+| `App\Models\LeaseHistoryCollection` | `lease_history_collections` |
 | `App\Models\LeaseItem` | `lease_items` |
 | `App\Models\LeaseItemComponent` | `lease_item_components` |
 | `App\Models\LeaseOpeningBalance` | `lease_opening_balances` |
@@ -6854,6 +7100,7 @@ Ran on dev: 0 rows (there is no inventory in dev).
 | Exit notice | A tenant's notice to leave (`tenant_exit_notices`), which releases the spaces and settles the deposit. |
 | Facility | A property. |
 | FRC | Financial Reporting Centre (Kenya). The `frc_*` tables hold the sanctions list and screening results. |
+| EPMAS history | The old system's ledgers before the cut-over, kept for reference only: the tenant ledger in `lease_history_billings` / `lease_history_collections` (its `cutover_reconciliation` rows make it add up to the opening balances), property expenses in `facility_history_expenses` and landlord remittances in `facility_history_remittances`. Never part of a balance. |
 | Held balance | The part of an invoice balance reserved by a receipt or credit note that is still pending approval. |
 | Landlord | The owner of a property, a `users` row in the `landlord` group, pointed to by `facilities.landlord_id`. |
 | Lease component | A charge type in the catalogue (`lease_components`): Rent, Service Charge, Parking, Signage, Water, Electricity, deposits, legal fees. Flags such as `is_rent`, `is_service_charge`, `is_utility_charge` give each row its role. |

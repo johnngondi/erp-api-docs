@@ -61,6 +61,7 @@ All filters are **optional** and flat (not nested under `filter[...]`). The six
 | `report_type` | enum `weekly` \| `monthly` \| `quarterly` \| `annually` | **`monthly`** — how period columns are grouped |
 | `account_id` | `expense_categories.id` — the **Account** | All accounts |
 | `currency_id` | `currencies.id` | **Required when `facility_id` is omitted** (see currency below) |
+| `include_history` | boolean (`true` \| `false` \| `1` \| `0`) | **`true`** — periods up to the EPMAS cutover read the legacy ledger (see [Legacy history](#legacy-history-before-the-cutover)) |
 
 - **`account_id`** scopes both sides of the statement to one account: **income** to lease components
   mapped to that expense category (`lease_components.expense_category_id`), and **expenses** to those
@@ -69,6 +70,9 @@ All filters are **optional** and flat (not nested under `filter[...]`). The six
   proxy for the account. See the [shared conventions](./README.md#shared-conventions).
 - **`currency_id`** is **required only when no `facility_id` is given**. Requesting a multi-property
   roll-up without it returns `422` with a `currency_id` error.
+- **`include_history`** adds the legacy EPMAS figures to periods on or before the cutover. Send
+  `include_history=false` to see live ERP data only. It is not echoed in `header.filters`, so a
+  `false` response is identical to the report as it was before the flag existed.
 
 Example:
 
@@ -139,10 +143,37 @@ Nett Remittance             = Remittable Amount − Advance Remittance
 
 Notes:
 
-- Income is **confirmed** `LeaseCollection` only; expenses exclude `cancelled` / `pending`.
+- Income is **confirmed** `LeaseCollection` only; expenses exclude `cancelled` / `pending`. Before the
+  cutover these are joined by the legacy history (see below) unless `include_history=false`.
 - The management fee is **not** a separate line — it is already an ordinary expense row, so it sits
   inside the Expenses Sub Total.
 - When a property has no management contract (or empty lists), Non-Remittable Income / Expenses are 0.
+
+### Legacy history (before the cutover)
+
+The ERP went live on 1 Oct 2026; everything before it was brought in from EPMAS as one opening
+balance per lease, so the live tables hold no income, expenses or remittances dated before then.
+With `include_history` on (the default), periods up to the cutover are filled from the
+reference-only EPMAS history tables:
+
+| Section | Live source | History source (dated on or before the cutover only) |
+|---|---|---|
+| Income, per lease component | confirmed `lease_collections` | `confirmed` `lease_history_collections`. A legacy payment EPMAS never allocated to a charge is shown under **Rent**, the component the history importer charges it to. Tax withheld comes from the history row's `is_withholding` flag. |
+| Expenses, per expense type | `facility_expenses` (not cancelled / pending) | `facility_history_expenses` |
+| Less Advance Remittance | advance `facility_remittances` | advance `facility_history_remittances` in EPMAS status `submitted` (approved; `pending` drafts and `cancelled` are left out) |
+
+- **The cutover** is the end of the day in `config('history.epmas_cutover')` (default `2026-09-30`,
+  Africa/Nairobi). History rows dated after it are never read, so **a period entirely after the
+  cutover is exactly the live report**, whatever `include_history` says, and a period spanning the
+  cutover adds history before it to live data after it.
+- `account_id` narrows history the same way as live data: income by the component's
+  `expense_category_id` (unallocated legacy payments by Rent's), expenses by the history row's own
+  `expense_category_id`.
+- **Currency:** every history row carries its own currency and is converted, at the current rate,
+  into the property's reporting currency (the currency the live figures are taken to be in) before
+  it is added up. The multi-property conversion to `currency_id` then applies as usual.
+- Non-remittable income and expenses use the property's **current** management contract for history
+  rows too.
 
 ### This report's presentation choices
 
