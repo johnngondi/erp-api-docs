@@ -112,12 +112,14 @@ it has gone out for quotes the way to change what was asked is a rebase (below).
 | `selected_option` | Conditional | integer | The quote (work) or price option (purchase) the procurement step picks. Optional on the first pass, where leaving it out keeps the system's recommendation, and required when a later step sent the request back. It must belong to this request. See [Overriding the recommendation](#overriding-the-recommendation) |
 | `expense_category_id` | Conditional | integer | Required if current step has `select_expense_category=true` and `status=approved` |
 | `vendors` | Conditional | array | Required if `override=true` |
-| `deadline` | No | string/date | Optional |
 | `has_preferred_vendor` | No | boolean | Default `false` |
 | `override` | No | boolean | Default `false` |
 
 `comment` is required when the status is `review` or `rejected`, when `has_preferred_vendor` or
 `override` is set, and when `selected_option` is not the system's recommendation.
+
+The quote deadline is never part of this payload: the system sets it (see
+[Quote deadline](#quote-deadline)). A `deadline` key sent by an older client is ignored.
 
 ### Overriding the recommendation
 
@@ -256,8 +258,7 @@ The default supplier is, in order:
 
 While preliminary, the request carries `is_preliminary: true`, `default_vendor_id`, and
 `preliminary_until` = now + `rfq_default_vendor_exclusive_window_hours` (default 24). The same value
-is its `deadline`; a deadline the step set is replaced by the window. A preferred supplier chosen
-by the step is asked alongside the default one.
+is its `deadline`. A preferred supplier chosen by the step is asked alongside the default one.
 
 The stage ends in one of four ways:
 
@@ -306,18 +307,19 @@ the default supplier only, with no broadcast.
 
 ### Quote deadline
 
-The quote deadline is counted in **working days** (Monday to Friday; public holidays are not
-excluded) and falls at **17:00** on the day reached. `rfq_default_deadline_days` (default 3) is used:
+The quote deadline is set by the system; no step sets or edits it. It is counted in **working
+days** (Monday to Friday; public holidays are not excluded) and falls at **17:00** on the day
+reached. `rfq_default_deadline_days` (default 3) is used:
 
-- when the procurement step opens the first round and the request has no deadline (a `deadline` a
-  step set is kept), unless the request goes to its default supplier first;
-- for every round after a rebase, whatever the form sends;
+- when the procurement step opens the first round, unless the request goes to its default supplier
+  first;
+- for every round after a rebase;
 - for each "request more quotes" extension;
 - when a request in its default-supplier stage is sent to the other suppliers (broadcast).
 
 While the request is with its default supplier alone, the deadline is the end of that supplier's
 window, `preliminary_until` (`rfq_default_vendor_exclusive_window_hours` from the step approval, in
-clock hours, not working days). It replaces a deadline the step set.
+clock hours, not working days).
 
 ### Rebase
 
