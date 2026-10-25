@@ -48,29 +48,54 @@ report template (indent by `depth`); the envelope, bucket keys and cell shape ar
 
 ## Filters (query params)
 
-All filters are **optional** and flat (not nested under `filter[...]`). The six
-[global filters](./README.md#global-filters) apply; this report adds two:
+All filters are **optional** and flat (not nested under `filter[...]`). The
+[global filters](./README.md#global-filters) apply, plus the block / wing / floor lists every tenant
+report takes:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| `landlord_id` | `users.id` | All landlords (global) |
-| `facility_id` | `facilities.id` | All properties (global) |
+| `landlord_ids` | list of `users.id` | All landlords (global) |
+| `facility_ids` | list of `facilities.id` | All properties (global) |
 | `facility_type_id` | `facility_types.id` | All property types (global) |
 | `properties_status` | enum `App\Enums\Status` | Any property status (global) |
 | `period_from` / `period_to` | date `Y-m-d` | Current month (global) — a schedule is a current snapshot, so the period is echoed but does not change occupancy |
-| `facility_block_id` | `facility_blocks.id` | The whole property tree |
-| `facility_wing_id` | `facility_wings.id` | The whole property tree |
+| `buckets` | list of this report's bucket ids | Every bucket (global) — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
+| `landlord_id` / `facility_id` | single id — **deprecated** aliases, merged into the lists | (global) |
+| `facility_block_ids` | list of `facility_blocks.id` | The whole property tree |
+| `facility_wing_ids` | list of `facility_wings.id` | The whole property tree |
+| `facility_floor_ids` | list of `facility_floors.id` | The whole property tree |
+| `facility_block_id` / `facility_wing_id` | single id — **deprecated** aliases of `facility_block_ids` / `facility_wing_ids`, merged into them | The whole property tree |
 
-- `facility_block_id` / `facility_wing_id` **require** a `facility_id`, and must belong to it — a `422`
-  is returned otherwise.
-- When a block (or wing) is selected, its **own** row is omitted and the tree **starts at its
-  children** (its wings/floors, or floors), which become the top-level `items` at `depth: 0`.
+### Rooting the tree at blocks, wings and floors
+
+- The block / wing / floor lists (and their deprecated aliases) are accepted only when **exactly one
+  property is selected**. Otherwise the `422` is on `facility_ids`: `"Select exactly one property to
+  filter by block, wing or floor."` — this includes a block or wing sent **without** a property,
+  which used to fail with a "property required" error. Each node must belong to that property
+  (`422` on the list, or on the alias key when the alias was sent), and the property must be one the
+  caller is allocated to. See
+  [Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor).
+- **One** node selected: its **own** row is omitted and the tree **starts at its children** (a
+  block's wings/floors, a wing's floors, a floor's spaces), which become the top-level `items` at
+  `depth: 0` — as before.
+- **Several** nodes selected: each selected block / wing / floor is a **root node** of its own —
+  a group node at `depth: 0` with `row_kind` `block`, `wing` or `floor` — with its subtree beneath.
+  The bucket therefore has several top-level groups, in tree order.
+- A selection inside a selected node refines it: Block A plus a floor inside Block A roots the
+  tree at that floor, not at Block A.
+- This report splits **per space**, while the other tenant reports split **per lease** by its
+  primary space. A lease holding a shop in Block A (with the Rent) and a parking bay in Block B
+  shows the parking bay under Block B here, but all of its money under Block A in every other
+  report.
+- The pickers are filled from
+  [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 
-- **With `facility_id`** → exactly **one** `property_{id}` bucket (optionally rooted at the selected
-  block/wing).
-- **Without `facility_id`** → **one `property_{id}` bucket per property** in scope, ordered by name.
+- **Exactly one property selected** → exactly **one** `property_{id}` bucket (optionally rooted at
+  the selected blocks / wings / floors).
+- **Otherwise** (none or several selected) → **one `property_{id}` bucket per property** in scope,
+  ordered by name.
   **There is no `overview` bucket** — every bucket is a property.
 
 Each bucket's `header` carries `label` (the property name), `property { id, name }`, and `currency`
@@ -79,7 +104,7 @@ Each bucket's `header` carries `label` (the property name), `property { id, name
 ## Columns (`fields`)
 
 The leaf/space columns, in order: `name` (Space), `category`, `type`, `size`, `status`, `tenant`,
-`lease_id` (Lease), `lease_start`, `lease_end`, `billing_cycle`, then one **money column per
+`lease_id` (Lease), `landlord_identifier` (Landlord ID), `lease_start`, `lease_end`, `billing_cycle`, then one **money column per
 autobilled component present in the property** (`component_{id}`, e.g. `Rent/M`, `Service Charge/M`, `Parking/M`, `Signage/M` —
 each carries `component_id`, `togglable:true`), then `total` (Total/M, `type: grosstotal`).
 
@@ -100,11 +125,13 @@ cell. A space that does not carry one of the property's component columns has `v
   `Available`); other spaces follow the rent/SC split (`Unavailable` / `Only Service Charge Available`
   / `Only Rent Available` / `Available`), with `Under Consideration` for a free space that has an open
   application. The cell carries the status `color`.
-- **tenant**, **lease_id**, **lease_start** / **lease_end** (`Y-m-d`), **billing_cycle**, and
+- **tenant**, **lease_id**, **landlord_identifier**, **lease_start** / **lease_end** (`Y-m-d`), **billing_cycle**, and
   **amounts** — from the space's **primary holding lease for the period** (rent holder → SC holder →
   parking → signage → the latest overlapping lease). `lease_id` names that primary lease, so a space
   held by two leases — rent on one, service charge on another — shows only the primary one, exactly
-  as the Tenant column already does. Group nodes (block / wing / floor) carry no field cells at all,
+  as the Tenant column already does. `landlord_identifier` is what the landlord calls the tenant in
+  their own system (`leases.landlord_identifier`) on that same primary lease; `null` when the lease
+  has none or the space is vacant. Group nodes (block / wing / floor) carry no field cells at all,
   so the column is blank on them. Monthly amount per component is `SUM(lease_item_components.cost_per_month)`
   over autobilled components. Parking and signage occupancy is resolved through the lease's
   `is_parking_fee` / `is_signage_fee` components (there is no dedicated occupancy column for them).
@@ -159,6 +186,7 @@ component flag — so a parking bay or signage panel correctly shows its histori
   "status":      { "value": "Unavailable", "color": "danger" },
   "tenant":      { "value": "Java House Ltd" },
   "lease_id":    { "value": 41 },
+  "landlord_identifier": { "value": "JAVA-01" },
   "lease_start": { "value": "2026-01-01" },
   "lease_end":   { "value": "2028-12-31" },
   "billing_cycle": { "value": "monthly" },
@@ -196,7 +224,8 @@ Both the bucket `summary` and the report-level `summary` are **segmented by spac
 ```
 
 - **Commercial** is measured by **leasable area**, not space count: `total_space` is the property's
-  `leasable_space` (or the selected block/wing's, when the tree is rooted there) and `occupied` is the
+  `leasable_space` (or, when the tree is rooted at selected nodes, the **sum** of the selected roots'
+  `leasable_space`) and `occupied` is the
   summed **size** of its leased spaces. `available` = `total_space − occupied`; `rate` =
   occupied / total_space. The three area figures are preformatted `"<n> SqFt"` strings; `rate` stays a
   number.

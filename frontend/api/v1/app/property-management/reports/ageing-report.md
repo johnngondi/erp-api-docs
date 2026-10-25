@@ -64,18 +64,32 @@ per the shared contract — and subtotal rows are never tinted: their emphasis i
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus one:
+The [global filters](./README.md#global-filters) plus one:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
 | `period_to` | `Y-m-d` | End of the current month. **This is the as-at anchor.** |
 | `period_from` | `Y-m-d` | **Ignored by this report** |
-| other global filters | see the shared contract | all |
+| other [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status` | see the shared contract | all |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `leases_status` | `active` \| `suspended` \| `terminated` | Any lease status |
+| `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
 ```
-GET …/reports/tenants/ageing-report?facility_id=1&period_to=2026-07-31&leases_status=active
+GET …/reports/tenants/ageing-report?facility_ids[]=1&period_to=2026-07-31&leases_status=active
 ```
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). Each lease counts
+**whole** under the node of its **primary space** — the space of the item holding Rent, else
+Service Charge, else the lowest-id spaced item. A lease with no space is in the property run
+and out of every block / wing / floor run, so the block runs plus those leases add up to the property run.
+Each outstanding invoice follows its lease.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 
@@ -94,7 +108,7 @@ columns a property bucket uses, with the property's name where a property bucket
 Each row equals that property bucket's Total row, and its own Total row equals `overall`'s
 grosstotal.
 
-**`properties-summary` is omitted when `facility_id` is set.** It would hold a single row, and
+**`properties-summary` is omitted when exactly one property is selected.** It would hold a single row, and
 `overall` already is that row.
 
 Property buckets carry `header.property` `{ id, name }`. A property with no debt gets no bucket, and
@@ -126,6 +140,7 @@ The Total row's `property` cell carries `col_span: 2`, so the row omits `status`
 |---|---|---|
 | `tenant` | `Tenant` | `string` |
 | `lease_id` | `Lease` | `id` — `null` on the Total row |
+| `landlord_identifier` | `Landlord ID` | `string` — what the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none, and on the Total row |
 | `current` / `d_1_30` / `d_31_60` / `d_61_90` / `d_91_plus` | `Current` / `1–30` / `31–60` / `61–90` / `91+` | `money` |
 | `total` | `Total` | `money`, `type: grosstotal` |
 
@@ -171,13 +186,15 @@ Property buckets carry the same two, scoped to that property. `properties-summar
       {
         "bucket": "property-1",
         "header": { "label": "KAHAWA HOUSE", "property": { "id": 1, "name": "KAHAWA HOUSE" } },
-        "fields": [ /* tenant, the five bands, total */ ],
+        "fields": [ /* tenant, lease_id, landlord_identifier, the five bands, total */ ],
         "items": [
           { "type": "normal", "tenant": { "value": "Acme Traders Ltd" },
+            "lease_id": { "value": 412 }, "landlord_identifier": { "value": "LL-0042" },
             "current": { "value": 400000.00 }, "d_1_30": { "value": 0 },
             "d_31_60": { "value": 540000.00, "color": "warning" }, "d_61_90": { "value": 0 },
             "d_91_plus": { "value": 120000.00, "color": "danger" }, "total": { "value": 1060000.00 } },
           { "type": "subtotal", "background_color": "secondary", "tenant": { "value": "Total" },
+            "lease_id": { "value": null }, "landlord_identifier": { "value": null },
             "current": { "value": 400000.00 }, "d_1_30": { "value": 600000.00 }, "d_31_60": { "value": 540000.00 },
             "d_61_90": { "value": 0 }, "d_91_plus": { "value": 120000.00 }, "total": { "value": 1660000.00 } }
         ],

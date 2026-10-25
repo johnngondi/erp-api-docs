@@ -76,20 +76,35 @@ Don't substitute an empty string or a dead link; the row tint already says what 
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus two ways to pick one method:
+The [global filters](./README.md#global-filters) plus two ways to pick one method:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `payment_method_code` | `VAT_WITHHOLDING` \| `RENTAL_WITHHOLDING` | Both methods |
 | `payment_method_id` | `payment_methods.id` | Both methods |
+| `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
 `payment_method_code` is what the nav presets use. `payment_method_id` is there for ad-hoc use when
 the caller already holds a real id. **Given both, the id wins** — it is the more specific request.
 
 ```
-GET …/reports/tenants/tenant-withholding?facility_id=1&payment_method_code=VAT_WITHHOLDING
+GET …/reports/tenants/tenant-withholding?facility_ids[]=1&payment_method_code=VAT_WITHHOLDING
 ```
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). Each lease counts
+**whole** under the node of its **primary space** — the space of the item holding Rent, else
+Service Charge, else the lowest-id spaced item. A lease with no space is in the property run
+and out of every block / wing / floor run, so the block runs plus those leases add up to the property run.
+A receipt counts whole under the lease of the invoice on its **first** allocation, even
+when it is allocated across several leases.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 
@@ -109,6 +124,7 @@ The label is how a preset view announces itself — `VAT Withholding Withheld`,
 | `date` | `Date` | `string` | `12 Jul, 2026` — the receipt's transaction date |
 | `tenant` | `Tenant` | `string` | The paying user |
 | `lease_id` | `Lease` | `string` | **A list** — see below. `—` when the receipt is allocated to nothing |
+| `landlord_identifier` | `Landlord ID` | `string` | **A list**, like `lease_id`: the landlord's own identifier (`leases.landlord_identifier`) of each of those leases that carries one, in lease order, de-duplicated (`"ACME-1, NJ-2"`). `null` when none of them carries one, or the receipt is allocated to nothing |
 | `property` | `Property` | `string` | |
 | `invoice_no` | `Invoice No.` | `string` | **Every** invoice the receipt was allocated against, comma-separated; `—` where it was allocated to none |
 | `amount_withheld` | `Amount Withheld` | `money` | The receipt amount |
@@ -116,7 +132,7 @@ The label is how a preset view announces itself — `VAT Withholding Withheld`,
 | `certificate_number` | `Certificate No.` | `string` | The receipt's transaction number |
 | `certificate_document` | `Certificate` | `string` | URL of the proof-of-payment upload. **Omitted when absent** |
 
-The subtotal's label spans the five text columns (`col_span: 5`) and carries only
+The subtotal's label spans the six text columns (`col_span: 6`) and carries only
 `amount_withheld`.
 
 ### Why `lease_id` is a list here
@@ -141,6 +157,7 @@ off as the only one. That is why its `format` is `string` where the other report
 "items": [
   { "type": "normal",
     "date": { "value": "12 Jul, 2026" }, "tenant": { "value": "Acme Traders Ltd" },
+    "lease_id": { "value": "412" }, "landlord_identifier": { "value": "ACME-1" },
     "property": { "value": "KAHAWA HOUSE" }, "invoice_no": { "value": "9911" },
     "amount_withheld": { "value": 8816.00 }, "payment_method": { "value": "VAT Withholding" },
     "certificate_number": { "value": "WHT2026071200491" },
@@ -149,12 +166,13 @@ off as the only one. That is why its `format` is `string` where the other report
   // No proof of payment on file: whole row danger, and no certificate_document key at all.
   { "type": "normal", "background_color": "danger",
     "date": { "value": "18 Jul, 2026" }, "tenant": { "value": "Njiru Hardware" },
+    "lease_id": { "value": "388" }, "landlord_identifier": { "value": null },
     "property": { "value": "KAHAWA HOUSE" }, "invoice_no": { "value": "9912" },
     "amount_withheld": { "value": 3480.00 }, "payment_method": { "value": "Rental Withholding" },
     "certificate_number": { "value": "RWT2026071800112" } },
 
   { "type": "subtotal", "background_color": "secondary",
-    "date": { "value": "2 receipts", "col_span": 4 },
+    "date": { "value": "2 receipts", "col_span": 6 },
     "amount_withheld": { "value": 12296.00 } }
 ]
 ```

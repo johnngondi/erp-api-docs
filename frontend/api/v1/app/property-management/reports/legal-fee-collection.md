@@ -48,17 +48,29 @@ collection never appears. Billings have no status.
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) and nothing else. `header.filters` echoes all
-six, `null` included.
+The [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `buckets` and the
+rest — plus the [block / wing / floor lists](#blocks-wings-and-floors), and nothing else.
+`header.filters` echoes every filter, `null` included.
 
 ```
-GET …/reports/tenants/collections-reports/legal-fee-collection?facility_id=1&period_from=2026-05-01&period_to=2026-07-31
+GET …/reports/tenants/collections-reports/legal-fee-collection?facility_ids[]=1&period_from=2026-05-01&period_to=2026-07-31
 ```
 
 There is deliberately **no component filter**. The report is defined by the flag; pointing it at
 another component would make it a different report.
 
 Money is shown as stored, in each property's reporting currency — nothing is converted.
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). Each lease counts
+**whole** under the node of its **primary space** — the space of the item holding Rent, else
+Service Charge, else the lowest-id spaced item. A lease with no space is in the property run
+and out of every block / wing / floor run, so the block runs plus those leases add up to the property run.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 
@@ -77,6 +89,7 @@ reading `0 leases` with zero totals.
 |---|---|---|---|
 | `tenant` | `Tenant` | `string` | The lease's tenant; `—` where the lease has none |
 | `lease_id` | `Lease` | `id` | Absent on the subtotal, which the label spans |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none. Absent on the subtotal, which the label spans |
 | `property` | `Property` | `string` | |
 | `unit` | `Unit` | `string` | **Every** space on the lease, comma-separated; `—` where the lease has no space |
 | `legal_fee_billed` | `Legal Fee Billed` | `money` | Billed in the window |
@@ -100,16 +113,16 @@ portfolio. Per the shared contract, a missing field key renders as an empty cell
 
 ### The subtotal row
 
-Its label spans the four text columns:
+Its label spans the five text columns:
 
 ```jsonc
 { "type": "subtotal", "background_color": "secondary",
-  "tenant": { "value": "2 leases", "col_span": 4 },
+  "tenant": { "value": "2 leases", "col_span": 5 },
   "legal_fee_billed": { "value": 150000.00 }, "recovered": { "value": 70000.00 },
   "outstanding": { "value": 80000.00 } }
 ```
 
-`col_span: 4` means the row **omits the next three field keys** (`lease_id`, `property`, `unit`) — walk `fields`
+`col_span: 5` means the row **omits the next four field keys** (`lease_id`, `landlord_identifier`, `property`, `unit`) — walk `fields`
 with a skip counter, as the shared contract describes. The label is `1 lease` / `N leases`. The
 subtotal's `outstanding` carries **no colour**; the tint marks individual debts, not the total.
 
@@ -140,20 +153,22 @@ Both bucket-level and report-level `summary`:
       {
         "bucket": "overview",
         "header": { "label": "Legal Fee Collection" },
-        "fields": [ /* the seven columns above */ ],
+        "fields": [ /* the nine columns above */ ],
         "items": [
           { "type": "normal", "tenant": { "value": "Acme Traders Ltd" },
+            "lease_id": { "value": 412 }, "landlord_identifier": { "value": "LF-301" },
             "property": { "value": "KAHAWA HOUSE" }, "unit": { "value": "3rd Flr — 3B" },
             "legal_fee_billed": { "value": 120000.00 }, "recovered": { "value": 40000.00 },
             "outstanding": { "value": 80000.00, "color": "danger" },
             "days_outstanding": { "value": 91 } },
           { "type": "normal", "tenant": { "value": "Njiru Hardware" },
+            "lease_id": { "value": 388 }, "landlord_identifier": { "value": null },
             "property": { "value": "NJIRU PLAZA" }, "unit": { "value": "Shop 4" },
             "legal_fee_billed": { "value": 30000.00 }, "recovered": { "value": 30000.00 },
             "outstanding": { "value": 0 },
             "days_outstanding": { "value": 0 } },
           { "type": "subtotal", "background_color": "secondary",
-            "tenant": { "value": "2 leases", "col_span": 4 },
+            "tenant": { "value": "2 leases", "col_span": 5 },
             "legal_fee_billed": { "value": 150000.00 }, "recovered": { "value": 70000.00 },
             "outstanding": { "value": 80000.00 } }
         ],

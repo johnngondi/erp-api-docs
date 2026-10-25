@@ -52,19 +52,20 @@ posted.
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus:
+The [global filters](./README.md#global-filters) plus:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
 | `tax_id` | `taxes.id` | All taxes |
 | `supplier_id` | `users.id` (the bill's `vendor_id`) | All suppliers |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 
 - **`tax_id`** keeps bills with **at least one line** (`facility_bill_items.tax_id`) on that tax. The
   row still shows the **whole bill's** figures, so a bill with lines on two taxes appears under either
   one with its full amounts.
 
-`header.filters` echoes all eight.
+`header.filters` echoes every filter.
 
 ```
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31
@@ -73,7 +74,8 @@ GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=20
 
 ## Header
 
-- `property` — `{ id, name }` when a `facility_id` is given, otherwise `null`.
+- `property` — `{ id, name }` when exactly one property is selected, otherwise `null`. The full
+  selection is in `properties` / `landlords` (see the [shared `header`](./README.md#header)).
 - `currency` — `{ code, name }` when every listed bill is in one currency; `null` when they differ.
   Nothing is converted.
 

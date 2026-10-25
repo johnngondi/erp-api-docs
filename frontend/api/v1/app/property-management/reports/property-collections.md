@@ -41,17 +41,30 @@ the same window: this report's `summary.total_collected` equals Collections Summ
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) and nothing else. `header.filters` echoes all
-six, `null` included.
+The [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `buckets` and the
+rest — plus the [block / wing / floor lists](#blocks-wings-and-floors), and nothing else.
+`header.filters` echoes every filter, `null` included.
 
 ```
-GET …/reports/tenants/collections-reports/property-collections?facility_id=1&period_from=2026-05-01&period_to=2026-07-31
+GET …/reports/tenants/collections-reports/property-collections?facility_ids[]=1&period_from=2026-05-01&period_to=2026-07-31
 ```
 
-`facility_id` narrows the scope but does **not** change the bucket set: `all-properties` and the
-landlord bucket then hold that one property.
+Selecting properties (`facility_ids`) narrows the scope but does **not** change the bucket set:
+`all-properties` and the landlord buckets then hold only the selected properties.
 
 Money is shown as stored, in each property's reporting currency — nothing is converted.
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). Each lease counts
+**whole** under the node of its **primary space** — the space of the item holding Rent, else
+Service Charge, else the lowest-id spaced item. A lease with no space is in the property run
+and out of every block / wing / floor run, so the block runs plus those leases add up to the property run.
+Collection rates are recomputed for each run, never summed.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 

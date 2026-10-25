@@ -38,11 +38,12 @@ Property Expenses.
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus:
+The [global filters](./README.md#global-filters) plus:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `report_cycle` | `weekly` \| `monthly` \| `quarterly` \| `annually` | **`monthly`** |
 | `expense_category_id` | `expense_categories.id` | All categories |
 | `currency_id` | `currencies.id` | Each property's reporting currency (see below) |
@@ -55,7 +56,7 @@ The six [global filters](./README.md#global-filters) plus:
   property in scope shares one, and is `null` when they do not (then pass `currency_id` to get figures
   that add up across currencies).
 
-`header.filters` echoes all nine; `report_cycle` is echoed as the effective cycle (`monthly` when
+`header.filters` echoes every filter; `report_cycle` is echoed as the effective cycle (`monthly` when
 omitted).
 
 ```
@@ -65,8 +66,9 @@ GET …/reports/suppliers/expenditure-reports/expenses-summary?period_from=2026-
 
 ## Header additions
 
-- `property` — `{ id, name }` when a `facility_id` is given, otherwise `null`.
-- `landlord` — `{ id, name }` when a `landlord_id` is given, otherwise `null`.
+- `property` — `{ id, name }` when exactly one property is selected, otherwise `null`.
+- `landlord` — `{ id, name }` when exactly one landlord is selected, otherwise `null`.
+- `properties` / `landlords` — the full selection (see the [shared `header`](./README.md#header)).
 - `currency` — `{ code, name }` the report's money is in, or `null` for mixed currencies (see above).
 
 ## Buckets

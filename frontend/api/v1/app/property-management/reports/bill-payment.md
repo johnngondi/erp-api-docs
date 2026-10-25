@@ -58,16 +58,17 @@ April and 300 in May shows `paid: 700` on both rows, even with a period that end
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus:
+The [global filters](./README.md#global-filters) plus:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
 | `payment_method_id` | `payment_methods.id` (the voucher's) | All payment methods |
 | `supplier_id` | `users.id` (the bill's `vendor_id`) | All suppliers |
 | `debit_bank_account_id` | `bank_accounts.id` (the voucher's) | All bank accounts |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 
-`header.filters` echoes all nine.
+`header.filters` echoes every filter.
 
 ```
 GET …/reports/suppliers/expenditure-reports/bill-payment?period_from=2026-04-01&period_to=2026-04-30&debit_bank_account_id=3
@@ -75,7 +76,8 @@ GET …/reports/suppliers/expenditure-reports/bill-payment?period_from=2026-04-0
 
 ## Header
 
-- `property` — `{ id, name }` when a `facility_id` is given, otherwise `null`.
+- `property` — `{ id, name }` when exactly one property is selected, otherwise `null`. The full
+  selection is in `properties` / `landlords` (see the [shared `header`](./README.md#header)).
 - `currency` — `{ code, name }` when every bill **and** every voucher listed is in one currency; `null`
   otherwise.
 

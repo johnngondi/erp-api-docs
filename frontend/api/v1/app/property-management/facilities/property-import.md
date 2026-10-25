@@ -241,7 +241,16 @@ The fields:
     Every key is a column, so every error has a cell to fix it in.
   - `warnings`: shown but not blocking: `Vacant: no lease will be created.`, `Already imported: this
     unit's leases are in the system, so this row will be skipped.`, `Meter X is already in the system, so
-    it will be skipped.`, and the bill_sc_separate one above.
+    it will be skipped.`, the bill_sc_separate one above, and on the first row of a KRA PIN or email
+    clash: `Row 8 has KRA PIN A009876543C with a different email, mary@example.com. Use the same email on
+    both rows.` / `Row 8 uses peter@example.com with a different KRA PIN, A007777777D. An email belongs to
+    one person.` (the later row carries the error).
+  - **A KRA PIN already on file under another name** is not an error: the PIN is the person, so the
+    lease goes to them and the row warns `KRA PIN A001234567B is registered to Faith Achieng, so the
+    lease goes to them; the sheet says Collins Barasa. Check the PIN if that is not who you meant.`
+    The name on file is not changed. Only case and spacing differences (`PETER  otieno` for
+    `Peter Otieno`) pass without a warning. Show these warnings prominently on the preview: they are
+    the only sign of a mistyped PIN.
   - `actions`: what importing the row will do, in plain words. A new block, floor or person, and a
     property or block being set up with blocks or wings, is described on the first row that does it.
 
@@ -260,7 +269,7 @@ the property's name. Column names appear only where the user has to type one (`b
 | `unit` | `This unit appears on rows 4 and 9. Each unit goes on one row only.` / `A-3-07 is already rented to Peter Otieno.` / `A-3-07 already has a service-charge lease with Jane Kamau.` |
 | `unit_size` | `Enter the unit's size in sq ft.` / `Not enough space: Block A has 1,000 sq ft free, but these units need 1,100 sq ft. Increase Block A's leasable space first.` |
 | `tenant_*`, `sc_tenant_*` | `Enter the tenant's name.` (also `email`, `KRA PIN`; `SC tenant's` for the SC tenant) / `The tenant's email isn't a valid address.` / `Not a valid KRA PIN. It should look like A001234567B.` |
-| `tenant_email`, `sc_tenant_email` | `This KRA PIN has a different email on another row. Use the same email on both.` / `This email is used with a different KRA PIN on another row.` |
+| `tenant_email`, `sc_tenant_email` | `KRA PIN A009876543C is on row 2 with peter@example.com. Use the same email on both rows.` / `peter@example.com is on row 2 with KRA PIN A009876543C. An email belongs to one person: use their KRA PIN, or another email.` - on the later row; the first row gets a warning naming this one, since either may be the wrong one. When the tenant and SC tenant on one row clash: `KRA PIN A009876543C is also the tenant on this row, with peter@example.com. Use the same email for both.` / `peter@example.com is also the tenant's on this row, with KRA PIN A009876543C. An email belongs to one person: use their KRA PIN, or another email.` |
 | `*_email`, `*_phone` | `This email is already used by someone with a different KRA PIN. Check the email or the PIN.` / `This phone belongs to someone else, not the person with KRA PIN A001234567B.` |
 | `lease_start_date` | `Enter the lease start date.` / `Enter the lease start date as a date like 31/01/2025.` |
 | `lease_term_years`, `lease_term_months` | `Enter the lease term in years, months or both.` / `Months must be 0 to 11. Put whole years in the years column.` |

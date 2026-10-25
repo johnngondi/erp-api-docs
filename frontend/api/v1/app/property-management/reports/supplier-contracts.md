@@ -40,21 +40,22 @@ The register answers "which contracts do we have, and which need renewing now?",
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus:
+The [global filters](./README.md#global-filters) plus:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all properties (the period is echoed only) |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all properties (the period is echoed only) |
 | `contract_status` | `pending` \| `active` \| `suspended` \| `expired` \| `inactive` \| `rejected` | Any status |
 | `expiring_within_days` | integer ≥ 0 | No expiry warning (expired contracts are still tinted) |
 | `supplier_id` | `users.id` (the contract's `vendor_id`) | All suppliers |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 
 - **`contract_status`** matches the status **as shown**: `expired` includes active contracts past
   their end date, and `active` excludes them.
 - **`expiring_within_days`** only changes the tint. It never hides a contract.
 - All filters narrow **both** buckets, so they always reconcile.
 
-`header.filters` echoes all nine.
+`header.filters` echoes every filter.
 
 ```
 GET …/reports/suppliers/supplier-contracts?expiring_within_days=30
@@ -63,7 +64,8 @@ GET …/reports/suppliers/supplier-contracts?supplier_id=42&contract_status=acti
 
 ## Header
 
-- `property` — `{ id, name }` when a `facility_id` is given, otherwise `null`.
+- `property` — `{ id, name }` when exactly one property is selected, otherwise `null`. The full
+  selection is in `properties` / `landlords` (see the [shared `header`](./README.md#header)).
 - `currency` — `{ code, name }` when every listed contract is in one currency; `null` when they differ.
 - `as_at` — today's date (`Y-m-d`), the date expiry is measured from.
 - `period` — the echoed period (not used to narrow).

@@ -35,6 +35,7 @@ Supported query params:
     property with it
   - `filter[user_id]`
   - `filter[status]`
+  - `filter[landlord_identifier]` — **exact**. `filter[search]` matches it too
   - `filter[created_at]`
   - `filter[start_at]`
   - `filter[end_at]`
@@ -94,6 +95,7 @@ Request body:
 | `next_due_at` | Yes | date (`YYYY-MM-DD`) | - |
 | `status` | No | string | `pending`, `active`, `suspended`, `terminated`, `rejected`. Not worth sending on create — see approval below |
 | `currency_id` | No | integer | Must exist in `currencies.id` (defaults to `1` when omitted) |
+| `landlord_identifier` | No | string or number, nullable | Up to 255 characters. What the landlord calls this tenant in their own system. **Not unique**: several leases may share one. A number is stored as text (`4512` comes back as `"4512"`); blank is `null`. On an update, omitting it leaves the stored value alone and `null` clears it |
 
 Example request:
 
@@ -107,7 +109,8 @@ Example request:
   "billing_cycle": "monthly",
   "next_due_at": "2026-03-01",
   "status": "active",
-  "currency_id": 1
+  "currency_id": 1,
+  "landlord_identifier": "TNT-0451"
 }
 ```
 
@@ -121,6 +124,7 @@ Example response:
     "user": { "id": 77, "name": "Jane Tenant" },
     "facility": { "id": 14, "name": "Parkview Residency" },
     "billing_cycle": "monthly",
+    "landlord_identifier": "TNT-0451",
     "status": { "value": "active", "color": "success" },
     "start_at": { "raw": "2026-01-01", "formatted": "01 Jan, 2026" },
     "next_due_at": { "raw": "2026-03-01", "formatted": "01 Mar, 2026" }
@@ -128,6 +132,16 @@ Example response:
 }
 ```
 
+
+### Landlord identifier
+
+`landlord_identifier` is returned on the lease list rows and on `GET /leases/{lease}` (and on the
+landlord portal's leases). It is printed on the tenant statement: on the PDF cover as a
+**Landlord ID** line under **Lease ID**, and in the Excel export beside the lease id in the sheet
+heading (`Tenant Statement - Lease ID 181, Landlord ID TNT-0451`). The tenant reports that have a
+Lease column carry a **Landlord ID** column (`landlord_identifier`) right after it.
+
+A lease promoted from a Letter of Offer starts with none; set it with an edit.
 
 ## Creation approval
 

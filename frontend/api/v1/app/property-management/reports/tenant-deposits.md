@@ -95,20 +95,34 @@ figures.
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus one:
+The [global filters](./README.md#global-filters) plus one:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month (echoed only) |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month (echoed only) |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `leases_status` | `active` \| `suspended` \| `terminated` | Any lease status |
+| `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
-`header.filters` echoes all seven, `null` included.
+`header.filters` echoes every filter, `null` included.
 
 ```
-GET …/reports/tenants/tenant-deposits?facility_id=1&leases_status=active
+GET …/reports/tenants/tenant-deposits?facility_ids[]=1&leases_status=active
 ```
 
 Money is shown as stored, in each property's reporting currency — nothing is converted.
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). Each lease counts
+**whole** under the node of its **primary space** — the space of the item holding Rent, else
+Service Charge, else the lowest-id spaced item. A lease with no space is in the property run
+and out of every block / wing / floor run, so the block runs plus those leases add up to the property run.
+A deposit follows its lease.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 
@@ -127,6 +141,7 @@ A lease with no deposits does not appear at all — this is a register of deposi
 | `tenant` | `Tenant` | `string` | `—` where the lease has no tenant |
 | `property` | `Property` | `string` | |
 | `lease_id` | `Lease` | `id` | The lease's id |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none |
 | `start_date` | `Start` | `string` | `01 Jan, 2026` |
 | `end_date` | `End` | `string` | `31 Dec, 2028`, or `—` |
 | `status` | `Status` | `string` | The lease's status |
@@ -138,17 +153,17 @@ A lease with no deposits does not appear at all — this is a register of deposi
 
 ### The subtotal row
 
-Its label spans the six text columns:
+Its label spans the seven text columns:
 
 ```jsonc
 { "type": "subtotal", "background_color": "secondary",
-  "tenant": { "value": "2 leases", "col_span": 6 },
+  "tenant": { "value": "2 leases", "col_span": 7 },
   "deposit_component_1": { "value": 1350000.00 }, "deposit_component_2": { "value": 240000.00 },
   "deposit_component_7": { "value": 30000.00 },
   "total": { "value": 1620000.00 }, "refunded": { "value": 480000.00 }, "currently_held": { "value": 1140000.00 } }
 ```
 
-`col_span: 6` means the row **omits the next five field keys** (`property` … `status`) — walk `fields`
+`col_span: 7` means the row **omits the next six field keys** (`property` … `status`) — walk `fields`
 with a skip counter, as the shared contract describes. The label reads `1 lease` / `N leases`.
 
 ## Summary
@@ -185,18 +200,20 @@ Both bucket-level and report-level `summary`:
         "fields": [ /* the static columns, with deposit_component_* spliced in before `total` */ ],
         "items": [
           { "type": "normal", "tenant": { "value": "Acme Traders Ltd" }, "property": { "value": "KAHAWA HOUSE" },
-            "lease_id": { "value": 412 }, "start_date": { "value": "01 Jan, 2026" }, "end_date": { "value": "31 Dec, 2028" },
+            "lease_id": { "value": 412 }, "landlord_identifier": { "value": "DEP-12" },
+            "start_date": { "value": "01 Jan, 2026" }, "end_date": { "value": "31 Dec, 2028" },
             "status": { "value": "active" },
             "deposit_component_1": { "value": 900000.00 }, "deposit_component_2": { "value": 240000.00 },
             "total": { "value": 1140000.00 }, "refunded": { "value": 0 }, "currently_held": { "value": 1140000.00 } },
           { "type": "normal", "tenant": { "value": "Njiru Hardware" }, "property": { "value": "KAHAWA HOUSE" },
-            "lease_id": { "value": 388 }, "start_date": { "value": "01 Mar, 2024" }, "end_date": { "value": "28 Feb, 2026" },
+            "lease_id": { "value": 388 }, "landlord_identifier": { "value": null },
+            "start_date": { "value": "01 Mar, 2024" }, "end_date": { "value": "28 Feb, 2026" },
             "status": { "value": "terminated" },
             "deposit_component_1": { "value": 450000.00 }, "deposit_component_7": { "value": 30000.00 },
             "total": { "value": 480000.00 }, "refunded": { "value": 480000.00 }, "currently_held": { "value": 0 },
             "refunded_by_exit_notice_id": { "value": 91 } },
           { "type": "subtotal", "background_color": "secondary",
-            "tenant": { "value": "2 leases", "col_span": 6 },
+            "tenant": { "value": "2 leases", "col_span": 7 },
             "deposit_component_1": { "value": 1350000.00 }, "deposit_component_2": { "value": 240000.00 },
             "deposit_component_7": { "value": 30000.00 },
             "total": { "value": 1620000.00 }, "refunded": { "value": 480000.00 }, "currently_held": { "value": 1140000.00 } }

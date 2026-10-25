@@ -42,14 +42,16 @@ appears.
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus one:
+The [global filters](./README.md#global-filters) plus one:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `report_cycle` | `weekly` \| `monthly` \| `quarterly` \| `annually` | **`monthly`** |
+| `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
-`header.filters` echoes all seven, `null` included — including `report_cycle`, which is `null` when
+`header.filters` echoes every filter, `null` included — including `report_cycle`, which is `null` when
 the default was used.
 
 ```
@@ -57,6 +59,18 @@ GET …/reports/tenants/collections-reports/collections-summary?period_from=2026
 ```
 
 Money is shown as stored, in each property's reporting currency — nothing is converted.
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). Each lease counts
+**whole** under the node of its **primary space** — the space of the item holding Rent, else
+Service Charge, else the lowest-id spaced item. A lease with no space is in the property run
+and out of every block / wing / floor run, so the block runs plus those leases add up to the property run.
+A receipt follows the lease of the invoice on its first allocation.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 

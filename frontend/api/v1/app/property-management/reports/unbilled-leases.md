@@ -66,20 +66,33 @@ leases surface.
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) and nothing else.
+The [global filters](./README.md#global-filters) plus the [block / wing / floor lists](#blocks-wings-and-floors), and nothing else.
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
 | `period_to` | `Y-m-d` | End of the current month. **The date a lease is judged overdue against.** |
 | `period_from` | `Y-m-d` | Echoed only |
-| other global filters | see the shared contract | all |
+| other [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status` | see the shared contract | all |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
+| `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
 `header.as_at` carries the judging date on its own, so you never have to work out which end of
 `period` was used.
 
 ```
-GET …/reports/tenants/unbilled-leases?facility_id=1&period_to=2026-07-31
+GET …/reports/tenants/unbilled-leases?facility_ids[]=1&period_to=2026-07-31
 ```
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). Each lease counts
+**whole** under the node of its **primary space** — the space of the item holding Rent, else
+Service Charge, else the lowest-id spaced item. A lease with no space is in the property run
+and out of every block / wing / floor run, so the block runs plus those leases add up to the property run.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 
@@ -96,6 +109,7 @@ The bucket is always present. When nothing is overdue it holds only its subtotal
 |---|---|---|---|
 | `tenant` | `Tenant` | `string` | `—` where the lease has no tenant |
 | `lease_id` | `Lease` | `id` | |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none |
 | `property` | `Property` | `string` | |
 | `unit` | `Unit` | `string` | **Every** space on the lease, comma-separated |
 | `lease_start` | `Lease Start` | `string` | `01 Jan, 2026` |
@@ -110,7 +124,7 @@ The bucket is always present. When nothing is overdue it holds only its subtotal
 > no elapsed time to measure — a large number there would read as a fact. `last_invoice_date` is `—`
 > in that case, and that is the field to look at.
 
-The subtotal's label spans the six text columns (`col_span: 6`) and carries only the expected
+The subtotal's label spans the seven text columns (`col_span: 7`) and carries only the expected
 charges — a portfolio has no next due date.
 
 ## Summary
@@ -128,13 +142,14 @@ charges — a portfolio has no next due date.
 "items": [
   { "type": "normal", "background_color": "danger",
     "tenant": { "value": "Acme Traders Ltd" }, "lease_id": { "value": 412 },
+    "landlord_identifier": { "value": "UB-7" },
     "property": { "value": "KAHAWA HOUSE" }, "unit": { "value": "3rd Flr — 3B" },
     "lease_start": { "value": "01 Jan, 2026" }, "lease_end": { "value": "31 Dec, 2028" },
     "expected_rent": { "value": 300000.00 }, "expected_sc": { "value": 80000.00 },
     "next_due_at": { "value": "01 Jun, 2026" }, "last_invoice_date": { "value": "01 May, 2026" },
     "months_since_last_invoice": { "value": 2 } },
   { "type": "subtotal", "background_color": "secondary",
-    "tenant": { "value": "1 unbilled lease", "col_span": 6 },
+    "tenant": { "value": "1 unbilled lease", "col_span": 7 },
     "expected_rent": { "value": 300000.00 }, "expected_sc": { "value": 80000.00 } }
 ]
 ```

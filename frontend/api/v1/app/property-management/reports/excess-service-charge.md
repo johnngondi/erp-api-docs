@@ -48,11 +48,13 @@ the expenditure side is empty — the report does not guess.
 
 ## Filters
 
-Only the six [global filters](./README.md#global-filters); this report adds none. `header.filters`
-echoes all six, `null` included, and an omitted period resolves to the current month.
+Only the [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`,
+`facility_type_id`, `properties_status`, the period and `buckets` (plus the deprecated `landlord_id` /
+`facility_id`); this report adds none. `header.filters` echoes every filter, `null` included, and an
+omitted period resolves to the current month.
 
 ```
-GET …/reports/landlords/excess-service-charge?facility_id=1&period_from=2026-07-01&period_to=2026-07-31
+GET …/reports/landlords/excess-service-charge?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31
 ```
 
 Money is shown as stored, in each property's reporting currency — nothing is converted.

@@ -33,17 +33,19 @@ The two permissions are **independent**: neither grants the other.
 
 ### Filters (query params)
 
-All filters are **optional** and flat. The six [global filters](./README.md#global-filters) apply; this
+All filters are **optional** and flat. The [global filters](./README.md#global-filters) apply; this
 report adds two:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| `landlord_id` | `users.id` | All landlords (global) |
-| `facility_id` | `facilities.id` | All properties (global) |
+| `landlord_ids` | list of `users.id` | All landlords (global) |
+| `facility_ids` | list of `facilities.id` | All properties (global) |
 | `facility_type_id` | `facility_types.id` | All property types (global) |
 | `properties_status` | enum `App\Enums\Status` | Any property status (global) |
 | `period_from` | date `Y-m-d` | Start of the current month (global) — echoed only, see below |
 | `period_to` | date `Y-m-d` | End of the current month (global) — echoed only, see below |
+| `buckets` | list of this report's bucket ids | Every bucket (global) — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
+| `landlord_id` / `facility_id` | single id — **deprecated** aliases, merged into the lists | (global) |
 | `contract_status` | enum `App\Enums\Status` (`active`, `expired`, `suspended`, …) | Any status |
 | `expiring_within_days` | integer, `0` or more | No expiry warning is applied |
 
@@ -60,7 +62,7 @@ report adds two:
 Example:
 
 ```
-GET …/reports/landlords/management-contracts?landlord_id=4&contract_status=active&expiring_within_days=60
+GET …/reports/landlords/management-contracts?landlord_ids[]=4&contract_status=active&expiring_within_days=60
 ```
 
 ## Buckets

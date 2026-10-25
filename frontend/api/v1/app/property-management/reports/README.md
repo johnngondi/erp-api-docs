@@ -16,9 +16,9 @@ future one without hardcoding columns or colours. Each per-report page (e.g.
 that report: its extra filters, its buckets, and its numbers.
 
 > **One exception to "global filters".** [trial-balance.md](./trial-balance.md) is a company-wide
-> accounting snapshot rather than a party report: it takes **none** of the six global filters and has
-> no `period` in its `header` — only `as_at` and `currency_id`. Everything else on this page still
-> applies to it unchanged.
+> accounting snapshot rather than a party report: it takes **none** of the global filters (no
+> landlord, property, bucket or block/wing/floor selection) and has no `period` in its `header` —
+> only `as_at` and `currency_id`. Everything else on this page still applies to it unchanged.
 
 ## What a report is
 
@@ -200,26 +200,67 @@ Every node carries `type`, `key` and `label`. What else it carries depends on `t
 
 #### A filter descriptor
 
-One per query param the report accepts, **in the order the report declares them**. Derived from
-the report's validation class, so it cannot drift from what the endpoint actually accepts.
+One per query param the report accepts. Derived from the report's validation class, so it cannot
+drift from what the endpoint actually accepts.
 
 ```jsonc
 {
-  "name": "facility_id",
-  "type": "integer",                          // integer | string | date | enum | boolean | number
+  "name": "currency_id",
+  "type": "integer",                          // integer | string | date | enum | boolean | number | array
   "required": false,                          // true only for a param the endpoint rejects when absent
-  "default": "All properties",                // what omitting it means — prose, not a literal value
-  "description": "One property. When set the summaries use that property's reporting currency; …",
-  "references": { "table": "facilities", "column": "id" },   // present when the value is an entity id
-  "required_when": "facility_id is omitted",  // present when a param is conditionally required (422 otherwise)
+  "default": "Each property's reporting currency",   // what omitting it means — prose, not a literal value
+  "description": "The currency multi-property figures are converted to; …",
+  "references": { "table": "currencies", "column": "id" },   // present when the value is an entity id
+  "required_when": "no single property is selected (facility_ids has zero or several entries)", // present when a param is conditionally required (422 otherwise)
   "values": ["weekly", "monthly", "quarterly", "annually"],  // present for type: enum — the allowed literals
   "format": "Y-m-d"                           // present for type: date
 }
 ```
 
-`references`, `required_when`, `values` and `format` are **omitted when not applicable**; the
-other five keys are always present (`default` and `description` may be `null` for a filter
-nobody has annotated yet).
+A **list filter** (see [Global filters](#global-filters)) is described with `type: "array"`:
+
+```jsonc
+{
+  "name": "facility_ids",
+  "type": "array",
+  "items": { "type": "integer" },             // the type of each element
+  "multiple": true,                           // render a multi-select
+  "required": false,
+  "default": "All properties",
+  "description": "The properties to report on. …",
+  "references": { "table": "facilities", "column": "id" }    // what each element refers to
+}
+```
+
+```jsonc
+{
+  "name": "buckets",
+  "type": "array",
+  "items": { "type": "string" },
+  "multiple": true,
+  "required": false,
+  "default": "Every bucket",
+  "description": "Which buckets to return. …",
+  "values": ["overview", "property_{id}"]     // this report's declared bucket ids and patterns
+}
+```
+
+A superseded filter that is still accepted carries `deprecated` and the filter that replaced it.
+Don't render it as its own control — the replacement covers it:
+
+```jsonc
+{ "name": "facility_id", "type": "integer", "required": false, "deprecated": true, "replaced_by": "facility_ids", … }
+```
+
+`references`, `required_when`, `values`, `format`, `items`, `multiple`, `deprecated` and
+`replaced_by` are **omitted when not applicable**; the other five keys are always present
+(`default` and `description` may be `null` for a filter nobody has annotated yet).
+
+**Order.** The params the report's validation class declares come first, in declaration order
+(the global scalars, then the report's own). The list filters follow, always in this order:
+`landlord_ids`, `facility_ids`, `buckets`, then — on the twelve
+[tenant reports](#splitting-by-block--wing--floor) only — `facility_block_ids`,
+`facility_wing_ids`, `facility_floor_ids`.
 
 #### A bucket entry
 
@@ -307,7 +348,7 @@ Every report has an `…/export` sibling at its own URL:
 
 ```
 GET …/reports/landlords/facility-budget/export?format=excel
-GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facility_id=1&period_from=2026-07-01
+GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facility_ids[]=1&period_from=2026-07-01
 ```
 
 - **It accepts every filter its report accepts** — same flat param names, same defaults, including
@@ -319,13 +360,19 @@ GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facil
 > Exports return an attachment immediately. Use `format=excel` for an `.xlsx` workbook or
 > `format=pdf` for a PDF. Filenames follow
 > `{report-slug}_{company}[_{landlord}][_{property}]_{period-from}_{period-to}`; Trial Balance uses
-> `{report-slug}_{company}_as-at_{as-at}`. The `landlord` and `property` segments are slugged names
-> and only appear when the export was filtered by `landlord_id` / `facility_id` (either or both), so
-> a filtered download is identifiable without opening it. The response uses `attachment`
-> `Content-Disposition` and the corresponding Excel or PDF `Content-Type`.
-> Each report bucket is a separate worksheet in Excel and a separate page in PDF.
+> `{report-slug}_{company}_as-at_{as-at}`. The `landlord` and `property` segments only appear when
+> the export was filtered by landlord / property (either or both — `landlord_ids` / `facility_ids`
+> or their deprecated aliases), so a filtered download is identifiable without opening it. With
+> **one** landlord selected the segment is the landlord's slugged name; with **several** it is
+> `{n}-landlords` (`3-landlords`). The property segment works the same way: the slugged name, or
+> `{n}-properties`. The response uses `attachment` `Content-Disposition` and the corresponding
+> Excel or PDF `Content-Type`.
+> Each report bucket is a separate worksheet in Excel and a separate page in PDF. When the request
+> sends [`buckets`](#selecting-buckets--buckets), only those buckets become sheets / pages.
 >
-> Money cells are exported as bare amounts (`1,250.50`), never prefixed with a currency code. The
+> Money cells are exported as bare amounts, never prefixed with a currency code — in Excel as real
+> numbers (`money` columns carry the `#,##0.00` number format, `integer` columns `#,##0`), so the sheet
+> can be summed, sorted and charted; in the PDF as `1,250.50`. The
 > currency is named once per bucket instead: a bucket with money columns is titled with its currency
 > appended — `Summary (KES)` — using the bucket's own `header.currency` when it has one, else the
 > report's (`header.property.currency`, then `header.currency`). The Excel sheet's first row carries
@@ -347,8 +394,13 @@ GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facil
 > window alone, no cycle) or `currency`. It can also set `bucket_titles: false` to drop the title above
 > its table, and `date_format` to print its dates its own way (the statements use `d-M-y`).
 >
-> Without a declared layout, the band is laid out as follows. The landlord and property lines come from `header.landlord.name` / `header.property.name`,
-> so they are printed only when the export was filtered down to one. **Period** is the resolved window formatted
+> Without a declared layout, the band is laid out as follows. With **one** landlord / property
+> selected, a **Landlord** / **Property** line prints its name (`header.landlord.name` /
+> `header.property.name`). With **several**, the line is titled **Landlords** / **Properties** and
+> lists the selected names from `header.landlords` / `header.properties`, shortened past a few to
+> `A, B and 3 more`. Nothing selected prints no line. On the
+> [tenant reports](#splitting-by-block--wing--floor), **Blocks**, **Wings** and **Floors** lines list
+> the selected nodes the same way, each only when that filter was used. **Period** is the resolved window formatted
 > `01 Aug, 2026 – 31 Aug, 2026`, suffixed with the cycle when the report declares one
 > (`header.filters.report_type` / `report_cycle`) or when the window is exactly one calendar week,
 > month, quarter or year; Trial Balance shows `As at 19 Aug, 2026` instead. **Currency** is the
@@ -373,33 +425,246 @@ GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facil
 
 ## Global filters
 
-Every report supports these six filters (defined on the shared `App\Data\Reports\ReportFilterData`).
-Individual reports may add their own on top (e.g. Billings & Collections adds `leases_status`,
-`expense_category_id`, `lease_component_id`; Income & Expenditure adds `report_type` for period
-grouping, `account_id`, and a `currency_id` required for multi-property roll-ups).
+Every report except Trial Balance supports these filters (defined on the shared
+`App\Data\Reports\ReportFilterData`). Individual reports may add their own on top (e.g. Billings &
+Collections adds `leases_status`, `expense_category_id`, `lease_component_id`; Income & Expenditure
+adds `report_type` for period grouping, `account_id`, and a `currency_id` required for
+multi-property roll-ups). The twelve tenant reports also take the block / wing / floor lists — see
+[Splitting by block / wing / floor](#splitting-by-block--wing--floor).
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| `landlord_id` | `users.id` | All landlords |
-| `facility_id` | `facilities.id` | All properties |
+| `landlord_ids` | list of `users.id` | All landlords |
+| `facility_ids` | list of `facilities.id` | All properties |
 | `facility_type_id` | `facility_types.id` | All property types |
 | `properties_status` | enum `App\Enums\Status` (`active`, `inactive`, …) | Any property status |
 | `period_from` | date `Y-m-d` | **Start of the current month** |
 | `period_to` | date `Y-m-d` | **End of the current month** |
+| `buckets` | list of bucket ids | Every bucket — see [Selecting buckets](#selecting-buckets--buckets) |
+| `landlord_id` | `users.id` — **deprecated**, use `landlord_ids` | — |
+| `facility_id` | `facilities.id` — **deprecated**, use `facility_ids` | — |
 
 Rules that hold for **all** reports:
 
 - All filters are **optional** and passed as **flat** query params (not nested under `filter[...]`).
-- `null` means "all" (for ids/types) or "any" (for statuses).
+- `null` (or an empty list) means "all" (for ids/types) or "any" (for statuses).
 - The period defaults to the **current month** when `period_from` / `period_to` are omitted.
 - **Currency is never a filter.** It is resolved from the property's reporting currency
-  (`facilities.reporting_currency_id`) and surfaced in the `header`.
+  (`facilities.reporting_currency_id`) and surfaced in the `header`. (A few landlord and supplier
+  reports take a `currency_id` to convert a multi-property roll-up into — that is a conversion
+  target, not a filter.)
 
 Example:
 
 ```
-GET …/reports/tenants/billings-and-collections?facility_id=1&period_from=2026-07-01&period_to=2026-07-31
+GET …/reports/tenants/billings-and-collections?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31
 ```
+
+### List filters
+
+`landlord_ids`, `facility_ids`, `buckets` and the tenant reports' `facility_block_ids`,
+`facility_wing_ids`, `facility_floor_ids` each take **several** values. A list may be sent three
+ways, all equivalent:
+
+```
+?facility_ids[]=1&facility_ids[]=2      // repeated key[] — what axios and most HTTP clients send for an array
+?facility_ids=1,2                       // one comma-separated string
+?facility_ids=1                         // a single scalar, read as a one-element list
+```
+
+- **At most 500 ids** per list. More ⇒ `422` on the list's name.
+- **Every id must exist.** One unknown id fails the whole list with a `422` keyed on the list's
+  name, never on an element:
+
+  ```json
+  {
+    "message": "The properties contains unknown ids.",
+    "errors": { "facility_ids": ["The properties contains unknown ids."] }
+  }
+  ```
+
+- Values are combined with **OR** within a list and **AND** across filters: `landlord_ids[]=4&
+  landlord_ids[]=7&facility_type_id=2` is "properties of landlord 4 or 7 that are of type 2".
+- Duplicates are ignored, and order does not matter.
+
+### The deprecated `landlord_id` / `facility_id`
+
+The single-value `landlord_id` and `facility_id` are **still accepted** as aliases, so existing
+links, presets and integrations keep working. Each is **merged into its list** (a union):
+`facility_id=3&facility_ids[]=5` selects properties 3 and 5. Both are still echoed in
+`header.filters`, and discovery lists them with `"deprecated": true` and
+`"replaced_by": "landlord_ids"` / `"facility_ids"`. New code should send the lists only.
+
+### Exactly one property
+
+Several reports behave differently when the user is looking at **one** property. That condition is
+now **exactly one property selected** — `facility_ids` with one entry, or the `facility_id` alias
+on its own (or both naming the same property). It is about what was **selected**, not what the
+other filters happen to leave: a landlord who owns a single property still gives a
+multi-property report unless that property is selected. Where it applies:
+
+- `header.property` is set (with the property's reporting currency) — see [`header`](#header).
+- Billings & Collections omits `summary_by_property`; the Ageing Report omits
+  `properties-summary`.
+- Income & Expenditure, Facility Budget and Property Expenses **require `currency_id` unless
+  exactly one property is selected** (`422` on `currency_id` otherwise), and use that property's
+  reporting currency when it is.
+- The block / wing / floor filters are accepted only then.
+
+---
+
+## Selecting buckets — `buckets`
+
+By default a report returns every bucket it produces. `buckets` asks for **only some of them** —
+e.g. a UI that shows one tab at a time, or an export of just the summary:
+
+```
+GET …/reports/tenants/billings-and-collections?facility_ids[]=1&buckets[]=overview&buckets[]=billings
+```
+
+- **Only `data.report` shrinks** — and with it the Excel sheets and PDF pages of an export.
+  `header` and `data.summary` are **always computed for the whole filtered scope**, whichever
+  buckets were asked for, so the headline tiles do not change when a tab is switched.
+- Buckets keep the report's own order, not the order they were requested in.
+- **Each id must be one the report declares** — a fixed bucket id (`overview`), or a match for a
+  declared pattern: `property_{id}` accepts any `property_<integer>` (`property_12`). Patterns keep
+  each report's own spelling — `property_{id}`, `property-{id}`, `landlord-{id}` — so match the
+  `bucket` ids the report actually returns. Requesting the literal pattern
+  (`buckets[]=property_{id}`) selects **every** bucket of that pattern.
+  Discovery lists the declared ids and patterns as the `buckets` descriptor's `values`.
+- An id the report declares but this run did not produce (a property out of scope, or
+  `summary_by_property` on a single-property run) is **simply absent** — not an error.
+- An id the report does not declare ⇒ `422` on that element:
+
+  ```json
+  {
+    "message": "The bucket weekly_totals is not one this report returns.",
+    "errors": { "buckets.1": ["The bucket weekly_totals is not one this report returns."] }
+  }
+  ```
+
+---
+
+## Splitting by block / wing / floor
+
+The twelve **tenant reports** can be narrowed to part of a property:
+[Billings & Collections](./billings-and-collections.md),
+[Property Collections](./property-collections.md),
+[Collections Summary](./collections-summary.md),
+[Legal Fee Collection](./legal-fee-collection.md),
+[Tenancy Schedule](./tenancy-schedule.md),
+[Summary Occupancy](./summary-occupancy.md),
+[Tenant Deposits](./tenant-deposits.md),
+[Ageing Report](./ageing-report.md),
+[Debtors Listing](./debtors-listing.md),
+[Unbilled Leases](./unbilled-leases.md),
+[Output VAT Analysis](./vat-analysis-output.md) and
+[Tenant Withholding](./tenant-withholding.md). They take three more [list filters](#list-filters):
+
+| Param | Type | Meaning when omitted |
+|---|---|---|
+| `facility_block_ids` | list of `facility_blocks.id` | The whole property |
+| `facility_wing_ids` | list of `facility_wings.id` | The whole property |
+| `facility_floor_ids` | list of `facility_floors.id` | The whole property |
+
+These are **filters, not groupings.** They narrow which rows are counted; bucket shapes, row shapes
+and Total rows stay exactly as documented on each report's page, and no block subtotal rows are
+added. To compare blocks, run the report once per block — or select several in one run. A run with
+none of these filters is the report as it always was.
+
+Rules (each failure is a `422`):
+
+- **Exactly one property must be selected** ([see above](#exactly-one-property)). A node filter
+  with no property, or with several, fails on `facility_ids`:
+  `"Select exactly one property to filter by block, wing or floor."`
+- **Every node must belong to that property.** Otherwise the error is keyed on the list —
+  `facility_block_ids`: `"The selected block does not belong to the selected property."` (and
+  `wing` / `floor` likewise on `facility_wing_ids` / `facility_floor_ids`).
+- **The property must be one the caller is allocated to.**
+- Several nodes are a **union**: blocks A and B is everything in either. A selection **inside** a
+  selected node **refines** it, so the pickers read as a drill-down: Block A plus Wing 1 of Block A
+  is Wing 1 only, and a wing plus one of its floors is that floor. A block with nothing selected
+  inside it is the whole block.
+
+### Which node a row belongs to — the primary space
+
+Billings carry no space (a billing is a lease and a component), and opening balances are per lease,
+so a lease cannot be split across spaces without inventing figures. Instead **every row's lease is
+placed whole under one node**, through its **primary space**:
+
+1. the space on the lease item that holds the **Rent** component; else
+2. the space on the lease item that holds the **Service Charge** component; else
+3. the space on the lowest-id lease item that has a space.
+
+The lease belongs to that space's floor, and through it to the floor's wing and block. Everything
+else follows its lease:
+
+- **Invoices and credit notes** — through their lease.
+- **Receipts** — through the lease of the invoice on the receipt's **first** allocation.
+- **Deposits, billings, collections, balances** — through their lease.
+
+A lease with **no spaced item** (or whose primary space sits outside the lease's own property) is
+**unassigned**: it is counted in a property-level run, and left out of **every** block / wing /
+floor-filtered run. A soft-deleted floor still places its leases, so attribution does not move
+when the structure is edited.
+
+### What adds up
+
+For a property split into Blocks A and B, for every money and count column of every bucket's Total
+row, and for every money and count key of `data.summary`:
+
+- **Block A run + Block B run + unassigned leases = the whole-property run.**
+- **A run with Blocks A and B selected together = Block A run + Block B run.**
+
+The same holds for wings and floors. **Rates and percentages are recomputed for each run, never
+summed** — a collection rate for Block A is Block A's collections over Block A's billings. Stored
+amounts carry five decimal places and a Total row rounds the raw sum, so two block runs may differ
+from the property run **by a cent** in a rounded column; that is rounding, not a lost row.
+
+Two reports split differently:
+
+- **Summary Occupancy** counts spaces, not leases, so it filters spaces by their floor directly —
+  exact by construction, no primary-space rule.
+- **Tenancy Schedule** lists spaces too, so it splits **per space**, while the other reports split
+  **per lease**. A lease holding a shop in Block A (with the Rent) and a parking bay in Block B
+  shows the parking bay under Block B in the schedule, but all of its money under Block A in every
+  other report.
+
+### Picking blocks, wings and floors
+
+```
+GET /api/v1/app/{company}/property-management/reports/filter-options/structure?facility_id=1
+```
+
+Returns one property's blocks, wings and floors for the pickers. Any authenticated app user may
+call it — like discovery, there is no permission of its own — but the property must be one the
+caller is allocated to (`404` otherwise). `facility_id` is required.
+
+```jsonc
+{
+  "data": {
+    "facility": { "id": 1, "name": "ACK Gardens", "has_blocks": true, "has_wings": false },
+    "blocks": [
+      { "id": 11, "name": "Block A", "has_wings": true },
+      { "id": 12, "name": "Block B", "has_wings": false }
+    ],
+    "wings": [
+      { "id": 21, "name": "Wing 1", "facility_block_id": 11 }
+    ],
+    "floors": [
+      { "id": 31, "name": "Basement", "facility_block_id": 12, "facility_wing_id": null },
+      { "id": 32, "name": "Ground Floor", "facility_block_id": 11, "facility_wing_id": 21 },
+      { "id": 33, "name": "First Floor", "facility_block_id": 11, "facility_wing_id": 21 }
+    ]
+  }
+}
+```
+
+- Each list is ordered by name. A node hanging directly off the property has `null` parent ids.
+- **Offer blocks** only when `facility.has_blocks`; **wings** when `facility.has_wings` or a
+  selected block `has_wings`; **floors** always.
+- Narrow the wing and floor pickers to the selected blocks / wings with the parent ids. Disable
+  all three pickers unless exactly one property is selected — the report would reject them.
 
 ---
 
@@ -491,14 +756,28 @@ order.** A report with no buckets returns `[]`.
 
 ### `header`
 
-- `property` — `{ id, name, currency: { code, name } }`, or `null` when no single property is
-  selected. **Currency lives on the property** (its reporting currency). When `property` is `null`,
+- `property` — `{ id, name, currency: { code, name } }` only when
+  [exactly one property is selected](#exactly-one-property), otherwise `null` (several selected, or
+  none). **Currency lives on the property** (its reporting currency). When `property` is `null`,
   a top-level `header.currency` fallback (the company default currency, or a report-selected currency)
   is included instead.
-- `landlord` — `{ id, name }` when a `landlord_id` filter is supplied, otherwise `null`. Present on
-  every report that accepts `landlord_id` (i.e. all but Trial Balance).
+- `properties` — `[{ id, name }]`, the properties **selected** (`facility_ids` plus the
+  `facility_id` alias). `[]` means none was selected, i.e. all properties — it is not the list of
+  properties the report covered.
+- `landlord` — `{ id, name }` only when exactly one landlord is selected, otherwise `null`.
+- `landlords` — `[{ id, name }]`, the landlords selected (`landlord_ids` plus the `landlord_id`
+  alias); `[]` means all.
+- `blocks`, `wings`, `floors` — **tenant reports only**: `[{ id, name, facility_id }]`, the nodes
+  selected by `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids`; `[]` when that
+  filter is unused.
+- These are present on every report that accepts the global filters (i.e. all but Trial Balance).
+  Use them to label the scope ("Properties: ACK Gardens, Beta House") without a lookup.
 - `period` — `{ from, to }` (the resolved period, after defaults).
-- `filters` — every filter echoed back (nulls included) so the UI can show the active scope.
+- `filters` — every filter echoed back (nulls included) so the UI can show the active scope. That
+  includes the lists (`landlord_ids`, `facility_ids`, `buckets`, and on tenant reports
+  `facility_block_ids`, `facility_wing_ids`, `facility_floor_ids`) **and** the deprecated
+  `landlord_id` / `facility_id`. For the resolved selection read `landlords` / `properties` above,
+  which already merge the aliases.
 - `generated_at` — ISO-8601 timestamp.
 - A report **may add** header fields — e.g. Trial Balance adds `as_at` and `notes` in place of
   `period`. Per-report pages document any such additions.

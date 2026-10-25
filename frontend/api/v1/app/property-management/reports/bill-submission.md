@@ -37,15 +37,16 @@ The view and export permissions are **independent**, and neither is shared with
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus:
+The [global filters](./README.md#global-filters) plus:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
 | `bill_status` | `pending` \| `unpaid` \| `partially-paid` \| `paid` \| `cancelled` | Any status |
 | `supplier_id` | `users.id` (the bill's `vendor_id`) | All suppliers |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 
-`header.filters` echoes all eight.
+`header.filters` echoes every filter.
 
 ```
 GET …/reports/suppliers/expenditure-reports/bill-submission?period_from=2026-01-01&period_to=2026-06-30&bill_status=pending
@@ -53,7 +54,8 @@ GET …/reports/suppliers/expenditure-reports/bill-submission?period_from=2026-0
 
 ## Header
 
-- `property` — `{ id, name }` when a `facility_id` is given, otherwise `null`.
+- `property` — `{ id, name }` when exactly one property is selected, otherwise `null`. The full
+  selection is in `properties` / `landlords` (see the [shared `header`](./README.md#header)).
 - `currency` — `{ code, name }` when every listed bill is in one currency; `null` when they differ
   (the totals row then mixes currencies, so show it with care).
 

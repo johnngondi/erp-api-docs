@@ -59,15 +59,16 @@ invoice date for bills imported without one).
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus:
+The [global filters](./README.md#global-filters) plus:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
 | `withholding_tax_id` | `withholding_taxes.id` | **All withholding taxes** |
 | `supplier_id` | `users.id` (the bill's `vendor_id`) | All suppliers |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 
-`header.filters` echoes all eight.
+`header.filters` echoes every filter.
 
 ```
 GET …/reports/suppliers/supplier-withholding?period_from=2026-03-01&period_to=2026-03-31
@@ -78,7 +79,8 @@ GET …/reports/suppliers/supplier-withholding?period_from=2026-03-01&period_to=
 
 - `withholding_tax` — `{ id, name, rate }` of the selected tax when `withholding_tax_id` is given
   (`rate` as a label, e.g. `"2%"`), otherwise `null`.
-- `property` — `{ id, name }` when a `facility_id` is given, otherwise `null`.
+- `property` — `{ id, name }` when exactly one property is selected, otherwise `null`. The full
+  selection is in `properties` / `landlords` (see the [shared `header`](./README.md#header)).
 - `currency` — `{ code, name }` when every listed bill is in one currency; `null` when they differ.
 
 ## Buckets

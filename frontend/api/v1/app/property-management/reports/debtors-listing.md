@@ -73,16 +73,30 @@ never goes negative**: a tenant whose deposit exceeds their debt sits at nil, no
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus one:
+The [global filters](./README.md#global-filters) plus one:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `leases_status` | `active` \| `suspended` \| `terminated` | Any lease status |
+| `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
 ```
-GET …/reports/tenants/debtors-listing?facility_id=1&period_to=2026-07-31&leases_status=active
+GET …/reports/tenants/debtors-listing?facility_ids[]=1&period_to=2026-07-31&leases_status=active
 ```
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). Each lease counts
+**whole** under the node of its **primary space** — the space of the item holding Rent, else
+Service Charge, else the lowest-id spaced item. A lease with no space is in the property run
+and out of every block / wing / floor run, so the block runs plus those leases add up to the property run.
+Each outstanding invoice follows its lease.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 
@@ -94,8 +108,8 @@ GET …/reports/tenants/debtors-listing?facility_id=1&period_to=2026-07-31&lease
 Property buckets carry `header.property` `{ id, name }`. A property with no debt gets no bucket, and
 a tenant who owes nothing gets no row.
 
-**The two buckets have different columns** — `overall` has no `tenant`, `lease_id` or
-`months_in_arrears`, because those are properties of a lease, not of a property. Read each bucket's
+**The two buckets have different columns** — `overall` has no `tenant`, `lease_id`,
+`landlord_identifier` or `months_in_arrears`, because those are properties of a lease, not of a property. Read each bucket's
 own `fields`, as the shared contract requires.
 
 ## Columns
@@ -109,6 +123,7 @@ own `fields`, as the shared contract requires.
 |---|---|---|---|
 | `tenant` | `Tenant` | `string` | |
 | `lease_id` | `Lease` | `id` | |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none |
 | `month_rent` | `Monthly Rent` | `money` | Lease item components on `is_rent` components |
 | `billed` | `Billed` | `money` | |
 | `collected` | `Collected` | `money` | |
@@ -117,8 +132,8 @@ own `fields`, as the shared contract requires.
 | `months_in_arrears` | `Months in Arrears` | `integer` | Rounded up |
 | `debt_beyond_deposit` | `Debt Beyond Deposit` | `money` | `danger` when above nil |
 
-The subtotal's label spans `tenant` and `lease_id` (`col_span: 2`) and carries no
-`months_in_arrears`.
+The subtotal's label spans `tenant`, `lease_id` and `landlord_identifier` (`col_span: 3`) and
+carries no `months_in_arrears`.
 
 ## Summary
 
@@ -137,6 +152,7 @@ The subtotal's label spans `tenant` and `lease_id` (`col_span: 2`) and carries n
 "items": [
   { "type": "normal", "background_color": "danger",
     "tenant": { "value": "Acme Traders Ltd" }, "lease_id": { "value": 412 },
+    "landlord_identifier": { "value": "TEN/0099" },
     "month_rent": { "value": 300000.00 }, "billed": { "value": 1060000.00 }, "collected": { "value": 0 },
     "arrears": { "value": 1060000.00 }, "deposit_held": { "value": 900000.00 },
     "months_in_arrears": { "value": 4 },
@@ -145,18 +161,20 @@ The subtotal's label spans `tenant` and `lease_id` (`col_span: 2`) and carries n
   // Identical figures to the row below; only the billing cycle differs.
   { "type": "normal", "background_color": "warning",
     "tenant": { "value": "Njiru Hardware (quarterly)" }, "lease_id": { "value": 388 },
+    "landlord_identifier": { "value": null },
     "month_rent": { "value": 150000.00 }, "billed": { "value": 300000.00 }, "collected": { "value": 0 },
     "arrears": { "value": 300000.00 }, "deposit_held": { "value": 0 },
     "months_in_arrears": { "value": 2 }, "debt_beyond_deposit": { "value": 300000.00, "color": "danger" } },
 
   { "type": "normal", "background_color": "danger",
     "tenant": { "value": "Solo Traders (monthly)" }, "lease_id": { "value": 389 },
+    "landlord_identifier": { "value": "TEN/0104" },
     "month_rent": { "value": 150000.00 }, "billed": { "value": 300000.00 }, "collected": { "value": 0 },
     "arrears": { "value": 300000.00 }, "deposit_held": { "value": 0 },
     "months_in_arrears": { "value": 2 }, "debt_beyond_deposit": { "value": 300000.00, "color": "danger" } },
 
   { "type": "subtotal", "background_color": "secondary",
-    "tenant": { "value": "Total", "col_span": 2 },
+    "tenant": { "value": "Total", "col_span": 3 },
     "month_rent": { "value": 600000.00 }, "billed": { "value": 1660000.00 }, "collected": { "value": 0 },
     "arrears": { "value": 1660000.00 }, "deposit_held": { "value": 900000.00 },
     "debt_beyond_deposit": { "value": 760000.00 } }

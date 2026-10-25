@@ -42,8 +42,8 @@ Like Income & Expenditure this is a **matrix**, but each period column is a **gr
   same four. The per-cycle columns are [dynamic columns](./README.md#fields--column-definitions):
   keys `period_0_budget`, `period_0_actual`, `period_0_variance`, `period_0_status`, `period_1_budget`,
   … each money column carrying `period_from` / `period_to`.
-- **Buckets are property-scoped.** With a `facility_id` you get one `property_{id}` bucket; without one
-  you get an `overall` roll-up **plus** a `property_{id}` bucket per property in scope.
+- **Buckets are property-scoped.** With exactly one property selected you get one `property_{id}`
+  bucket; otherwise you get an `overall` roll-up **plus** a `property_{id}` bucket per property in scope.
 
 ### Where the numbers come from
 
@@ -65,24 +65,26 @@ Like Income & Expenditure this is a **matrix**, but each period column is a **gr
 
 ### Filters (query params)
 
-All filters are **optional** and flat (not nested under `filter[...]`). The six
+All filters are **optional** and flat (not nested under `filter[...]`). The
 [global filters](./README.md#global-filters) apply; this report adds:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| `landlord_id` | `users.id` | All landlords (global) |
-| `facility_id` | `facilities.id` | All properties (global) — drives single vs. overall buckets |
+| `landlord_ids` | list of `users.id` | All landlords (global) |
+| `facility_ids` | list of `facilities.id` | All properties (global) — exactly one drives single vs. overall buckets |
 | `facility_type_id` | `facility_types.id` | All property types (global) |
 | `properties_status` | enum `App\Enums\Status` | Any property status (global) |
 | `period_from` | date `Y-m-d` | Start of the current month (global) |
 | `period_to` | date `Y-m-d` | End of the current month (global) |
+| `buckets` | list of this report's bucket ids | Every bucket (global) — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
+| `landlord_id` / `facility_id` | single id — **deprecated** aliases, merged into the lists | (global) |
 | `report_cycle` | enum `weekly` \| `monthly` \| `quarterly` \| `annually` | **`annually`** — how cycle columns are grouped |
-| `currency_id` | `currencies.id` | **Required when `facility_id` is omitted** (see currency below) |
+| `currency_id` | `currencies.id` | **Required unless exactly one property is selected** (see currency below) |
 
 Example:
 
 ```
-GET …/reports/landlords/facility-budget?facility_id=1&period_from=2026-01-01&period_to=2026-12-31&report_cycle=quarterly
+GET …/reports/landlords/facility-budget?facility_ids[]=1&period_from=2026-01-01&period_to=2026-12-31&report_cycle=quarterly
 GET …/reports/landlords/facility-budget?currency_id=1&period_from=2026-01-01&period_to=2026-12-31
 ```
 
@@ -91,10 +93,10 @@ GET …/reports/landlords/facility-budget?currency_id=1&period_from=2026-01-01&p
 **Currency lives on each bucket here, not just the report header** — unlike Income & Expenditure,
 per-property buckets are **not** converted.
 
-- **Single property** (`facility_id` set): the one bucket is in that property's reporting currency
+- **Single property** (exactly one selected): the one bucket is in that property's reporting currency
   (`facilities.reporting_currency_id`); `currency_id` is ignored. The currency sits on
   `header.property.currency` and on the bucket's `header.property.currency`.
-- **Multiple properties** (no `facility_id`): the **`overall`** bucket is converted to the requested
+- **Multiple properties** (none or several selected): the **`overall`** bucket is converted to the requested
   `currency_id` (surfaced at `header.currency` and `overall.header.currency`); **each `property_{id}`
   bucket stays in its own budget currency**, surfaced at that bucket's `header.property.currency`. So
   the per-property figures sum to `overall` **only after** converting each to the selected currency.
@@ -108,7 +110,8 @@ per-property buckets are **not** converted.
 
 Beyond the shared header fields, this report adds:
 
-- `landlord` — `{ id, name }` when a `landlord_id` filter is supplied, otherwise `null`.
+- `landlord` — `{ id, name }` when exactly one landlord is selected, otherwise `null`. The full
+  selection is in `landlords` / `properties` (see the [shared `header`](./README.md#header)).
 
 ## Buckets
 
@@ -117,7 +120,7 @@ Beyond the shared header fields, this report adds:
 
 | `bucket` | When present | `header.label` | One row per… | Columns |
 |---|---|---|---|---|
-| `overall` | only when `facility_id` is omitted | `Overall` | budget line, summed across properties (converted) | `label`, four per cycle, four `total_*` |
+| `overall` | unless exactly one property is selected | `Overall` | budget line, summed across properties (converted) | `label`, four per cycle, four `total_*` |
 | `property_{id}` | always (one per property in scope) | the property's name | budget line (native currency) | same |
 
 Order: `overall` first when present, then one bucket per property **sorted by property name**.

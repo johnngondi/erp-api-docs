@@ -45,14 +45,15 @@ their totals always agree:
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus one:
+The [global filters](./README.md#global-filters) plus one:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `report_cycle` | `weekly` \| `monthly` \| `quarterly` \| `annually` | **`monthly`** |
 
-`header.filters` echoes all seven, `null` included — including `report_cycle`, which is `null` when the
+`header.filters` echoes every filter, `null` included — including `report_cycle`, which is `null` when the
 default was used.
 
 ```
@@ -70,7 +71,7 @@ One bucket:
 | `overall` | `All Properties` | one row per property, sorted by name, then a `Total` `subtotal` row |
 
 There are deliberately **no per-property buckets**: a property's bucket would be its own row repeated,
-and that row is already in `overall`. Filter by `facility_id` to read one property on its own.
+and that row is already in `overall`. Select one property (`facility_ids`) to read it on its own.
 
 ## Columns — generated from the cycle
 

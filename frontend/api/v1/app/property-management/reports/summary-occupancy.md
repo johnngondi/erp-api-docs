@@ -65,12 +65,24 @@ and `header.filters` but **change no figure**. Two consequences for the UI:
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) and nothing else. `header.filters` echoes all
-six, `null` included.
+The [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `buckets` and the
+rest — plus the [block / wing / floor lists](#blocks-wings-and-floors), and nothing else.
+`header.filters` echoes every filter, `null` included.
 
 ```
-GET …/reports/tenants/tenancy-reports/summary-occupancy?landlord_id=4&facility_type_id=2&properties_status=active
+GET …/reports/tenants/tenancy-reports/summary-occupancy?landlord_ids[]=4&facility_type_id=2&properties_status=active
 ```
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). This report counts spaces, not
+leases, so it keeps the spaces whose floor lies under a selected node — exact by construction, with
+no primary-space rule. The property's row then counts only those spaces, and its percentages are
+recomputed from them.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 

@@ -837,7 +837,7 @@ note. Needs `update-loo`, and the offer must be able to go — read `can_submit_
 
 - the offer has legal fees (`has_lawyer`, "Has legal fees" — which starts as the property's
   `bill_legal_fees` and may be changed on the offer; the property's flag itself is not read);
-- the offer is `draft` or `pending_approval`;
+- the offer is `draft`, `pending_approval` or `approved` (not yet sent);
 - it has not been submitted already (`assigned_lawyer_id` is null). **It goes once.**
 
 Anything else is a `403`. (Should the endpoint be reached on an offer with no legal fees anyway,
@@ -899,9 +899,12 @@ The lawyer records the fee note: what the legal work costs and the file it comes
 the setting names — no permission of its own. Read `permissions.recordLegalFeeNote` (who you
 are) together with `can_record_legal_fee_note` (the offer's state).
 
-**When.** While the offer has legal fees (`has_lawyer`) and is `draft` or `pending_approval`.
-It may be recorded **again** in that window; the note is recorded whole, so a fee left out is
-cleared rather than kept from the previous note. Once the offer is approved it is a `403`.
+**When.** While the offer has legal fees (`has_lawyer`) and is `draft`, `pending_approval` or
+`approved`. An approved offer has not gone to the tenant yet, so the lawyer may still add the
+fee note to it; recording it does not reopen the approval chain. It may be recorded **again**
+in that window; the note is recorded whole, so a fee left out is cleared rather than kept from
+the previous note. Once the offer is sent (or accepted, declined, withdrawn...) it is a `403`:
+the delivered document is fixed.
 
 This is the only way the fee figures are written: the offer's `PATCH` refuses them. It stamps
 `legal_fee_recorder_id`/`legal_fee_updated_at`,

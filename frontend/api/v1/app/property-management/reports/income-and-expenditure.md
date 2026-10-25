@@ -38,8 +38,8 @@ Unlike a per-lease report, this one is a **matrix**:
 - **Columns** are **time periods** (`report_type`) plus a `Total`. The period columns are
   [dynamic columns](./README.md#fields--column-definitions): keys `period_0`, `period_1`,
   … each carrying `period_from` / `period_to`.
-- **Buckets are property-scoped.** With a `facility_id` you get one `property_{id}` bucket; without
-  one you get an `overall` roll-up **plus** a `property_{id}` bucket per property in scope.
+- **Buckets are property-scoped.** With exactly one property selected you get one `property_{id}`
+  bucket; otherwise you get an `overall` roll-up **plus** a `property_{id}` bucket per property in scope.
 
 ## Get the report
 
@@ -47,20 +47,22 @@ Unlike a per-lease report, this one is a **matrix**:
 
 ### Filters (query params)
 
-All filters are **optional** and flat (not nested under `filter[...]`). The six
+All filters are **optional** and flat (not nested under `filter[...]`). The
 [global filters](./README.md#global-filters) apply; this report adds:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| `landlord_id` | `users.id` | All landlords (global) |
-| `facility_id` | `facilities.id` | All properties (global) — drives single vs. overall buckets |
+| `landlord_ids` | list of `users.id` | All landlords (global) |
+| `facility_ids` | list of `facilities.id` | All properties (global) — exactly one drives single vs. overall buckets |
 | `facility_type_id` | `facility_types.id` | All property types (global) |
 | `properties_status` | enum `App\Enums\Status` | Any property status (global) |
 | `period_from` | date `Y-m-d` | Start of the current month (global) |
 | `period_to` | date `Y-m-d` | End of the current month (global) |
+| `buckets` | list of this report's bucket ids | Every bucket (global) — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
+| `landlord_id` / `facility_id` | single id — **deprecated** aliases, merged into the lists | (global) |
 | `report_type` | enum `weekly` \| `monthly` \| `quarterly` \| `annually` | **`monthly`** — how period columns are grouped |
 | `account_id` | `expense_categories.id` — the **Account** | All accounts |
-| `currency_id` | `currencies.id` | **Required when `facility_id` is omitted** (see currency below) |
+| `currency_id` | `currencies.id` | **Required unless exactly one property is selected** (see currency below) |
 | `include_history` | boolean (`true` \| `false` \| `1` \| `0`) | **`true`** — periods up to the EPMAS cutover read the legacy ledger (see [Legacy history](#legacy-history-before-the-cutover)) |
 
 - **`account_id`** scopes both sides of the statement to one account: **income** to lease components
@@ -68,8 +70,9 @@ All filters are **optional** and flat (not nested under `filter[...]`). The six
   whose **own** category is it (`facility_expenses.expense_category_id`). Expenses are *not* matched
   through their expense type: one type carries expenses of several categories, so the type is not a
   proxy for the account. See the [shared conventions](./README.md#shared-conventions).
-- **`currency_id`** is **required only when no `facility_id` is given**. Requesting a multi-property
-  roll-up without it returns `422` with a `currency_id` error.
+- **`currency_id`** is **required unless exactly one property is selected** (one `facility_ids`
+  entry, or the `facility_id` alias). Requesting a multi-property roll-up without it returns `422`
+  with a `currency_id` error.
 - **`include_history`** adds the legacy EPMAS figures to periods on or before the cutover. Send
   `include_history=false` to see live ERP data only. It is not echoed in `header.filters`, so a
   `false` response is identical to the report as it was before the flag existed.
@@ -77,16 +80,16 @@ All filters are **optional** and flat (not nested under `filter[...]`). The six
 Example:
 
 ```
-GET …/reports/landlords/income-and-expenditure?facility_id=1&period_from=2026-01-01&period_to=2026-12-31&report_type=monthly
-GET …/reports/landlords/income-and-expenditure?landlord_id=7&period_from=2026-01-01&period_to=2026-12-31&currency_id=1
+GET …/reports/landlords/income-and-expenditure?facility_ids[]=1&period_from=2026-01-01&period_to=2026-12-31&report_type=monthly
+GET …/reports/landlords/income-and-expenditure?landlord_ids[]=7&period_from=2026-01-01&period_to=2026-12-31&currency_id=1
 ```
 
 ### Currency
 
-- **Single property** (`facility_id` set): everything is in that property's reporting currency
+- **Single property** (exactly one selected): everything is in that property's reporting currency
   (`facilities.reporting_currency_id`); `currency_id` is ignored and the currency sits on
   `header.property.currency`.
-- **Multiple properties** (no `facility_id`): every bucket — `overall` and each `property_{id}` — is
+- **Multiple properties** (none or several selected): every bucket — `overall` and each `property_{id}` — is
   converted to the requested `currency_id`, so the property buckets sum to `overall`. The currency is
   surfaced at `header.currency`.
 
@@ -94,7 +97,8 @@ GET …/reports/landlords/income-and-expenditure?landlord_id=7&period_from=2026-
 
 Beyond the shared header fields, this report adds:
 
-- `landlord` — `{ id, name }` when a `landlord_id` filter is supplied, otherwise `null`.
+- `landlord` — `{ id, name }` when exactly one landlord is selected, otherwise `null`. The full
+  selection is in `landlords` / `properties` (see the [shared `header`](./README.md#header)).
 
 ## Buckets
 
@@ -103,7 +107,7 @@ in scope. Read them from the `report` array; never assume a fixed set.
 
 | `bucket` | When present | `header.label` | One row per… | Columns |
 |---|---|---|---|---|
-| `overall` | only when `facility_id` is omitted | `Overall` | category line / summary line, summed across properties | `label`, one `period_{i}` per period, `total` |
+| `overall` | unless exactly one property is selected | `Overall` | category line / summary line, summed across properties | `label`, one `period_{i}` per period, `total` |
 | `property_{id}` | always (one per property in scope) | the property's name | category line / summary line | same |
 
 Order: `overall` first when present, then one bucket per property **sorted by property name**.

@@ -1598,6 +1598,7 @@ Live rows are `status = 'active'` for "current tenancies"; use `status IN ('acti
 | `id` | bigint | | Primary key |
 | `company_id` | bigint, nullable | companies.id | Owning company. Never NULL in dev. |
 | `user_id` | bigint | users.id | The tenant. Join to `users.name` for the tenant name. |
+| `landlord_identifier` | varchar(255), nullable | | What the landlord calls this tenant in their own system. Free text, not unique (one reference may cover several leases). Added 2026-10-23; NULL on older rows. |
 | `facility_id` | bigint | facilities.id | The property. |
 | `facility_type_id` | bigint, nullable | facility_types.id | Property type the lease was classified under (1 NULL in dev). |
 | `currency_id` | bigint, nullable | currencies.id | Currency of the lease amounts (all but one row are currency 1 in dev). |

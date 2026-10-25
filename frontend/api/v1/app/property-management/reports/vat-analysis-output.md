@@ -87,19 +87,33 @@ Credit notes carry `cu_invoice_number` too and are judged the same way.
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus one:
+The [global filters](./README.md#global-filters) plus one:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
+| `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `tax_id` | `taxes.id` | All taxes |
+| `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
 `tax_id` narrows to **documents carrying at least one line on that tax**; the row still shows the
 whole document, not just the matching line. Same behaviour as Input VAT Analysis.
 
 ```
-GET …/reports/tenants/vat-analysis-output?facility_id=1&period_from=2026-07-01&period_to=2026-07-31&tax_id=1
+GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&tax_id=1
 ```
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union). Each lease counts
+**whole** under the node of its **primary space** — the space of the item holding Rent, else
+Service Charge, else the lowest-id spaced item. A lease with no space is in the property run
+and out of every block / wing / floor run, so the block runs plus those leases add up to the property run.
+Invoices and credit notes follow their lease.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 
@@ -116,6 +130,7 @@ One bucket:
 | `invoice_date` | `Invoice Date` | `string` | `01 Jul, 2026` — from `created_at` |
 | `tenant` | `Tenant` | `string` | |
 | `lease_id` | `Lease` | `id` | The lease the document was raised on |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`) on that lease; `null` when it has none |
 | `invoice_no` | `Invoice No.` | `id` | The document's id |
 | `cu_invoice_no` | `CU Invoice No.` | `string` | Raw value, `null` when unsigned |
 | `pin_no` | `PIN No.` | `string` | The tenant's `users.tax_pin` |
@@ -129,7 +144,7 @@ One bucket:
 > `invoice_number` column — `cu_invoice_number` is the only number it carries, and that has its own
 > column here.
 
-The subtotal's label spans the eight text columns (`col_span: 8`) and carries only the three money
+The subtotal's label spans the nine text columns (`col_span: 9`) and carries only the three money
 sums.
 
 ## Summary
@@ -146,25 +161,28 @@ sums.
 ```jsonc
 "items": [
   { "type": "normal", "invoice_date": { "value": "01 Jul, 2026" }, "tenant": { "value": "Acme Traders Ltd" },
+    "lease_id": { "value": 412 }, "landlord_identifier": { "value": "VAT-88" },
     "invoice_no": { "value": 9911 }, "cu_invoice_no": { "value": "0100042118000009911" },
     "pin_no": { "value": "P051112223A" }, "description": { "value": "Rent & SC — July 2026" },
     "etr_status": { "value": "signed", "color": "success" },
     "taxable_value": { "value": 380000.00 }, "vat": { "value": 60800.00 }, "total": { "value": 440800.00 } },
 
   { "type": "normal", "invoice_date": { "value": "03 Jul, 2026" }, "tenant": { "value": "Njiru Hardware" },
+    "lease_id": { "value": 388 }, "landlord_identifier": { "value": null },
     "invoice_no": { "value": 9912 }, "cu_invoice_no": { "value": null },
     "pin_no": { "value": "P054445556B" }, "description": { "value": "Rent — July 2026" },
     "etr_status": { "value": "not signed", "color": "secondary" },
     "taxable_value": { "value": 150000.00 }, "vat": { "value": 24000.00 }, "total": { "value": 174000.00 } },
 
   { "type": "normal", "invoice_date": { "value": "10 Jul, 2026" }, "tenant": { "value": "Acme Traders Ltd" },
+    "lease_id": { "value": 412 }, "landlord_identifier": { "value": "VAT-88" },
     "invoice_no": { "value": 34 }, "cu_invoice_no": { "value": "0100042118000000034" },
     "pin_no": { "value": "P051112223A" }, "description": { "value": "Credit note — SC adjustment" },
     "etr_status": { "value": "signed", "color": "success" },
     "taxable_value": { "value": -50000.00 }, "vat": { "value": -8000.00 }, "total": { "value": -58000.00 } },
 
   { "type": "subtotal", "background_color": "secondary",
-    "invoice_date": { "value": "3 documents", "col_span": 8 },
+    "invoice_date": { "value": "3 documents", "col_span": 9 },
     "taxable_value": { "value": 480000.00 }, "vat": { "value": 76800.00 }, "total": { "value": 556800.00 } }
 ]
 ```

@@ -37,17 +37,19 @@ and being able to export it does not grant viewing it.
 
 ### Filters (query params)
 
-All filters are **optional** and flat (not nested under `filter[...]`). The six
+All filters are **optional** and flat (not nested under `filter[...]`). The
 [global filters](./README.md#global-filters) apply; this report adds one:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| `landlord_id` | `users.id` | All landlords (global) |
-| `facility_id` | `facilities.id` | All properties (global) |
+| `landlord_ids` | list of `users.id` | All landlords (global) |
+| `facility_ids` | list of `facilities.id` | All properties (global) |
 | `facility_type_id` | `facility_types.id` | All property types (global) |
 | `properties_status` | enum `App\Enums\Status` | Any property status (global) |
 | `period_from` | date `Y-m-d` | Start of the current month (global) |
 | `period_to` | date `Y-m-d` | End of the current month (global) |
+| `buckets` | list of this report's bucket ids | Every bucket (global) — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
+| `landlord_id` / `facility_id` | single id — **deprecated** aliases, merged into the lists | (global) |
 | `management_contract_id` | `facility_management_contracts.id` | All contracts — limits the report to the properties that one contract covers |
 
 `header.filters` echoes **every** filter above, `null` included. `header.period` echoes the resolved
@@ -57,14 +59,14 @@ and `period_to` stay `null`.
 Example:
 
 ```
-GET …/reports/landlords/management-fee?landlord_id=4&period_from=2026-07-01&period_to=2026-07-31
-GET …/reports/landlords/management-fee/export?landlord_id=4&period_from=2026-07-01&period_to=2026-07-31&format=pdf
+GET …/reports/landlords/management-fee?landlord_ids[]=4&period_from=2026-07-01&period_to=2026-07-31
+GET …/reports/landlords/management-fee/export?landlord_ids[]=4&period_from=2026-07-01&period_to=2026-07-31&format=pdf
 ```
 
 ### Currency
 
 This report takes **no currency filter** and converts nothing: every figure is in its property's own
-reporting currency. For a single property (`facility_id` set) the currency sits on
+reporting currency. With exactly one property selected the currency sits on
 `header.property.currency`. Otherwise `header.currency` names the currency the properties in scope
 share, and is `null` when they report in different currencies.
 

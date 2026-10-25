@@ -39,7 +39,7 @@ on the fly.
 
 - **Fixed summary buckets + data-driven property buckets.** Three summaries always come first
   (`summary_by_category`, `summary_by_type`, `all-properties`), then one `property_{id}` bucket per
-  property in scope (only the selected one when a single `facility_id` is given). There is **no
+  property in scope (only the selected ones when `facility_ids` is given). There is **no
   `overall`** transaction bucket — the summaries carry the roll-up.
 - **`all-properties` has runtime columns.** One column per expense category in scope, so read its
   columns from `fields` — see [the all-properties bucket](#the-all-properties-bucket).
@@ -56,32 +56,35 @@ on the fly.
 
 ### Filters (query params)
 
-All filters are **optional** and flat (not nested under `filter[...]`). The six
+All filters are **optional** and flat (not nested under `filter[...]`). The
 [global filters](./README.md#global-filters) apply; this report adds:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| `landlord_id` | `users.id` | All landlords (global) |
-| `facility_id` | `facilities.id` | All properties (global) — drives single vs. all property buckets |
+| `landlord_ids` | list of `users.id` | All landlords (global) |
+| `facility_ids` | list of `facilities.id` | All properties (global) — drives which property buckets appear |
 | `facility_type_id` | `facility_types.id` | All property types (global) |
 | `properties_status` | enum `App\Enums\Status` | Any property status (global) |
 | `period_from` | date `Y-m-d` | Start of the current month (global) |
 | `period_to` | date `Y-m-d` | End of the current month (global) |
+| `buckets` | list of this report's bucket ids | Every bucket (global) — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
+| `landlord_id` / `facility_id` | single id — **deprecated** aliases, merged into the lists | (global) |
 | `expense_category_id` | `expense_categories.id` | All categories |
 | `expense_type_id` | `facility_expense_types.id` | All types |
-| `currency_id` | `currencies.id` | **Required when `facility_id` is omitted** (see currency below) |
+| `currency_id` | `currencies.id` | **Required unless exactly one property is selected** (see currency below) |
 
 - **`expense_category_id` / `expense_type_id`** narrow every bucket to that category / type
   (`facility_expenses.expense_category_id` / `facility_expenses.expense_type_id`).
-- **`currency_id`** is **required only when no `facility_id` is given**. Requesting a multi-property
-  roll-up without it returns `422` with a `currency_id` error.
+- **`currency_id`** is **required unless exactly one property is selected** (one `facility_ids`
+  entry, or the `facility_id` alias). Requesting a multi-property roll-up without it returns `422`
+  with a `currency_id` error.
 - **Cancelled and pending expenses are excluded** — they are not yet realised costs.
 
 Example:
 
 ```
-GET …/reports/suppliers/expenditure-reports/property-expenses?facility_id=1&period_from=2026-01-01&period_to=2026-01-31
-GET …/reports/suppliers/expenditure-reports/property-expenses?landlord_id=7&period_from=2026-01-01&period_to=2026-01-31&currency_id=1
+GET …/reports/suppliers/expenditure-reports/property-expenses?facility_ids[]=1&period_from=2026-01-01&period_to=2026-01-31
+GET …/reports/suppliers/expenditure-reports/property-expenses?landlord_ids[]=7&period_from=2026-01-01&period_to=2026-01-31&currency_id=1
 ```
 
 ### Currency
@@ -90,9 +93,9 @@ Each expense carries its own `currency_id`. Every amount is first converted to *
 reporting currency** (`facilities.reporting_currency_id`) — that is what the `property_{id}` buckets
 display. The summaries then convert those figures to a **target currency**:
 
-- **Single property** (`facility_id` set): the target is that property's reporting currency; `currency_id`
+- **Single property** (exactly one selected): the target is that property's reporting currency; `currency_id`
   is ignored. `header.property.currency` holds it.
-- **Multiple properties** (no `facility_id`): the target is the requested `currency_id`, surfaced at
+- **Multiple properties** (none or several selected): the target is the requested `currency_id`, surfaced at
   `header.currency`. Each `property_{id}` bucket still reports in **its own** reporting currency.
 
 Because buckets can be in different currencies, **every bucket's `header.currency` (`{ code, name }`)
@@ -103,7 +106,8 @@ top-level `header.currency`.
 
 Beyond the shared header fields, this report adds:
 
-- `landlord` — `{ id, name }` when a `landlord_id` filter is supplied, otherwise `null`.
+- `landlord` — `{ id, name }` when exactly one landlord is selected, otherwise `null`. The full
+  selection is in `landlords` / `properties` (see the [shared `header`](./README.md#header)).
 
 ## Buckets
 
@@ -275,7 +279,7 @@ separately [below](#sample-all-properties-bucket).
 
 ### Sample all-properties bucket
 
-A multi-property request (`landlord_id=7&currency_id=1`): Beta House spent nothing on Repairs, so its
+A multi-property request (`landlord_ids[]=7&currency_id=1`): Beta House spent nothing on Repairs, so its
 row has no `category_4` key.
 
 ```json
