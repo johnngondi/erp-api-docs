@@ -537,17 +537,26 @@ Expense sub-type create/update payload:
 | `can_have_default_vendor` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
 | `can_have_preferred_vendor` | No | boolean | Optional. If omitted on create, DB default applies (`true`). |
 | `default_vendor_id` | No | integer/null | The sub-category's company-wide default supplier. Must be a user in the vendor group who is not terminated, else **422**. `null` clears it; leaving the field out keeps the current one. Used only while `can_have_default_vendor` is `true`; a property's own default (the supplier's prequalification with `is_default_in_facility_id`) wins over it, and an inactive supplier is skipped when a request is sent out. |
+| `default_vendor_excluded_facility_ids` | No | array of integers/null | Properties where the company-wide default supplier does not apply: a work request there skips the preliminary stage unless the property has its own default. Each id must be a property of the company that is not deleted, with no repeats, else **422**. `null` or `[]` clears the list; leaving the field out keeps the current one. |
 
-Expense sub-type responses carry `default_vendor_id` and `defaultVendor` (a user: `id`, `name`, `email`, or `null` when none is set). The list, show, create and update responses always load it; `include=defaultVendor` is accepted on the list as well. The list also accepts `filter[default_vendor_id]` (exact) and `include=expenseType`.
+Expense sub-type responses carry `default_vendor_id`, `defaultVendor` (a user: `id`, `name`, `email`, or `null` when none is set) and `default_vendor_excluded_facility_ids` (sorted property ids, `[]` when none). The list, show, create and update responses always load it; `include=defaultVendor` is accepted on the list as well. The list also accepts `filter[default_vendor_id]` (exact) and `include=expenseType`.
 
-Bulk default suppliers: `php artisan procurement:set-default-vendors 244=12,13,14 251=15 [--dry-run]`
+Bulk default suppliers: `php artisan procurement:set-default-vendors 244=12,13,14 251=type:18 [--except=152 ...] [--dry-run]`
 gives each listed vendor (left of `=`) as the default supplier of the listed sub types (right of `=`),
-setting `default_vendor_id` and `can_have_default_vendor=true` on each. The vendor must exist, be
-active and be in the vendor group, and every sub type must exist; otherwise nothing is changed. A
-sub type given to two vendors is refused. It warns, and still sets the default, when the vendor is
-not prequalified on any sub type of the sub type's company. The run is one transaction, prints a
-table of what changed, and changes nothing when run again with the same list; `--dry-run` only
-reports.
+setting `default_vendor_id` and `can_have_default_vendor=true` on each. An item written
+`type:<expense_type_id>` stands for every live sub type of that expense type. `--except=<facility_id>`
+(repeatable) names the properties where the default does not apply and replaces
+`default_vendor_excluded_facility_ids` on every sub type written in the run; without it the lists are
+left as they are. The vendor must exist, be active and be in the vendor group; every sub type and
+expense type must exist (an expense type must have live sub types); every excluded property must
+exist and belong to the company of all the sub types in the run; otherwise nothing is changed. A sub
+type given to two vendors is refused. It warns, and still sets the default, when the vendor is not
+prequalified on any sub type of the sub type's company. The run is one transaction, prints a table
+of what changed (the Except column shows the resulting list), and changes nothing when run again
+with the same arguments; `--dry-run` only reports.
+
+Example: one supplier as the default for every Repairs & Maintenance sub type on every property but
+one: `php artisan procurement:set-default-vendors 224=type:18 --except=152`.
 
 Response envelope for create/update/delete:
 

@@ -253,7 +253,9 @@ The default supplier is, in order:
 1. the property's default: the supplier whose prequalification for the sub-category names the
    request's property (`facility_expense_sub_type_vendors.is_default_in_facility_id`); they must be
    prequalified and active;
-2. else the sub-category's company-wide `default_vendor_id`, when that supplier is active;
+2. else the sub-category's company-wide `default_vendor_id`, when that supplier is active and the
+   property is not in the sub-category's `default_vendor_excluded_facility_ids` (see
+   [Settings](settings.md));
 3. else nobody, and the request goes straight to the rotation.
 
 While preliminary, the request carries `is_preliminary: true`, `default_vendor_id`, and
