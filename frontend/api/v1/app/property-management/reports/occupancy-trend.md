@@ -46,18 +46,37 @@ if a lease covered it at any point during the window.
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus one:
+The [global filters](./README.md#global-filters) plus these:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
+| `buckets` | list of this report's bucket ids (`all-properties`, `property-{id}`) | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `report_cycle` | `monthly` \| `quarterly` \| `annually` | **`monthly`** |
+| `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
-`weekly` returns `422`. `header.filters` echoes all seven, `null` included.
+The deprecated `landlord_id` / `facility_id` are still accepted and merged into the lists (see
+[the shared contract](./README.md#the-deprecated-landlord_id--facility_id)).
+
+`weekly` returns `422`. `header.filters` echoes every filter, `null` included, the lists as lists
+(`[]` when empty).
 
 ```
-GET …/reports/tenants/occupancy-trend?period_from=2015-01-01&period_to=2026-12-31&report_cycle=annually
+GET …/reports/tenants/occupancy-trend?period_from=2015-01-01&period_to=2026-12-31&report_cycle=annually&landlord_ids[]=4&landlord_ids[]=7
 ```
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union; a node inside a
+selected node refines it). Like [Summary Occupancy](./summary-occupancy.md#blocks-wings-and-floors),
+this report counts **spaces, not leases**: it keeps the spaces whose floor lies under a selected node
+— exact by construction, with no primary-space rule. A kept space is occupied by any lease that holds
+it, so a lease spanning two blocks occupies its space in each. Every space sits on a floor, so the
+block runs plus the floors under no block add up to the property, period by period.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Buckets
 
@@ -68,8 +87,11 @@ Always in this order:
 | `all-properties` | `label: "All Properties"` | one row per period, every property in scope added together |
 | `property-{id}` | `label` (the property name), `property { id, name }` | one row per period for that property |
 
-Property buckets follow ordered by property name. `facility_id` narrows the scope but does **not**
-change the bucket set. Every period gets a row, and a property with no spaces still gets its bucket,
+Property buckets follow ordered by property name. `facility_ids` narrows the scope but does **not**
+change the bucket set. `buckets` shrinks only `report`; `header` and `summary` stay those of the whole
+scope. The top-level `header` carries the scope as every report does: `property` (with exactly one
+property selected), `properties`, `landlord`, `landlords`, and `blocks`, `wings`, `floors` — see
+[`header`](./README.md#header). Every period gets a row, and a property with no spaces still gets its bucket,
 all zeros. There is no total row: occupancy at different moments does not add up.
 
 Each row also carries `period_from`, `period_to` and `as_at` (the moment measured), as row metadata.

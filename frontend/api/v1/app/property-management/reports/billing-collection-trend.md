@@ -61,13 +61,18 @@ in September 2026 is therefore expected, not an error.
 
 ## Filters
 
-The six [global filters](./README.md#global-filters) plus two:
+The [global filters](./README.md#global-filters) plus these:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| six global filters | see the shared contract | all / current month |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
+| `buckets` | list of this report's bucket ids (`all-properties`, `property-{id}`) | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `report_cycle` | `monthly` \| `quarterly` \| `annually` | **`monthly`** |
 | `lease_component_id` | integer, `lease_components.id` | all components |
+| `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
+
+The deprecated `landlord_id` / `facility_id` are still accepted and merged into the lists (see
+[the shared contract](./README.md#the-deprecated-landlord_id--facility_id)).
 
 `report_cycle` has no `weekly` option (eight years of weeks is not a trend anyone reads); `weekly`
 returns `422`.
@@ -78,13 +83,27 @@ the importer charges them to when it computes the cutover reconciliation, so a R
 `balance_cf` still equals the live Rent balance. Under any other component they drop out; without
 the filter they count in full.
 
-`header.filters` echoes all eight, `null` included.
+`header.filters` echoes every filter, `null` included, the lists as lists (`[]` when empty).
 
 ```
-GET …/reports/tenants/billing-collection-trend?period_from=2019-01-01&period_to=2026-12-31&report_cycle=annually
+GET …/reports/tenants/billing-collection-trend?period_from=2019-01-01&period_to=2026-12-31&report_cycle=annually&facility_ids[]=12&facility_ids[]=14
 ```
 
 A useful trend needs a wide window; the default is still the current month, as for every report.
+
+### Blocks, wings and floors
+
+With exactly one property selected, `facility_block_ids`, `facility_wing_ids` and
+`facility_floor_ids` narrow the report to part of it (several nodes are a union; a node inside a
+selected node refines it). Each lease counts **whole** under the node of its **primary space** —
+the space of the item holding Rent, else Service Charge, else the lowest-id spaced item. This applies
+on **both sides of the cutover**: a legacy history row carries its lease just like a live billing or
+collection, so it follows that lease. A lease with no space is in the property run and out of every
+block / wing / floor run, so the block runs plus those leases add up to the property run, period by
+period.
+Rules, `422`s and the add-up guarantee:
+[Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
+are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
 ## Currency
 
@@ -109,8 +128,14 @@ Always in this order:
 | `all-properties` | `label: "All Properties"`, `currency` | one row per period, every property in scope added together, then a `Total` `grosstotal` row |
 | `property-{id}` | `label` (the property name), `property { id, name }`, `currency` | one row per period for that property, then a `Total` `subtotal` row |
 
-Property buckets follow the `all-properties` bucket ordered by property name. `facility_id` narrows
-the scope but does **not** change the bucket set: `all-properties` then holds that one property.
+Property buckets follow the `all-properties` bucket ordered by property name. `facility_ids` narrows
+the scope but does **not** change the bucket set: with one property selected, `all-properties` holds
+that one property. `buckets` shrinks only `report`; `header` and `summary` stay those of the whole
+scope.
+
+The top-level `header` carries the scope as every report does: `property` (with exactly one property
+selected), `properties`, `landlord`, `landlords`, and `blocks`, `wings`, `floors` — see
+[`header`](./README.md#header).
 
 **Every period gets a row, even an empty one**, so a trend line has no gaps. A property with no
 activity at all still gets its bucket, all zeros.

@@ -258,7 +258,7 @@ Don't render it as its own control — the replacement covers it:
 
 **Order.** The params the report's validation class declares come first, in declaration order
 (the global scalars, then the report's own). The list filters follow, always in this order:
-`landlord_ids`, `facility_ids`, `buckets`, then — on the twelve
+`landlord_ids`, `facility_ids`, `buckets`, then — on the fourteen
 [tenant reports](#splitting-by-block--wing--floor) only — `facility_block_ids`,
 `facility_wing_ids`, `facility_floor_ids`.
 
@@ -429,7 +429,7 @@ Every report except Trial Balance supports these filters (defined on the shared
 `App\Data\Reports\ReportFilterData`). Individual reports may add their own on top (e.g. Billings &
 Collections adds `leases_status`, `expense_category_id`, `lease_component_id`; Income & Expenditure
 adds `report_type` for period grouping, `account_id`, and a `currency_id` required for
-multi-property roll-ups). The twelve tenant reports also take the block / wing / floor lists — see
+multi-property roll-ups). The fourteen tenant reports also take the block / wing / floor lists — see
 [Splitting by block / wing / floor](#splitting-by-block--wing--floor).
 
 | Param | Type | Meaning when omitted |
@@ -547,7 +547,7 @@ GET …/reports/tenants/billings-and-collections?facility_ids[]=1&buckets[]=over
 
 ## Splitting by block / wing / floor
 
-The twelve **tenant reports** can be narrowed to part of a property:
+The fourteen **tenant reports** can be narrowed to part of a property:
 [Billings & Collections](./billings-and-collections.md),
 [Property Collections](./property-collections.md),
 [Collections Summary](./collections-summary.md),
@@ -558,8 +558,10 @@ The twelve **tenant reports** can be narrowed to part of a property:
 [Ageing Report](./ageing-report.md),
 [Debtors Listing](./debtors-listing.md),
 [Unbilled Leases](./unbilled-leases.md),
-[Output VAT Analysis](./vat-analysis-output.md) and
-[Tenant Withholding](./tenant-withholding.md). They take three more [list filters](#list-filters):
+[Output VAT Analysis](./vat-analysis-output.md),
+[Tenant Withholding](./tenant-withholding.md),
+[Billing & Collection Trend](./billing-collection-trend.md) and
+[Occupancy Trend](./occupancy-trend.md). They take three more [list filters](#list-filters):
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
