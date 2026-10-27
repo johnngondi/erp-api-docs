@@ -47,6 +47,26 @@ Example:
 
 `GET /api/v1/app/12/property-management/lease-management/receipts?filter[transaction_number]=RCPT-1005&sort=-transaction_date`
 
+### The receipt's dates
+
+A receipt carries three dates:
+
+- **`transaction_date`** is the day the tenant paid, as entered. It is the date on the bank
+  statement and the cashbook line's `transaction_at`. It never changes on approval.
+- **`created_at`** (`created` in the resource) is the day the receipt was **processed**. For a
+  receipt that needs Receivables' approval, that's the day of the final approval, not the day it
+  was captured. Captured on 30 Oct and approved on 2 Nov, it reads 2 Nov and falls in November.
+  Its tenant statement lines, collections and cashbook entry are written on approval and carry
+  the same day. A receipt that needs no approval is processed as it is captured, so its date
+  doesn't move.
+
+- **`requested_at`** is when the receipt was captured. It never changes. Filter with
+  `filter[requested_between]=Y-m-d,Y-m-d`.
+
+Allocating more money from an already approved receipt later does not move `created_at`. Only
+[Change Receipt Date](#change-receipt-date-backdate) does. Receipts approved before 2026-10-27 keep
+the day they were captured. See [Document dates](../document-dates.md).
+
 ## Create Receipt
 
 `POST /api/v1/app/{company}/property-management/lease-management/receipts`
@@ -113,6 +133,16 @@ Example response:
 |---|---|---|
 | `allocations` | An invoice is not on a lease of `facility_id` | Some of the allocated invoices do not belong to leases in the selected property. |
 | `allocations` | An invoice has no balance left (paid or already overpaid) | Invoice with invoice_id 9001 is already paid for fully |
+| `transaction_number` | Another live receipt has the same reference, amount, property and tenant | Duplicate payment: receipt #412 already records reference QJK3X7L2MP for 25,000.00 from this tenant on this property. |
+
+**Duplicate payments (row 178).** A receipt is the same payment as another when the **reference
+(`transaction_number`), amount, property (`facility_id`) and tenant (`paying_user_id`)** all match.
+The reference is compared without case or spaces (`qjk3 x7l2mp` is `QJK3X7L2MP`); the amount must be
+exact. Only **live** receipts count, pending or confirmed: a cancelled, rejected or reversed receipt
+no longer records the payment, so it can be entered again. Show the message on the reference field;
+it names the receipt already holding the payment. The same check runs when an edit changes one of
+the four (a pending receipt's full edit, or a confirmed receipt's reference); an edit that leaves
+them alone is never refused by it.
 
 ### Overpaying an invoice
 
@@ -342,7 +372,39 @@ opened the field, or to be the person it was returned to — the same rule as Up
 
 `PATCH /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}/cancel`
 
-No request body required.
+The body is optional:
+
+```json
+{
+  "charge_cancellation_fee": true,
+  "reason": "Cheque bounced"
+}
+```
+
+`reason` is optional and only used when a fee is charged. It goes on the fee invoice's notes.
+
+### Cancellation fee
+
+When `charge_cancellation_fee` is `true` and the receipt's payment method has
+`has_cancellation_fee`, the tenant is invoiced a fee on the lease of one of the receipt's
+invoices. The amount is taken from the first of these that is set:
+
+1. `cancellation_fee` on the receipt's receiving bank account for that payment method
+   (Settings > Finance > Bank Accounts)
+2. `default_cancellation_fee` on the payment method itself
+
+If neither is set, the call returns `422` on `charge_cancellation_fee` and nothing is cancelled:
+
+```json
+{
+  "message": "Cheque Deposit Slip cancellation fee must be set on the account in \"Settings > Finance > Bank Accounts\".",
+  "errors": {
+    "charge_cancellation_fee": ["Cheque Deposit Slip cancellation fee must be set on the account in \"Settings > Finance > Bank Accounts\"."]
+  }
+}
+```
+
+For a payment method without `has_cancellation_fee`, the flag is ignored and no fee is charged.
 
 Possible status values returned by API resource:
 

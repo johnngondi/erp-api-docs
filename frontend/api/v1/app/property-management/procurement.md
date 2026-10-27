@@ -933,9 +933,30 @@ Purpose:
 - Used by App users to accept a vendor-submitted jobcard / delivery document. It marks the LPO `delivered`
   and generates the supplier bill for it (once per LPO).
 
-Who: holders of `review-document-facility-procurement-lpo` - `403` otherwise (row 138; before, the call had
-no check and any staff user could make it). Gate the Review action on `permissions.reviewDocument`, not
+Who: holders of `review-document-facility-procurement-lpo`, and the LPO's creator (`created_by_id` on the
+LPO, else on its procurement request) - `403` otherwise (row 138; before, the call had no check and any
+staff user could make it). Gate the Review action on `permissions.reviewDocument`, not
 `permissions.update`, which is now `true` only while an LPO is pending.
+
+When the supplier submits the document, the creator gets a "Review document and close LPO" pending task
+(app portal, Property Management domain, the LPO as its resource). Accepting the document here clears it,
+and so do cancelling or deleting the LPO.
+
+#### Handing migrated procurement to the property
+
+Requests and LPOs imported from EPMAS were created by the migration user (id `1`), so nobody owned
+them. A console command gives each one to the property's caretaker (the `facility_role` holder of role
+`6`), or to its Property Manager (role `7`) when the property has no caretaker. An LPO that is still `lpo`
+and already carries the supplier's document also gets the creator's review task. A record whose property
+has neither role holder is listed and left as it is.
+
+```bash
+php artisan procurement:reassign-migrated-creators --dry-run      # report only
+php artisan procurement:reassign-migrated-creators
+php artisan procurement:reassign-migrated-creators --company=3 --from-user=1 --role=6 --fallback-role=7
+```
+
+Running it again changes nothing and raises no duplicate tasks.
 
 Request body (`CloseLpoData`; `document_number` and `document_upload_id` are taken from the LPO, and
 `delivered_at` is set to now):
@@ -1395,3 +1416,9 @@ Use shared behavior in `docs/frontend/app/README.md`:
 
 - Render `4xx` messages and validation errors.
 - Show generic fallback for `5xx`.
+
+## LPO dates
+
+**`requested_at` and `created_at`.** `requested_at` is when the LPO was entered. `created_at` is
+when it was processed, which is the day of its final approval when it needs one. Filter on entry
+with `filter[requested_between]=Y-m-d,Y-m-d`. See [Document dates](document-dates.md). The LPO resource names its processing date `created`.

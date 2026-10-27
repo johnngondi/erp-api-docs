@@ -462,6 +462,9 @@ Submit behavior:
 
 - Backend always sets `delivered_at` to current time.
 - Backend computes overall `rating` as average of quality/speed/communication.
+- Your "Upload jobcard" task is cleared, and the LPO's creator (the staff user who raised it, or who
+  raised its procurement request) gets a "Review document and close LPO" task. Submitting again
+  replaces that task, so the creator never holds two.
 
 Success response (`DataResource`):
 

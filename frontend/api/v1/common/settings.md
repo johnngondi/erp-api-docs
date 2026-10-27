@@ -57,6 +57,17 @@ be removed on an edit, is in the receipts doc under **Proof of payment**.
 { "id": 3, "name": "Mpesa", "code": "MPESA", "proof_of_payment_type": "message", "status": "active" }
 ```
 
+### Payment methods: `default_cancellation_fee`
+
+Each payment method row returns `default_cancellation_fee` (number|null, in currency units), and
+the create/update payload accepts it (numeric, `0` or more). When a receipt is cancelled with a fee
+and the receiving bank account has no `cancellation_fee` for this method, this amount is charged
+instead. Cheque Deposit Slip starts at `3300`. See the receipts doc under **Cancellation fee**.
+
+```json
+{ "id": 1, "name": "Cheque Deposit Slip", "code": "CHEQUE", "has_cancellation_fee": true, "default_cancellation_fee": "3300.00000" }
+```
+
 ### Banks: `paybill_number`
 
 Each bank row now also returns `paybill_number` (string|null): the bank's M-Pesa paybill. The invoice `mobile_money` document block uses it when the landlord holds the collection account, or when the company has no `paybill_number` setting. The account number printed with it is the pay-to bank account's `account_number`.
