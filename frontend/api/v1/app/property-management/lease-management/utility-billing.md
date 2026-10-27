@@ -41,6 +41,17 @@ The response echoes the facility utility's `distribution_method` so the FE knows
 drive the rate, plus a `result` object. When the document is not a legible utility bill,
 `result.is_legible` is `false` and `result.feedback` carries a message; the fields are null.
 
+What each field reads off the bill:
+
+| Field | Read as |
+| --- | --- |
+| `bill_number` | The bill's own number: the value labelled "Invoice Number" (Kenya Power), else "Bill No" (Nairobi Water); not the "Bill-…" reference in Kenya Power's billing details. Never the account, meter or itinerary number, which stay the same every month and would make the next month's bill a duplicate |
+| `bill_tax_invoice_number` | The KRA CU invoice number ("CU Invoice Number"); `null` when the bill shows none |
+| `total_bill_amount` | This period's charges including tax, not the total payable after balances brought forward or payments |
+| `bill_consumption` | Every row of the bill's meter readings table added, each meter and register once, maximum-demand rows (kVA, kW) included: a Kenya Power bill with High Rate 28,580, Low Rate 19,024 and demand 114 kVA and 113 kW reads 47,831. Never the charge lines that repeat the units (energy, fuel cost, levies, water and sewer tiers) |
+
+All of them pre-fill the form and can be corrected before processing.
+
 ### Example response
 
 ```json
@@ -242,7 +253,7 @@ Rows are **per lease**, never per meter — `summary.total_rows` counts leases.
 | `indirect_consumption` | number | This lease's share of the unmetered units (`0` when indirect is not billed) |
 | `indirect_amount` / `indirect_tax` / `indirect_total` | number | The indirect line's figures, priced at the same `charge_rate` |
 | `has_warning` / `warning_notes` | bool / string | Warns on zero/negative consumption or a faulty meter (amount is still computed) |
-| `has_error` / `error_notes` | bool / string | Errors when the lease has no meter, the reading is not submitted, or no unbilled reading exists |
+| `has_error` / `error_notes` | bool / string | Errors when the lease has no meter, the reading is not submitted (also listed in [`unsubmitted_meters`](#meters-not-submitted-unsubmitted_meters)), or no unbilled reading exists |
 
 ### Preconditions (422)
 
@@ -250,6 +261,29 @@ Rows are **per lease**, never per meter — `summary.total_rows` counts leases.
   `No leases in this property have a meter for the selected utility.`
 - If leases have meters but **none** of the meters has been submitted for the period:
   `The readings for the meters have not been submitted for this period.`
+
+### Meters not submitted (`unsubmitted_meters`)
+
+When **some** meters were submitted but others were not, the fetch still succeeds and the
+leases on the unsubmitted meters come back as error rows. Processing skips them, so they go
+unbilled for the period. This usually happens when a meter is replaced after the period's
+submission: the new meter starts with no submission even though a reading was recorded on
+it.
+
+`unsubmitted_meters` lists every meter on an active lease that has not been submitted for the
+period, so the screen can show **one warning above the table** and prompt a fresh submission
+before processing:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | The meter |
+| `name` / `meter_number` | string | As on the meter |
+| `has_unbilled_reading` | bool | `true` when a reading is waiting to be billed, so only the submission is missing. `false` means a reading must be recorded first |
+| `leases` | object[] | `{ id, tenant }` for each active lease the meter serves |
+
+It is an empty array when every meter has been submitted. After the readings are submitted,
+fetch again: the rows are recomputed and the list empties. Processing does **not** refuse
+while meters are unsubmitted; it bills the other leases and skips these, as before.
 
 ### Example response
 
@@ -400,6 +434,7 @@ images collected, `meters[]` holding the detail). Lease 102 has no meter for the
       "error_notes": "This lease has no meter for the selected utility."
     }
   ],
+  "unsubmitted_meters": [],
   "summary": {
     "total_rows": 2,
     "billable_rows": 1,
