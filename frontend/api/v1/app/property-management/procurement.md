@@ -32,6 +32,7 @@ Endpoints:
 - `POST /requests/{procurementRequest}/rebase`
 - `POST /requests/{procurementRequest}/request-more-quotes`
 - `POST /requests/{procurementRequest}/evaluate-anyway`
+- `POST /requests/{procurementRequest}/override`
 
 ### List query support
 
@@ -68,7 +69,13 @@ it has gone out for quotes the way to change what was asked is a rebase (below).
 | `ticket_id` | No | integer | Must exist in `tickets.id` |
 | `asset_id` | No | integer | Must exist in `assets.id` |
 | `owner_id` | No | integer | Must exist in `users.id`, defaults to current user |
+| `is_emergency` | No | boolean | Default `false`. An emergency work request goes to its default supplier only; see [Locked supplier](#locked-supplier-emergency-and-preferred) |
 | `items` | Conditional | array | Required when `type=purchase` |
+
+An emergency request (`is_emergency=true`) needs a default supplier for its sub-category on its
+property (found as in [Default supplier first](#default-supplier-first)). Without one, create and
+update return **422** keyed on `is_emergency`: "No default supplier is set for this category on this
+property. Ask the procurement officer to set a default supplier for the category or the property."
 
 `items[]` object (for `type=purchase`):
 
@@ -111,9 +118,8 @@ it has gone out for quotes the way to change what was asked is a rebase (below).
 | `preferred_vendor_id` | Conditional | integer | Required if `has_preferred_vendor=true` |
 | `selected_option` | Conditional | integer | The quote (work) or price option (purchase) the procurement step picks. Optional on the first pass, where leaving it out keeps the system's recommendation, and required when a later step sent the request back. It must belong to this request. See [Overriding the recommendation](#overriding-the-recommendation) |
 | `expense_category_id` | Conditional | integer | Required if current step has `select_expense_category=true` and `status=approved` |
-| `vendors` | Conditional | array | Required if `override=true` |
 | `has_preferred_vendor` | No | boolean | Default `false` |
-| `override` | No | boolean | Default `false` |
+| `override` | No | boolean | Default `false`. Unlocks the request from its locked supplier and sends it to the rotation; see [Override](#override-unlocking-the-supplier) |
 
 `comment` is required when the status is `review` or `rejected`, when `has_preferred_vendor` or
 `override` is set, and when `selected_option` is not the system's recommendation.
@@ -193,20 +199,23 @@ the task links to the request page.
 
 | Request state | Who holds a task | Title |
 |---|---|---|
-| Current step `pending` | Each of the step's `actors` | `Review procurement request: {title}` |
-| Current step `pending`, sent back by a later step | Each of the step's `actors` | `Procurement request returned for review: {title}`. The description quotes the comment from the step that sent it back |
-| Current step `quotes-review` | Each of the step's `actors` | `Select a quote for {title}` |
+| Procurement step (`handle_procurement`) `pending`, work request | Each of the step's `actors` | `Release for quotes - {title}`, or `Release for quotes (round {n}) - {title}` after a rebase. With a locked supplier the description names them |
+| Procurement step `pending`, purchase request | Each of the step's `actors` | `Select a price option - {title}` |
+| Any other step `pending` | Each of the step's `actors` | `Review procurement request - {title}` |
+| Current step `pending`, sent back by a later step | Each of the step's `actors` | `Returned for review - {title}`. The description quotes the comment from the step that sent it back |
+| Current step `quotes-review` | Each of the step's `actors` | `Quotes review - {title}` |
 | Current step `waiting-quotes` | Nobody, because the request is waiting on suppliers | - |
-| Current step `waiting-quotes`, deadline passed with too few quotes | Each of the step's `actors` | `Only {received} of {required} quotes received for {title}`. Cleared by request more quotes, evaluate anyway or a rebase |
-| First step sent back to the creator | The request's creator | `Make changes to procurement request: {title}` |
+| Current step `waiting-quotes`, deadline passed with too few quotes | Each of the step's `actors` | `Quotes shortfall - {title} ({received} of {required})`. Cleared by request more quotes, evaluate anyway, override or a rebase |
+| Current step `waiting-quotes`, locked request held: the locked supplier declined or did not quote by the deadline | Each of the step's `actors` | `No quote from {supplier} - {title}`. The description lists the choices: request more time, evaluate anyway, override or rebase |
+| First step sent back to the creator | The request's creator | `Make changes to procurement request - {title}` |
 | Rejected, LPO raised, or request deleted | Nobody | - |
 
 The tasks are cleared and raised again every time the request moves, so each person holds at most
 one task per request.
 
-Open steps that were dispatched before these tasks existed have no task. Run
-`php artisan procurement:sync-step-tasks` once (add `--company={id}` to limit it to one company) to
-raise them. Running it again changes nothing.
+Open steps that were dispatched before these tasks existed have no task, and tasks raised before
+these titles carry the old ones. Run `php artisan procurement:sync-step-tasks` once (add
+`--company={id}` to limit it to one company) to raise them again. Running it again changes nothing.
 
 ### Who is invited (round-robin)
 
@@ -223,8 +232,11 @@ its property (or on every property). They are ordered by:
 Each round asks `rfq_vendor_batch_size` suppliers (default 10; see [Settings](settings.md)). The
 first round of a request leaves the request's own invitations out of the history, so approving the
 procurement step a second time asks the same suppliers. A later round never asks a supplier already
-asked on the request. A preferred or default supplier set on the request is still invited on the
-first round as before.
+asked on the request.
+
+A request with a locked supplier (an emergency, or a preferred supplier chosen by a step) asks
+nobody from the rotation until it is overridden; see
+[Locked supplier](#locked-supplier-emergency-and-preferred).
 
 When the request's sub-category has a default supplier and the company prioritizes it, the first
 round starts with that supplier alone, and the rotation is asked only when that stage ends; see
@@ -243,7 +255,7 @@ are the basis for a later rule deactivating suppliers who keep not responding (n
 
 ### Default supplier first
 
-A **non-emergency** work request whose sub-category allows a default supplier
+A **non-emergency** work request with no preferred supplier whose sub-category allows a default supplier
 (`can_have_default_vendor`) and has one goes to that supplier **alone** when the procurement step is
 approved, as long as the company setting `rfq_prioritize_default_vendor` is `yes` (see
 [Settings](settings.md)). This is the request's preliminary stage.
@@ -258,9 +270,12 @@ The default supplier is, in order:
    [Settings](settings.md));
 3. else nobody, and the request goes straight to the rotation.
 
+Emergency requests find their default supplier the same way.
+
 While preliminary, the request carries `is_preliminary: true`, `default_vendor_id`, and
 `preliminary_until` = now + `rfq_default_vendor_exclusive_window_hours` (default 24). The same value
-is its `deadline`. A preferred supplier chosen by the step is asked alongside the default one.
+is its `deadline`. A request with a preferred supplier has no preliminary stage: it goes to the
+preferred supplier alone (see [Locked supplier](#locked-supplier-emergency-and-preferred)).
 
 The stage ends in one of four ways:
 
@@ -291,21 +306,98 @@ evaluate anyway, rebase). Between `preliminary_until` and the next hourly run (a
 quoting is closed, because the deadline has passed.
 
 Only the first round has a preliminary stage. A round after a rebase, "request more quotes" and an
-`override` follow the normal round-robin flow. Emergency requests are unchanged: they still go to
-the default supplier only, with no broadcast.
+`override` follow the normal round-robin flow. Emergency requests never have a preliminary stage and
+never broadcast: they are locked to the default supplier.
 
 **Step form.** `GET /requests/{procurementRequest}/steps/{step}` returns in `meta`:
 
 - `default_vendor`: `{ id, name }` of the supplier the request will go to first. Set only on the
-  procurement step of a first-round, non-emergency work request while the step is `pending` and
-  the company prioritizes default suppliers; otherwise `null`;
+  procurement step of a first-round, non-emergency work request with no preferred supplier while the
+  step is `pending` and the company prioritizes default suppliers; otherwise `null`;
 - `defaultVendorContext`: a sentence to show above the supplier list. With `default_vendor` set it
   names the supplier, the auto-accept amount, the window in hours, the batch size and the
   working-day deadline that follows a broadcast. For an emergency request it says the RFQ goes to
-  the default supplier only and not to the others automatically. `null` when there is no default
-  supplier;
+  the default supplier only, that their quote opens the quotes at once, and that nobody else is
+  asked unless the officer overrides. `null` when there is no default supplier;
+- `preferredVendorContext`: the same for a preferred supplier: the RFQ goes to them only, in every
+  round, until overridden. `null` without one;
+- `overrideContext`: once the request was overridden, who did it, when and why; else `null`;
 - `vendors`: with `default_vendor` set, the batch that would be asked after the default supplier
-  (the next `rfq_vendor_batch_size` in rotation, the default supplier left out).
+  (the next `rfq_vendor_batch_size` in rotation, the default supplier left out). With a locked
+  supplier, just that supplier.
+
+### Locked supplier (emergency and preferred)
+
+Some work requests go to one supplier only, in every round, until the procurement officer
+overrides:
+
+| Request | Locked supplier |
+|---|---|
+| A step chose a preferred supplier (`preferred_vendor_id`) | The preferred supplier. It wins over a default supplier, for emergencies too |
+| Emergency (`is_emergency=true`), no preferred supplier | The default supplier, found as in [Default supplier first](#default-supplier-first) when the procurement step approves |
+| Overridden (`overridden` set) | Nobody: the request follows the normal flow |
+
+While a request is locked:
+
+- approving the procurement step invites the locked supplier alone. There is no preliminary stage
+  and no auto-accept amount; the deadline is `rfq_default_deadline_days` working days out. An
+  emergency with neither a default nor a preferred supplier cannot be approved without `override`:
+  **422** keyed on `status`, "No default supplier is set for this category on this property. Set a
+  default supplier for the category or the property, choose a preferred supplier, or override.";
+- **the locked supplier's quote opens the quotes at once**, whatever its amount and whatever
+  `min_quotes_for_evaluation` says: the request and the step move to `quotes-review` with that quote
+  recommended, and the officer gets the "Quotes review" task;
+- at the deadline a live quote from the locked supplier (for example one restored after a rebase,
+  see [Rebase](#rebase)) opens the quotes the same way. Without one the request is held as a
+  shortfall, with the task "No quote from {supplier} - {title}";
+- if the locked supplier declines from the supplier portal, the request is held at once in the same
+  way. Nobody else is asked;
+- "request more quotes" only extends the deadline and tells the locked supplier; nobody new is asked
+  (`invited: 0`);
+- a rebase cancels the round as usual, and the next round invites the locked supplier again, alone.
+
+#### Override: unlocking the supplier
+
+The procurement officer unlocks a request in one of two ways:
+
+- **On the step form**, when approving the pending procurement step: `override=true` with a
+  `comment`. The comment is the reason.
+- **While waiting for quotes**: `POST /requests/{procurementRequest}/override`.
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `reason` | Yes | string | Max 2000 characters |
+
+The endpoint is allowed (`permissions.overrideSupplierLock`) for an actor of the current procurement step
+holding `update-facility-procurement-request-step`, while the request is locked, `order`, and its
+procurement step is `waiting-quotes` (with or without a shortfall); otherwise **403**.
+`can_override` says whether the state allows it.
+
+Either way:
+
+- `overridden` is recorded on the request: who, when and the reason. It stays for good and is shown
+  on the request and the step form;
+- the next `rfq_vendor_batch_size` suppliers in rotation are asked in the same round
+  (`RfqInvitationNotification`). The locked supplier keeps their invitation and any quote they sent;
+- through the endpoint, the deadline moves to `rfq_default_deadline_days` working days out, any
+  shortfall is cleared, and suppliers already asked whose invitation is open and who have not quoted
+  are told the new deadline (`RfqDeadlineExtendedNotification`);
+- the requester (the request's creator) gets an in-app `ProcurementSupplierLockOverriddenNotification`
+  ("Procurement request overridden") with the reason, unless they made the override themselves;
+- from then on the request follows the normal flow: minimum quotes, request more quotes from the
+  rotation, and later rounds from the rotation.
+
+`preferred_vendor_id` and `default_vendor_id` are kept on an overridden request as history.
+
+```json
+{
+  "data": {
+    "message": "The supplier lock was overridden and 4 more suppliers were asked to quote.",
+    "invited": 4,
+    "request": { "...": "the request as GET /requests/{id} returns it" }
+  }
+}
+```
 
 ### Quote deadline
 
@@ -354,15 +446,23 @@ What happens, in one transaction:
 (`PUT /requests/{id}/steps/{step}` with `status=approved`). On a round after a rebase:
 
 - the next `rfq_vendor_batch_size` suppliers in rotation are asked (never anyone asked on this
-  request before), and get `RfqInvitationNotification`;
+  request before), and get `RfqInvitationNotification`. A locked request asks nobody from the
+  rotation: only the locked supplier is asked again;
 - the suppliers whose quotes the rebase shelved are asked again, carried over
   (`is_carried_over=true`), and get `RfqReopenedNotification`: the job is open again, the scope may
   have changed, and they may send a revised quote. Suppliers asked before who did not quote are not
   asked again;
-- the deadline is `rfq_default_deadline_days` working days out; the form's `deadline`, preferred
-  supplier and `override` are ignored.
+- **their shelved quotes are restored**: `status` goes back to `bid`, `round` becomes the new round,
+  `restored_at` is stamped, and `shelved` and `is_computer_recommended` are cleared (the previous
+  round's pick stays in the activity log). Restored quotes compete at the deadline like any other
+  and appear in `meta.quotes`;
+- the deadline is `rfq_default_deadline_days` working days out; the form's `deadline` and preferred
+  supplier are ignored. `override=true` on this approval unlocks a locked request (see
+  [Override](#override-unlocking-the-supplier)).
 
-A carried-over supplier may quote again: the one-quote-per-supplier rule ignores shelved quotes.
+A carried-over supplier may send a revised quote. It **replaces** their restored quote, which is
+shelved again with the reason "Replaced by a newer quote". A supplier who already quoted in this
+round cannot quote again.
 
 Response:
 
@@ -456,18 +556,23 @@ is selected, no later step has answered). The system's recommended quote keeps i
 | `preliminary_until` | object or null | `{ raw, formatted, diff }`: when the default supplier's window ends; `null` outside the preliminary stage |
 | `default_vendor_id` | integer or null | The default supplier the request was sent to first |
 | `default_vendor` | object or null | `{ id, name }` of that supplier |
+| `is_emergency` | boolean | - |
+| `locked_vendor` | object or null | `{ id, name, reason }` while the request is locked to one supplier; `reason` is `preferred` or `emergency-default`. `null` when not locked or overridden |
+| `overridden` | object or null | `{ at: { raw, formatted }, by: { id, name } or null, reason }` once the supplier lock was overridden; else `null` |
+| `can_override` | boolean | The state allows overriding the supplier lock (show only) |
 | `quotes_shortfall` | object or null | `{ awaiting: bool, received: int, required: int, since: { raw, formatted } }` while the deadline passed with too few quotes and the officer has not decided; else `null` |
 | `rebased` | object or null | `{ at: { raw, formatted }, by: { id, name } or null, reason }` for the latest rebase; else `null` |
 | `can_rebase` | boolean | The state allows a rebase (show only) |
 | `can_request_more_quotes` | boolean | The state allows requesting more quotes (show only) |
 | `can_evaluate_anyway` | boolean | The state allows evaluating anyway (show only) |
-| `permissions.rebase`, `permissions.requestMoreQuotes`, `permissions.evaluateAnyway` | boolean | Whether the caller may (state and actor) |
+| `permissions.rebase`, `permissions.requestMoreQuotes`, `permissions.evaluateAnyway`, `permissions.overrideSupplierLock` | boolean | Whether the caller may (state and actor) |
 
 Show the actions when the permission is true. The flags alone carry the state, for disabled
 buttons or explanations.
 
-Each entry of `quotes` (and of `GET /requests/{id}/bids`) adds `round` and `shelved`
-(`{ at: { raw, formatted }, reason }` or `null`). `status` may be `shelved`
+Each entry of `quotes` (and of `GET /requests/{id}/bids`) adds `round`, `shelved`
+(`{ at: { raw, formatted }, reason }` or `null`) and `restored_at` (`{ raw, formatted }` when the
+quote was brought back after a rebase, else `null`). `status` may be `shelved`
 (`{ value: "shelved", color: "warning" }`). A shelved quote cannot be recommended or selected
 (`selected_option` naming one returns **422**), is left out of the step form's `meta.quotes`, and
 is not rejected again when the LPO is raised.
