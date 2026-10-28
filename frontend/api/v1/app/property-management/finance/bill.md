@@ -20,6 +20,7 @@ Nairobi, but send `YYYY-MM-DD`.
 - `GET /bills/{bill}`
 - `PUT/PATCH /bills/{bill}`
 - `DELETE /bills/{bill}`
+- `DELETE /bills/{bill}/withholdings/{withholding}`: take a withholding off a pending bill. See [Delete a withholding](#delete-a-withholding)
 - `PATCH /bills/{bill}/cancel`
 - `PATCH /bills/{bill}/backdate`: change the posting date. See [Change Bill Date (Backdate)](#change-bill-date-backdate)
 - `PUT /bills/{bill}/post-bill`
@@ -235,6 +236,21 @@ owed to the supplier:
 Both are omitted when `withholdings` is not loaded (e.g. a resource rendered from a create/update
 response).
 
+### Withholding object
+
+Each entry of `withholdings`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | The **withholding tax** id (`withholding_tax_id`), not the row's own id. Kept as it was for existing callers. |
+| `withholding_id` | integer | The withholding row's own id. Use it in the [delete](#delete-a-withholding) URL. |
+| `name` | string | The withholding tax's name, when `withholdingTax` is loaded. |
+| `value` | number | The withholding tax rate as a fraction, when `withholdingTax` is loaded. |
+| `amount` | number | Amount withheld. |
+| `paid` | number | Amount settled through a liability bill. |
+| `balance` | number | Amount still withheld. |
+| `remitted` | number | Amount remitted. |
+
 ### Row link fields
 
 The list eager-loads these, so they are on every bill without an `include`.
@@ -318,6 +334,23 @@ negative figures).
 | `invoice_date` | Conditional | date | **Required when `post_direct` is true** |
 | `invoice_upload_id` | Conditional | integer | Must exist in `uploads.id`. **Required when `post_direct` is true** |
 | `tax_invoice_number` | Conditional | string | **Required when `post_direct` is true** |
+
+### Editing a pending bill's withholdings
+
+`PUT/PATCH /bills/{bill}` accepts `withholding_tax_ids` (array of `withholding_taxes.id`). On a
+**pending** bill the list replaces the bill's withholdings: a tax left out is removed, a tax added
+is applied, and every withholding is recalculated against the bill's totals. Edits used to ignore
+this field, so a withholding unticked in the edit form came back on save.
+
+- Omit the key to leave the withholdings as they are.
+- Send `[]` to remove them all. A contract's withholdings are inherited only when the bill is
+  created, so an empty list on edit means none.
+- The create filters still apply: a withholding-exempt supplier gets none, and only taxes the
+  property's landlord may withhold are kept.
+- Ignored once the bill is no longer pending.
+
+To take off a single withholding without opening the edit form, use
+[Delete a withholding](#delete-a-withholding).
 
 ### The invoice date cannot be in the future
 
@@ -423,6 +456,33 @@ Used by `post-bill` and some updates. It is **not** used by `reject-invoice`; se
 Editing `invoice_date` on a posted bill changes **only** the invoice date. It no longer moves
 `expense_posted_at` or the expense's dates. The invoice date records when the invoice was
 generated. To move the posting date, use [Change Bill Date](#change-bill-date-backdate).
+
+## Delete a withholding
+
+`DELETE /api/v1/app/{company}/property-management/finance/bills/{bill}/withholdings/{withholding}`
+
+`{withholding}` is the row's `withholding_id`, and it must belong to `{bill}` (otherwise `404`).
+
+This takes one withholding tax off a **pending** bill. The row is deleted and its tax is removed
+from the bill's `withholding_tax_ids`, so editing the bill afterwards does not bring it back. The
+bill's `amount`, `tax`, `total` and `balance` do not change; `withheld_amount` and
+`payable_amount` do.
+
+Show a delete button on each row of the bill's Withholdings tab only when
+`bill.permissions.deleteWithholding === true`. The flag is `true` when the bill is `pending` and
+the user may edit it (`update-facility-bill`, or they created the bill). It is always `false` in
+the supplier portal. Ask for confirmation first.
+
+No request body.
+
+Success (`200`) returns `{ data: { message, bill } }`. `bill` is the bill as the show endpoint
+returns it, so the Withholdings tab can be redrawn from it.
+
+Errors:
+
+- `403`: the bill is not pending, the withholding has been paid or remitted, or the user may not
+  edit the bill.
+- `404`: the withholding does not exist or belongs to another bill.
 
 ## Reject invoice
 
