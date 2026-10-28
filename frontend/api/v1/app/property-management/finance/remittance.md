@@ -263,6 +263,11 @@ so the next remittance for that period can pick it up:
 Cancelling a remittance by hand does exactly the same - both run the one release step, so the
 two cannot drift apart.
 
+An advance remittance that is cancelled, rejected or still pending is never deducted from the
+regular remittance for its period, nor printed as a deduction on that remittance's advice. Only
+an approved advance (`unpaid` or `paid`) is deducted. A cancelled advance was never paid, so
+deducting it would underpay the landlord.
+
 ### Cancelling while a chain is open
 
 `PATCH /remittances/{remittance}/cancel` is refused with **403** while the remittance is still
