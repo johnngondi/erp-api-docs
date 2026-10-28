@@ -174,6 +174,38 @@ as 1 and 3, and `is_last` is set on the last *materialised* step.
 If **no** step applies, the resource is treated as fully approved — the same
 outcome as a bypass role. A chain with nothing in it cannot withhold approval.
 
+## Adding a bypass role later
+
+A bypass role is checked when a chain starts, so a resource raised before its creator's role
+became a bypass role would otherwise stay in its chain. Adding a role to `bypass_role_ids`
+(create or update) therefore catches up the chains already open:
+
+- every open chain on this template's resource type in this company whose **creator or
+  submitter** holds one of the **newly added** roles is approved outright
+- its steps nobody had answered (`pending`, or `review` when it was returned for changes) become
+  `skipped`, with a comment naming the person and the role. Steps already approved keep their
+  approver
+- every pending task for it is deleted
+- the resource gets its `FINAL_STATUS_ON_APPROVAL` and the template's post-approval event fires,
+  exactly as when the last step is approved: the resource's own processing runs and the
+  creator and submitter are told it was approved
+
+Nothing happens when `always_requires_approval` is `true`, or for a role that was already a
+bypass role. This runs in the background after the update returns, so the resources move a
+moment later.
+
+Chains that were already stuck before this existed are caught up by a command, run once per
+install:
+
+```bash
+php artisan approvals:approve-bypassed --dry-run    # list what would be approved
+php artisan approvals:approve-bypassed              # approve them
+# --company=ID   only this company
+# --template=ID  only this template
+```
+
+It uses each template's full bypass-role list. A second run changes nothing.
+
 ## The edit grant
 
 `steps[].allowed_to_edit` hands this step's actor the right to update the resource

@@ -39,6 +39,33 @@ Response includes:
 - `approved`
 - `review`
 - `rejected`
+- `skipped`: nobody acted on the step because the chain was auto-approved after the creator's
+  or submitter's role became a bypass role (see
+  [Approval Templates → Adding a bypass role later](approval-templates.md#adding-a-bypass-role-later)).
+  `acted_by` is `null`, `acted_at` is when it was skipped, and `comment` says which person and
+  role caused it. A skipped step is closed, like an approved one, and prints no signature.
+
+### Turnaround time (`turn_around_time`)
+
+Every step in an `approval_steps` timeline carries how long its actors took, or how long they
+have kept it waiting so far. It is there to audit slow approvals.
+
+```json
+"turn_around_time": { "value": "1w 1d 5h 10Mins", "color": "danger", "minutes": 11830 }
+```
+
+| Step | Measured | Value |
+| --- | --- | --- |
+| `approved`, `review`, `rejected` | `prompted_at` → `acted_at` | the duration |
+| `pending` and prompted | `prompted_at` → now (keeps running) | the duration |
+| `skipped` | nothing | `{ "value": "-", "color": "secondary", "minutes": null }` |
+| never prompted (later steps, steps a rejection closed) | nothing | `null` |
+
+- `value` drops zero units: `w`, `d`, `h`, `Min`/`Mins`, e.g. `45Mins`, `3h`, `1d 2h 1Min`.
+  Under a minute is `0Mins`.
+- `color`: up to 1 hour `success`, over 1 and up to 6 hours `warning`, over 6 hours `danger`.
+  Calendar time, not working hours.
+- `minutes` is the whole number of minutes, for sorting and exports.
 
 ## Act On Step
 
