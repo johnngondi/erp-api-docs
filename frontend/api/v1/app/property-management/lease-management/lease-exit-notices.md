@@ -61,8 +61,10 @@ date and optionally one lease; then an **Overall** tab and one tab per lease.
 
 `GET /exit-notices/quote?facility_id=…&tenant_id=…[&lease_id=…][&auto_credit_arrears=1]`
 
-Writes nothing. Lists the tenant's active and suspended leases on the property (or the one
-`lease_id`):
+Writes nothing. Lists the tenant's active, suspended and terminated leases on the property (or the
+one `lease_id`), leaving out any lease an approved (`completed`) notice has already closed. A lease
+terminated without a notice can still be given one, to settle its deposit and arrears; approving it
+skips the termination and does the rest as usual.
 
 ```json
 {
@@ -93,14 +95,15 @@ Writes nothing. Lists the tenant's active and suspended leases on the property (
 | `exit_date` | Yes | date | One exit date for the notice |
 | `auto_credit_arrears` | No | boolean | One switch for the notice, applied lease by lease |
 | `leases` | Yes | array | The lease picked, or all the tenant's leases on the property; at least one |
-| `leases.*.lease_id` | Yes | integer | Each once; the tenant's, on this property, active or suspended, not on another open notice |
+| `leases.*.lease_id` | Yes | integer | Each once; the tenant's, on this property, active, suspended or terminated, not closed by a completed notice, not on another open notice |
 | `leases.*.reason_for_exit` | Yes | string | |
 | `leases.*.repair_damages_cost` | No | number | Min 0 |
 | `leases.*.supporting_upload_id` | No | integer | |
 | `leases.*.repairs_cost_quote_upload_id` | No | integer | |
 
 A lease that fails a check answers `422` on `leases.{i}.lease_id` with the reason (not this tenant's
-lease on this property; ended; already on exit notice #N awaiting approval).
+lease on this property; any other status; already closed by exit notice #N, so its deposit is not
+refunded twice; already on exit notice #N awaiting approval).
 
 ### The notice's figures
 
@@ -108,7 +111,9 @@ Every notice response carries:
 
 - `items[]`: one per lease - `lease_id`, `lease`, `deposit_held`, `arrears`, `arrears_cleared`,
   `repair_damages_cost`, `tenant_gets`, `reason_for_exit`, `supporting_upload(_id)`,
-  `repairs_cost_quote_upload(_id)`. `id` is `null` on a notice raised before row 148, which reads as
+  `repairs_cost_quote_upload(_id)`. Each upload is the full upload object (`file_name`, `type`,
+  `extension`, `size`, `created`, `source_url`, ...), the same shape as the notice's own, on create,
+  show, update and the list. `id` is `null` on a notice raised before row 148, which reads as
   one item made from the notice itself.
 - `overall`: `leases_count`, `deposit_held`, `arrears`, `arrears_cleared`, `repair_damages_cost`,
   `tenant_gets` - the Overall tab.
