@@ -281,7 +281,7 @@ The stage ends in one of four ways:
 
 | What happens | Result |
 |---|---|
-| The default supplier quotes with an `amount` (before discount and tax) at or under `rfq_default_vendor_auto_accept_max_amount` (default 50000) | The request and the procurement step move to `quotes-review` at once, with that quote recommended. Nobody else is asked |
+| The default supplier quotes with an `amount` (before discount and tax) at or under `rfq_default_vendor_auto_accept_max_amount` (default 50000) | The request and the procurement step move to `quotes-review` at once, with that quote recommended, and the `deadline` becomes that moment. Nobody else is asked |
 | The default supplier quotes above that amount | Broadcast (`reason: over-threshold`) |
 | The default supplier declines from the supplier portal | Broadcast at once (`reason: declined`) |
 | The window passes without a quote | Broadcast by `procurement:release-preliminary-rfqs`, hourly at ten past the hour (`reason: window-expired`) |
@@ -346,7 +346,9 @@ While a request is locked:
   default supplier for the category or the property, choose a preferred supplier, or override.";
 - **the locked supplier's quote opens the quotes at once**, whatever its amount and whatever
   `min_quotes_for_evaluation` says: the request and the step move to `quotes-review` with that quote
-  recommended, and the officer gets the "Quotes review" task;
+  recommended, and the officer gets the "Quotes review" task. The round closes then and there: a
+  `deadline` still ahead becomes the moment of the quote, so quoting closes and the quotes can be
+  reviewed at once (see [Quote deadline](#quote-deadline));
 - at the deadline a live quote from the locked supplier (for example one restored after a rebase,
   see [Rebase](#rebase)) opens the quotes the same way. Without one the request is held as a
   shortfall, with the task "No quote from {supplier} - {title}";
@@ -414,6 +416,11 @@ reached. `rfq_default_deadline_days` (default 3) is used:
 While the request is with its default supplier alone, the deadline is the end of that supplier's
 window, `preliminary_until` (`rfq_default_vendor_exclusive_window_hours` from the step approval, in
 clock hours, not working days).
+
+When the quotes open before the deadline (a locked supplier's quote, or a default supplier's quote
+within the auto-accept amount), the `deadline` is brought forward to that moment. Quoting closes
+and the quotes can be reviewed at once: `GET /requests/{id}/bids/{bid}` and the quote view rights
+answer as soon as the request is in `quotes-review`.
 
 ### Rebase
 
