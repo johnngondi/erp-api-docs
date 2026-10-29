@@ -54,7 +54,7 @@ segment its reports sit under:
 | Party | URL segment | Holds today |
 |---|---|---|
 | `landlord` | `landlords` | Income & Expenditure, Facility Budget |
-| `supplier` | `suppliers` | parent group `expenditure-reports` (Property Expenses, Expenses Summary, Bill Submission, Bill Payment); Supplier Withholding (one report across every withholding tax, narrowed by `withholding_tax_id`); Supplier Contracts; Input VAT Analysis |
+| `supplier` | `suppliers` | parent group `expenditure-reports` (Property Expenses, Expenses Summary, Bill Submission, Bill Payment); Supplier Withholding (one report across every withholding tax, narrowed by `withholding_tax_id`); Supplier Contracts; [Prequalified Suppliers](./prequalified-suppliers.md); Input VAT Analysis |
 | `tenant` | `tenants` | Billings & Collections, Tenant Deposits, Ageing Report, Debtors Listing, Unbilled Leases, Output VAT Analysis; Tenant Withholding (one report across both withholding methods, with a preset child per method); parent group `collections-reports` (Property Collections, Collections Summary, Legal Fee Collection); parent group `tenancy-reports` (Tenancy Schedule, Summary Occupancy) |
 | `accounting` | `accounting` | Trial Balance — a company-wide snapshot, not a party report |
 
