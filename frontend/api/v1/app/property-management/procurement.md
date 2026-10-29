@@ -340,7 +340,8 @@ overrides:
 While a request is locked:
 
 - approving the procurement step invites the locked supplier alone. There is no preliminary stage
-  and no auto-accept amount; the deadline is `rfq_default_deadline_days` working days out. An
+  and no auto-accept amount; the deadline is `rfq_locked_vendor_deadline_days` working days out
+  (default 10; see [Settings](settings.md)), on every round including after a rebase. An
   emergency with neither a default nor a preferred supplier cannot be approved without `override`:
   **422** keyed on `status`, "No default supplier is set for this category on this property. Set a
   default supplier for the category or the property, choose a preferred supplier, or override.";
@@ -354,8 +355,10 @@ While a request is locked:
   shortfall, with the task "No quote from {supplier} - {title}";
 - if the locked supplier declines from the supplier portal, the request is held at once in the same
   way. Nobody else is asked;
-- "request more quotes" only extends the deadline and tells the locked supplier; nobody new is asked
-  (`invited: 0`);
+- "request more quotes" (shown as **Extend Deadline** on a locked request) only moves the deadline
+  `rfq_locked_vendor_deadline_days` working days out and tells the locked supplier; nobody new is
+  asked (`invited: 0`). The message names the supplier: "Quote deadline extended to {date} for
+  {supplier}. Nobody else was asked; override to invite other suppliers.";
 - a rebase cancels the round as usual, and the next round invites the locked supplier again, alone.
 
 #### Override: unlocking the supplier
@@ -564,7 +567,7 @@ is selected, no later step has answered). The system's recommended quote keeps i
 | `default_vendor_id` | integer or null | The default supplier the request was sent to first |
 | `default_vendor` | object or null | `{ id, name }` of that supplier |
 | `is_emergency` | boolean | - |
-| `locked_vendor` | object or null | `{ id, name, reason }` while the request is locked to one supplier; `reason` is `preferred` or `emergency-default`. `null` when not locked or overridden |
+| `locked_vendor` | object or null | `{ id, name, reason, deadline_days }` while the request is locked to one supplier; `reason` is `preferred` or `emergency-default`; `deadline_days` is the company's `rfq_locked_vendor_deadline_days` (what an extension gives). `null` when not locked or overridden. With it set, label "request more quotes" as **Extend Deadline** and say nobody else is asked |
 | `overridden` | object or null | `{ at: { raw, formatted }, by: { id, name } or null, reason }` once the supplier lock was overridden; else `null` |
 | `can_override` | boolean | The state allows overriding the supplier lock (show only) |
 | `quotes_shortfall` | object or null | `{ awaiting: bool, received: int, required: int, since: { raw, formatted } }` while the deadline passed with too few quotes and the officer has not decided; else `null` |
