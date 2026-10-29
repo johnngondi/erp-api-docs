@@ -534,12 +534,27 @@ Body fields:
 | `total_bill_amount` | No | number | Total monthly bill charged — **tax-inclusive**, not the amount payable after credits. When omitted, no provider bill is raised |
 | `bill_tax_amount` | No | number | Tax portion of the provider bill |
 | `bill_consumption` | No | number | Total metered consumption on the provider bill (stored as the bill line quantity) |
+| `generate_bill` | No | boolean | Default `true`. `false` raises **no** provider bill (tenants are still invoiced and the run's `bill_id` stays `null`). The bill fields above still price the run. The billing screen sends it from the **Generate provider bill** checkbox beside Process, ticked by default |
 
 Provider bill math (gross-inclusive): `amount = total_bill_amount − bill_tax_amount`,
 `tax = bill_tax_amount`, `total = total_bill_amount` (`tax_type = fixed`). The contract
 is matched by `facility_id` + `utility_id` (fallback: `facility_id` + the utility's
 `vendor_id` from `facility_utilities`). If no contract is found, tenant invoices are
 still created and a warning is returned.
+
+**A provider bill is never raised twice.** Before raising it, the processor looks for a live
+bill (not deleted, not `cancelled`) on a **utility contract** (`facility_contracts.utility_id`
+set) of the same company and supplier with the same `bill_number` (trimmed, case-insensitive),
+on **any** property, whatever its total. When one exists, no bill is raised. The run is
+linked to the existing bill (`bill_id`, a posted one preferred), and tenant invoicing carries on.
+The response gets one warning:
+
+```
+Provider bill 2610I0017842102 is already recorded as bill #57942; not created again.
+```
+
+A run without a `bill_number` is not checked. Cancelling the earlier bill lets the number
+be billed again.
 
 ### Example response
 
@@ -622,6 +637,33 @@ php artisan utility-billing:bill-unbilled-readings --notes="Catch-up"    # prefi
   was already charged from the initial (or an earlier billed) reading up to the later one.
 - Each billed reading is stamped `billed_at` and the lease `utility_billed_at`, so a second
   run finds nothing and the next regular run starts from the reading just billed.
+
+### Removing duplicate provider bills
+
+Runs made before the duplicate check could each raise the same provider bill again, for
+example after invoices were deleted and `billed_at` / `utility_billed_at` were reset by hand.
+The command below keeps one bill per supplier invoice and removes the copies.
+
+```
+php artisan utility-billing:dedupe-provider-bills --dry-run    # list what would be removed
+php artisan utility-billing:dedupe-provider-bills              # remove
+php artisan utility-billing:dedupe-provider-bills --company=1  # one company
+```
+
+- A group is the live bills (not deleted, not `cancelled`) on **utility contracts** sharing
+  company, supplier and trimmed `invoice_number`, on any property, whatever their totals.
+  Bills with no invoice number and bills on other contracts are never grouped, because some
+  suppliers reuse one invoice number across properties for different bills.
+- The kept bill is the earliest **posted** one (`unpaid`, `partially-paid`, `paid`) by
+  `posted_at`, then id. When none is posted, it is the earliest `pending` one (lowest id).
+- Only **pending** copies are removed: their lines and withholdings are deleted and the bill is
+  soft-deleted. Their invoice document goes too, unless a run or another bill still uses it.
+  A run that pointed at a removed copy is re-pointed to the kept bill.
+- A posted copy is never removed. A group with more than one posted bill is flagged
+  `extra posted - review`, and those bills must be cancelled by hand.
+- The table flags `other property` when a copy sits on a different property from the kept bill,
+  and `totals differ` when the amounts do not match. Review both in the dry run before removing.
+- Running it again is a no-op.
 
 ## Utility billing history (row 156)
 
