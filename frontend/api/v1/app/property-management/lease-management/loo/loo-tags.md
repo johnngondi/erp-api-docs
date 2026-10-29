@@ -166,7 +166,7 @@ read as a PHP date format. See [README.md](./README.md#tag-resolution).
 
 | Tag | Name | Format | Description | Resolved from |
 |---|---|---|---|---|
-| `{{approval_signatures}}` | Approval Signatures | `html` | The last two approvals of the offer's current approval chain side by side, the earlier on the left: each approver's signature (or a blank signing line), name and role. Empty until a step is approved, and refreshed as the chain moves. | **Computed.** `ApprovalSignaturesTable` off `Loo::approvalSteps()`. See [Approval signatures](#approval-signatures) below. |
+| `{{approval_signatures}}` | Approval Signatures | `html` | The approvals of the offer's current approval chain by steps marked to sign the document, in chain order: each approver's signature (or a blank signing line), name and role. Empty until a marked step is approved, and refreshed as the chain moves. | **Computed.** `ApprovalSignaturesTable` off `Loo::approvalSteps()`. See [Approval signatures](#approval-signatures) below. |
 
 ## System <sub>`system` · 4 tags</sub>
 
@@ -259,10 +259,15 @@ setting filled it has a section of its own even before a fee note is recorded (a
 
 ## Approval signatures
 
-`{{approval_signatures}}` prints the **last two `approved` steps of the current approval attempt**
-(the highest two `step_order`s) as a full-width table of two cells: the earlier approval on the
-left and the later one on the right. With only one approval it sits in the left cell and the right
-cell is blank. With none, the tag resolves to `null`.
+`{{approval_signatures}}` prints the **`approved` steps of the current approval attempt that are
+marked to sign the document** (`approval_steps.signs_document_signature`), in `step_order`, as one
+full-width row with a cell per signer: a lone signer sits on the right, two sit left and right,
+three or more run left, centred, right. An approved step that is not marked does not print. With
+no marked step approved, the tag resolves to `null`.
+
+The flag is copied from the template step onto the document's step when the chain starts, so a
+template marked later does not reach chains already running until
+`php artisan approvals:stamp-signing-steps` copies it across (see below).
 
 Each cell holds:
 
@@ -274,8 +279,64 @@ Each cell holds:
 **It stays current with the chain.** The approval framework calls `Loo::approvalChainMoved()` inside
 its transaction whenever a step is approved, a push-back resets steps, a returned offer is
 resubmitted, or a new attempt opens. That call re-resolves only this tag (not forced, so a hand
-correction stands). A signature saved or changed later does not re-print an offer by itself; the
-offer picks it up the next time its chain moves.
+correction stands). The tag is also re-read on every export and HTML render of an offer that has
+not been sent, and on every unsent offer a user signed when they save a new signature on their
+profile. Once an offer is sent it keeps what it was sent with.
+
+### When a signer is missing
+
+Usually the signer's step is not marked to sign, not a stale value. Check in this order:
+
+1. **The step is not marked.** Mark the step on the approval template, then copy the flag onto
+   existing chains:
+
+   ```
+   php artisan approvals:stamp-signing-steps --dry-run
+   php artisan approvals:stamp-signing-steps
+   ```
+
+   A document's step takes the flag of the template step with the same `step_order` and role.
+   When nothing matches on both, which happens once a step has been removed from the template and
+   the ones after it moved up, it takes the flag of the template step with the same role, as long
+   as that role appears only once on the template. A step whose role is no longer on the template
+   is left as it is. The command re-reads `{{approval_signatures}}` on every unsent offer whose
+   steps changed.
+2. **The value was typed over by hand** (`loo_tag_values.is_overridden`). Ordinary re-reads leave
+   it alone; `loos:resolve-tags --force` replaces it.
+3. **The offer was already sent.** Nothing re-reads it automatically; use `loos:resolve-tags`.
+   The PDF the tenant was sent is a filed copy and does not change.
+
+A signer with no saved PNG signature prints a blank signing line above their name. That is
+expected, not a missing signer.
+
+### Re-resolving an offer's tags
+
+```
+php artisan loos:resolve-tags 2808 --dry-run
+php artisan loos:resolve-tags 2808
+php artisan loos:resolve-tags 2808 2813 --tag=approval_signatures --force
+```
+
+Re-resolves the tag registry on the given offers whatever their status, the same pass a save of
+the offer runs. It is for offers that can no longer be edited (`approved`, `sent`, `accepted`).
+Before it writes anything, it prints for each offer:
+
+- the steps of the current approval attempt: order, role, status, who acted, whether the step
+  signs, and whether that person has a printable signature, with a note on each approved step that
+  will not print;
+- the tags whose stored value would change.
+
+| Argument / option | Meaning |
+|---|---|
+| `loo*` | Offer ids, one or more. Required |
+| `--tag=*` | Only these tag keys, repeatable (for example `--tag=approval_signatures`). Omit for the whole registry. An unknown key stops the run |
+| `--force` | Also replace values typed over by hand. Without it they are kept and listed |
+| `--dry-run` | Print the steps and what would change, and write nothing |
+
+Re-resolving the whole registry on an approved offer also re-reads the application, lease and
+property it prints, so a figure changed there since approval shows on the offer afterwards. The
+dry run lists those tags. Use `--tag` to touch only what needs fixing. On a sent offer the filed
+PDF the tenant received is unchanged. A new download prints the new values.
 
 The signature is stored in `loo_tag_values` as part of the value, because the value is what the
 editor preview, the PDF and the tenant's copy print. The sanitiser lets an `img` through only with
