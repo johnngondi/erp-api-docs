@@ -404,6 +404,40 @@ Either way:
 }
 ```
 
+#### Repair: emergencies sent to other suppliers
+
+Before the lock (October 2026) an emergency could go out to the rotation batch. The console
+command `php artisan procurement:lock-emergency-requests [request ids...] [--notify] [--dry-run]`
+puts every such request back on its locked supplier. It looks at emergency work requests that are
+`order`, whose procurement step is current and `waiting-quotes`, and that were not overridden
+(an overridden request was opened to the rotation by the officer and is left alone). The ids, when
+given, narrow the run to those requests.
+
+For each one, the locked supplier is the preferred supplier when there is one, else the default
+supplier found afresh (as on approval) and stamped as `default_vendor_id`, else the
+`default_vendor_id` the request already carries. A request with none is skipped and reported as
+`no-default`: set a default supplier, then run the command again. A request whose locked supplier
+already holds the only open invitation and no other supplier has a live quote is reported as
+`unchanged`. Otherwise, in one transaction per request:
+
+- every other supplier's open invitation is cancelled and their live quote shelved, with the
+  reason "Job Cancelled" (it does not say who keeps the job). With `--notify` they get the
+  `RfqCancelledNotification` email and in-app notice with that reason; without it they are not told;
+- the locked supplier keeps their invitation, or is added to the current round
+  (`is_default` / `is_preferred` set) when they were never asked. They are **not** sent an
+  invitation: the weekday 09:00 `procurement:remind-pending-quotes` run reminds them, because their
+  invitation is open, they have not quoted and the deadline is ahead;
+- if they already have a live quote, the quotes open at once, as for a locked supplier's quote
+  (`opened`);
+- if they had declined, the request is held for the officer as a decline under the lock is, with
+  the task "No quote from {supplier} - {title}" (`held`);
+- otherwise (`locked`) the deadline becomes `rfq_locked_vendor_deadline_days` working days from now, and any
+  shortfall and preliminary stage are cleared;
+- the request's pending tasks are synced (a shortfall task goes).
+
+The run prints one row per request (supplier, suppliers removed, quotes shelved, result) and
+changes nothing with `--dry-run`. Running it again changes nothing.
+
 ### Quote deadline
 
 The quote deadline is set by the system; no step sets or edits it. It is counted in **working
