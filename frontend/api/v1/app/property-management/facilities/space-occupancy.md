@@ -46,12 +46,17 @@ The status is then the first row below that matches:
 | Rent held **and** service charge held | `unavailable` | No |
 | Rent held, service charge free | `only service charge available` | No |
 | Rent free, service charge held | `only rent available` | Yes |
-| Neither held, but an open lease application targets the space | `under consideration` | No |
+| Neither held, but an open lease application targets the space | `under consideration` | Yes |
 | Neither held | `available` | Yes |
 
 `on notice` deliberately outranks `unavailable`: an exit notice on the rent lease
 means the rent is about to free up, which is what the application picker cares
 about.
+
+`under consideration` is still offered. An application holds nothing - it has not been
+issued a lease - so several applications may carry the same space at once, and the first
+one whose offer is [promoted to a lease](../lease-management/loo/loo.md#promote) wins
+it. Every later promotion over the same slot is refused.
 
 ## Recompute triggers
 
@@ -69,8 +74,8 @@ The recompute runs automatically whenever the truth can change:
 ## Application visibility
 
 When a tenant browses spaces to apply for, only spaces whose status is in the
-**visible** set above (`available`, `only rent available`, `on notice`) should be
-offered. Filter with the `visibleForApplication` scope, or by
+**visible** set above (`available`, `only rent available`, `under consideration`,
+`on notice`) should be offered. Filter with the `visibleForApplication` scope, or by
 `is_available_for_application` on the resource:
 
 ```

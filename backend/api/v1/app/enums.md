@@ -340,7 +340,7 @@ Serialized as `{ value, label, color }`. The status, together with `rent_occupie
 | `available` | `success` | No lease holds either the rent or the service charge. | Yes |
 | `only rent available` | `info` | A lease holds the service charge; the rent is free. | Yes |
 | `only service charge available` | `secondary` | A lease holds the rent; the service charge is free. | No |
-| `under consideration` | `secondary` | An open lease application targets this (otherwise free) space. | No |
+| `under consideration` | `secondary` | An open lease application targets this (otherwise free) space. Other applications may still take it; the first promoted to a lease wins. | Yes |
 | `on notice` | `warning` | The lease holding the rent has a pending exit notice. | Yes |
 | `unavailable` | `danger` | Separate (or the same) leases hold both the rent and the service charge. | No |
 

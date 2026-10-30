@@ -955,9 +955,12 @@ The two coexist and are never reconciled against each other. `residential_unit_t
 stays exactly as the applicant submitted it, so a shortfall between what was asked
 for and what was free stays visible rather than being quietly rewritten.
 
-Allocating a space marks it `under consideration`, which takes it out of
-`is_available_for_application` for everyone else. Approving or rejecting the
-application releases it again.
+Allocating a space marks it `under consideration`. That does **not** take it out of
+`is_available_for_application`: the application has not been issued a lease, so other
+applications may allocate the same space too. Whichever application's offer is
+[promoted to a lease](loo/loo.md#promote) first wins it, and promoting any other offer
+that grants the same slot is refused. Approving or rejecting the application releases the
+`under consideration` status again.
 
 ### Automatic allocation
 
@@ -971,7 +974,9 @@ It is provisional in three ways, all deliberate:
   does not fail, and the request still reads as five.
 - **Not exclusive.** Two applications submitted for the last free unit both get it.
   `under consideration` means someone is looking at it, not that it is taken —
-  choosing between competing applicants is a letting decision, not a queue.
+  choosing between competing applicants is a letting decision, not a queue. Free
+  (`available`, `only rent available`, `on notice`) spaces are picked before ones
+  already under consideration.
 - **Overridable.** These endpoints exist to correct it. Nothing re-runs the
   allocation afterwards, so editing an application's requested unit types will not
   undo staff's work.

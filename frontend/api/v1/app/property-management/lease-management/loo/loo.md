@@ -1179,6 +1179,20 @@ signing after the lease exists is exactly what should happen.
 Refused when the offer has not been sent, when it has already been promoted, and when it grants no
 spaces.
 
+**First to lease wins.** A space under consideration may sit on several applications, and so on
+several offers. The first offer promoted takes it: promotion is refused with a `422` keyed `loo`
+when another lease (`pending`, `active` or `suspended`) already holds the same slot - rent, service
+charge, parking fee or signage fee - on any space the offer grants. The message names the spaces.
+A lease on notice (pending exit notice) does not block, since its space is being given up. Nothing
+else changes on the losing offer or its application: staff withdraw or rebase it onto other spaces.
+
+```json
+{
+  "message": "Shop A1 has already been let under another lease, so this offer cannot be turned into one.",
+  "errors": { "loo": ["Shop A1 has already been let under another lease, so this offer cannot be turned into one."] }
+}
+```
+
 **Legal fees.** When the offer has legal fees (`has_lawyer`, not the property's
 `bill_legal_fees`) and its fee note totals more than zero (`legal_fee_total`), promotion
 adds a **zero-cost line** for the legal fees lease component to the lease's first space,
