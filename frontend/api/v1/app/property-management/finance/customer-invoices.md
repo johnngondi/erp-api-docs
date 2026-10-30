@@ -216,7 +216,13 @@ cleared); poll the detail or refresh. Once QuickBooks accepts it the invoice is 
 
 The landlord's customer is made a QuickBooks customer first when it is not one yet. Each line is sent
 as the QuickBooks item set for its fee type (settings `quickbooks_item_*`), with the VAT or no-tax code
-(`quickbooks_tax_code_*`). A retry never creates a second QuickBooks invoice.
+(`quickbooks_tax_code_*`). The invoice's `notes` go to both the QuickBooks "Note to customer"
+(`CustomerMemo`) and its "Memo" (`PrivateNote`).
+
+A retry never creates a second QuickBooks invoice. Each create carries a QuickBooks `requestid`, and
+a send whose outcome was unknown (QuickBooks unreachable, a server error, an answer without an
+invoice) is retried with the same one, so QuickBooks hands back the invoice it already made. A send
+QuickBooks refused is retried with a new one.
 
 `422` when:
 
