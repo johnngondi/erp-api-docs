@@ -275,6 +275,50 @@ The bill's **Print invoice** prints its customer invoice when the bill has no up
 invoice id, or download `GET /customer-invoices/{customerInvoice}/export?format=pdf`. A cancelled
 invoice does not print (`422`).
 
+Templates for it are designed like the other document types: pick **Customer invoice** in Settings →
+Document templates (`document_type=customer_invoice` on the registry, payload-schema and template
+endpoints). Its blocks: `customer_details`, `customer_billing_address`, `customer_invoice_details`,
+`customer_invoice_items`, `tax_summary`, `totals`, `document_notes`, `fiscal_qr`, and the shared
+ones (logo, company header, title, free text, divider).
+
+### Print payload
+
+The fields a template binds to, beyond the company and customer blocks:
+
+| Field | Value |
+|---|---|
+| `document.number` | `CI0012`, the ERP number |
+| `document.qbo_number` | The QuickBooks DocNumber, `null` until sent |
+| `document.invoice_number` | The QuickBooks DocNumber once sent, else `document.number`. The number the landlord knows the invoice by (`20702`) |
+| `document.issued_at` / `document.due_at` | `30 Sep, 2026` |
+| `document.signed_at` | When the ETR signed it, `30.09.2026 14:53:18`; `null` until signed |
+| `document.cu_invoice_number` / `cu_serial_number` / `verify_url` | The ETR's CU invoice number, serial number and KRA link (the `fiscal_qr` block) |
+| `items.item` | The fee (`Management Fee`, `Letting Fee`, `Re-letting Fee`), else the line's title |
+| `items.particulars` | The property and what the fee is for: `Jumuia Place I - Sep 2026`. The line's notes without the leading fee name, with the property in front when the notes do not already name it |
+| `items.notes` | The line's notes as billed (`Management Fee - Sep 2026`); this column prints the line's title in bold with the notes beneath |
+| `items.property` / `items.fee_type` | The line's property and fee |
+| `items.tax_label` | The line's tax as it is named (`16% S`) |
+| `items.quantity` / `cost` / `amount` / `tax` / `total` | `amount` is before tax |
+| `totals.amount` / `tax` / `total` | Sub total, tax, total |
+| `totals.total_due` | The total with its currency: `KES 586,205.81` |
+| `tax_summary.label` | `VAT @ 16%`; a zero-rated or exempt tax prints its own name. Also on the tenant invoice, credit note and LPO tax summaries |
+| `tax_summary.name` / `rate` / `taxable` / `tax` | The tax's name, its rate as a fraction (`0.16`), the amount before tax and the tax on it |
+
+`totals.paid` and `totals.balance` are always `null`: a customer invoice's payments are kept in
+QuickBooks.
+
+The `fiscal_qr` block (all fiscal documents) has two options, both off by default:
+`label_cu_numbers` prints `Invoice No.: …` and `Serial No.: …` rather than the bare numbers, and
+`show_signed_at` adds `document.signed_at` after the serial number (on its own line when the serial
+is hidden). Only the customer invoice carries `document.signed_at`.
+
+The new fields (`document.invoice_number`, `document.signed_at`, `items.item`, `items.particulars`,
+`items.tax_label`, `totals.total_due`, `tax_summary.label`) are off on templates saved before them:
+those templates keep the fields they printed and gain the new ones only when picked in the designer.
+The standard template of a new company is laid out as the invoice the landlord used to receive:
+item, particulars, tax and amount columns, sub total, tax, total and total due, the tax summary, and
+the fiscal QR with the ETR signing time.
+
 ## Where customer invoices come from
 
 - **Management fee**: each remittance that charges a management fee raises a management fee bill to
