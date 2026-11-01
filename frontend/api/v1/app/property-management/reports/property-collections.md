@@ -72,9 +72,9 @@ Three levels, always in this order:
 
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `lease-components` | `By Lease Component` | one row per lease component billed or collected anywhere in scope, ordered by name, then a `Total` `subtotal` row |
-| `all-properties` | `All Properties` | one row per property in scope, ordered by landlord then name, then a `Total` `subtotal` row |
-| `landlord-{id}` | the landlord's name, or `Unassigned` | that landlord's properties only, then its own `Total` row |
+| `lease-components` | `By Lease Component` | one row per lease component billed or collected anywhere in scope, ordered by component name, then a `Total` `subtotal` row |
+| `all-properties` | `All Properties` | one row per property in scope, ordered by property name, then a `Total` `subtotal` row |
+| `landlord-{id}` | the landlord's name, or `Unassigned` | one per landlord, by landlord name with `Unassigned` last: that landlord's properties only, ordered by property name, then its own `Total` row |
 
 The landlord buckets carry an extra header key:
 
@@ -89,6 +89,23 @@ identical by construction. The landlord buckets add back up to `all-properties`.
 
 **A property with nothing billed and nothing collected still gets a row**, all zeros, rather than
 being dropped — so the reader sees that it collected nothing instead of wondering where it went.
+
+### Bucket and row order
+
+- The **landlord buckets** are ordered by landlord **name**, case-insensitively, with
+  **`Unassigned`** (`landlord-0`) **last**. Every property whose landlord cannot be resolved joins
+  that one `landlord-0` bucket. This order is fixed: `sort` re-orders rows, never buckets.
+- Default row order in each bucket (`header.sort.default`):
+
+  | `bucket` | Default order |
+  |---|---|
+  | `lease-components` | component name: `["component"]` |
+  | `all-properties` | property name: `["property"]`. Rows are **no longer grouped by landlord**; the landlord buckets do that |
+  | `landlord-{id}` | property name: `["property"]` |
+
+Re-sort any bucket with [`sort`](./README.md#sorting-rows--sort), for example
+`sort[landlord-{id}]=-variance` to put the worst shortfall first, and the `Total` row stays last.
+[`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ## Columns
 

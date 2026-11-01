@@ -89,12 +89,19 @@ Always in this order:
 
 | `bucket` | When | `header.label` | Rows |
 |---|---|---|---|
-| `all-properties` | always, first | `By Property` | one per property with lines, sorted by name, then a `Total` row |
-| `overview` | always, second | `All Withholdings`, or `{tax name} Withheld` when one tax is selected | every withholding line, in posting date order, then a `Total` row |
-| `property-{id}` | one per property **with lines**, sorted by name | the property's name | that property's lines only, like `overview`, then its own `Total` row |
+| `all-properties` | always, first | `By Property` | one per property with lines, sorted by property name, then a `Total` row |
+| `overview` | always, second | `All Withholdings`, or `{tax name} Withheld` when one tax is selected | every withholding line, ordered by supplier, then posting date, then line, then a `Total` row |
+| `property-{id}` | one per property **with lines**, sorted by property name (case-insensitive) | the property's name | that property's lines only, ordered like `overview`, then its own `Total` row |
 
 A property bucket's `header` also carries `property { id, name }`; use it rather than parsing the
 `bucket` id. A property with no withholding lines in the period appears in no bucket.
+
+**Row order.** `all-properties` defaults to property name (`header.sort.default` `["property"]`).
+`overview` and every `property-{id}` default to `["supplier", "invoice_posted_at"]`. Ties keep the
+report's own order, by withholding line. The `property-{id}` buckets are ordered by property name,
+case-insensitively, then id, and that order is fixed. Re-sort rows with [`sort`](./README.md#sorting-rows--sort),
+for example `sort[property-{id}]=-amount_withheld` for every property bucket at once. The `Total`
+row stays last. A key naming a `tax_{id}` column the period does not produce is dropped. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ### `all-properties` — properties × withholding taxes
 

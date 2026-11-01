@@ -78,8 +78,11 @@ GET …/reports/suppliers/expenditure-reports/expenses-summary?period_from=2026-
 | `expense-categories` | `By Expense Category` | expense category, then a `Total` subtotal row |
 | `expense-types` | `By Expense Type` | expense type, then a `Total` subtotal row |
 
-Always both, in that order. Rows are ordered by **total descending** (then by name). Each bucket's
-`header` also carries `currency` (same as `header.currency`).
+Always both, in that order. By default rows are ordered by **total descending**, then by name
+(`header.sort.default` `["-total", "name"]`). Each bucket's `header` also carries `currency` (same as
+`header.currency`). Re-sort either bucket with [`sort`](./README.md#sorting-rows--sort), for example
+`sort[expense-types]=name` or `=-period_0`; the `Total` row stays last.
+[`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ## Columns — generated from the cycle
 

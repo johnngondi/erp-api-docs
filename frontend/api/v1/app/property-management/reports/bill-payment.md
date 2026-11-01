@@ -83,8 +83,15 @@ GET …/reports/suppliers/expenditure-reports/bill-payment?period_from=2026-04-0
 
 ## Bucket
 
-One bucket, `overview` (`header.label`: `Bill Payments`): one row per payment, oldest payment first,
-then a closing `Total Paid` row.
+One bucket, `overview` (`header.label`: `Bill Payments`): one row per payment, then a closing
+`Total Paid` row.
+
+By default the rows are ordered by supplier, then property, then payment date
+(`header.sort.default` `["supplier", "property", "payment_date"]`). Ties keep the report's own order,
+by voucher line. Re-sort
+with [`sort[overview]`](./README.md#sorting-rows--sort), for example `sort[overview]=-payment_amount`.
+The closing row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported. The `togglable` voucher columns
+are left out of an export when the user has hidden them.
 
 ## Columns
 

@@ -79,6 +79,10 @@ Always both, in this order:
 | `overall` | `By Expense Type` | expense type, then a `Total` subtotal row |
 | `overview` | `Supplier Contracts` | contract, then a subtotal row |
 
+Re-sort either bucket with [`sort`](./README.md#sorting-rows--sort), for example
+`sort[overview]=end_date` for the contracts ending soonest (open-ended contracts go last). The closing
+row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
+
 **Both buckets are built from the same contracts**, so the `overall` `Total` row's `contract_count`
 and `total_value` equal the number of `overview` rows and the sum of their `contract_value`. The two
 bucket `summary` objects are identical.
@@ -91,7 +95,8 @@ bucket `summary` objects are identical.
 | Contracts | `contract_count` | integer |
 | Total Value | `total_value` | money, `grosstotal` |
 
-Rows are ordered by `total_value` descending, then by name. The closing row is `Total`, with
+By default rows are ordered by `total_value` descending, then by name (`header.sort.default`
+`["-total_value", "expense_type"]`). The closing row is `Total`, with
 `type: subtotal` and `background_color: secondary`.
 
 ### `overview` columns
@@ -107,7 +112,8 @@ Rows are ordered by `total_value` descending, then by name. The closing row is `
 | Status | `status` | string | the status as shown (see above); the cell carries its colour (`pending` warning, `active` success, `suspended` secondary, `expired` danger, `inactive` none, `rejected` danger) |
 | Withholding Taxes | `withholding_taxes` | string | every tax in `facility_contracts.withholding_tax_ids`, by name, **comma-separated in one cell** (e.g. `WHT 5%, VAT WH 2%`); `null` when none |
 
-Rows are ordered by supplier, then property, then start date. The closing row is a label
+By default rows are ordered by supplier, then property, then start date (`header.sort.default`
+`["supplier", "property", "start_date"]`). The closing row is a label
 (`Total (N contracts)`) with `col_span: 3`, then `contract_value`; the other keys are omitted. It has
 `type: subtotal` and `background_color: secondary`.
 

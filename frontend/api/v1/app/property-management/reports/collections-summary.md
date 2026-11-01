@@ -78,12 +78,30 @@ The same three levels as Property Collections, always in this order:
 
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `lease-components` | `By Lease Component` | one row per lease component collected anywhere in scope, ordered by name, then a `Total` `subtotal` row |
-| `all-properties` | `All Properties` | one row per property in scope, ordered by landlord then name, then a `Total` `subtotal` row |
-| `landlord-{id}` | the landlord's name, or `Unassigned` | that landlord's properties only, then its own `Total` row |
+| `lease-components` | `By Lease Component` | one row per lease component collected anywhere in scope, ordered by component name, then a `Total` `subtotal` row |
+| `all-properties` | `All Properties` | one row per property in scope, ordered by property name, then a `Total` `subtotal` row |
+| `landlord-{id}` | the landlord's name, or `Unassigned` | one per landlord, by landlord name with `Unassigned` last: that landlord's properties only, ordered by property name, then its own `Total` row |
 
 Landlord buckets carry `header.landlord` `{ id, name }`, `null` where the properties have no landlord
 (the bucket id is then `landlord-0`). A property that collected nothing still gets a row, all zeros.
+
+### Bucket and row order
+
+- The **landlord buckets** are ordered by landlord **name**, case-insensitively, with
+  **`Unassigned`** (`landlord-0`) **last**. Every property whose landlord cannot be resolved joins
+  that one `landlord-0` bucket. This order is fixed: `sort` re-orders rows, never buckets.
+- Default row order in each bucket (`header.sort.default`):
+
+  | `bucket` | Default order |
+  |---|---|
+  | `lease-components` | component name: `["component"]` |
+  | `all-properties` | property name: `["property"]`. Rows are **no longer grouped by landlord**; the landlord buckets do that |
+  | `landlord-{id}` | property name: `["property"]` |
+
+Re-sort any bucket with [`sort`](./README.md#sorting-rows--sort), for example
+`sort[landlord-{id}]=-total` (or a period column such as `-period_0`), and the `Total` row stays last.
+A key naming a period column this window does not produce is dropped.
+[`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ## Columns — generated at runtime
 

@@ -74,8 +74,8 @@ share, and is `null` when they report in different currencies.
 
 | `bucket` | When present | `header.label` | Rows |
 |---|---|---|---|
-| `overall` | always, first | `Portfolio Total` | one `subtotal` row, `All landlords` |
-| `landlord-{id}` | one per landlord in scope, **sorted by landlord name** | the landlord's name | one row per property, then a `subtotal` row |
+| `overall` | always, first | `Portfolio Total` | one `subtotal` row, `All landlords`. **`sortable: false`** |
+| `landlord-{id}` | one per landlord in scope, **sorted by landlord name**, `Unassigned` last | the landlord's name | one row per property, then a `subtotal` row |
 
 - **Landlord is the grouping and property is the row.** A landlord's bucket holds every one of their
   properties in scope and nothing else.
@@ -83,7 +83,13 @@ share, and is `null` when they report in different currencies.
   property is simply another property, and it is never merged into the building it serves.
 - Each `landlord-{id}` bucket `header` adds `landlord` — `{ id, name }`. A property with no landlord
   falls under `landlord-0`, labelled `Unassigned`, with `landlord: null`.
-- Rows within a bucket are sorted by property name.
+- **Bucket and row order.** The `landlord-{id}` buckets are ordered by landlord **name**,
+  case-insensitively (ties by landlord id), with **`Unassigned`** (`landlord-0`) **last**. That
+  order is fixed. `overall` is [`sortable: false`](./README.md#buckets-that-are-never-sorted). Within
+  each bucket, rows default to property name (`header.sort.default` `["property"]`). Re-sort with
+  [`sort`](./README.md#sorting-rows--sort), for example `sort[landlord-{id}]=-management_fees`.
+  The `subtotal` row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and
+  exported.
 
 ## Columns
 

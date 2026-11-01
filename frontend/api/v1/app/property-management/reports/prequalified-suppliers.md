@@ -92,11 +92,16 @@ In this order:
 | `sub-type-{id}` | `{sub-category} ({expense type})`, or just the sub-category when it has no expense type | one per sub-category with **at least one listed supplier** | supplier, then a subtotal row |
 
 Sub-categories are ordered by expense type name (untyped last), then by sub-category name, in the
-overview and across the `sub-type-{id}` buckets alike. **A sub-category with no listed supplier gets
+overview and across the `sub-type-{id}` buckets alike. `overview` has **no configured default sort**
+(`header.sort.default` is `[]`): it keeps that order until the user sorts it. **A sub-category with no listed supplier gets
 an overview row but no bucket of its own.** With `supplier_id`, it gets neither.
 
 Each `sub-type-{id}` bucket header also carries `expense_type` (`{ id, name }`, or `null`) and
 `expense_sub_type` (`{ id, name }`).
+
+Either bucket can be re-sorted with [`sort`](./README.md#sorting-rows--sort), for example
+`sort[sub-type-{id}]=prequalified,supplier` (`No` sorts before `Yes`), and the subtotal row stays last.
+[`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ### `overview` columns
 
@@ -126,7 +131,7 @@ sub-category. The closing row is a label `Total` with `col_span: 2`, then `suppl
 | Properties | `properties` | string | `All properties` when the row's list is `null`; otherwise the names of its properties that you are allocated to, comma-separated and sorted; `null` when it names none you can see |
 | Default In | `default_in` | string | where the supplier is the default, comma-separated: `Category default` when they are the sub-category's `default_vendor_id`, then the property named by `is_default_in_facility_id` (if you are allocated to it). Only filled when the sub-category allows a default supplier; `null` otherwise |
 
-Rows are ordered by supplier name. The closing row is a label
+Rows default to supplier name (`header.sort.default` `["supplier"]`). The closing row is a label
 (`Total (N suppliers, M prequalified)`) with `col_span: 8`, so every other key is omitted. It has
 `type: subtotal` and `background_color: secondary`.
 

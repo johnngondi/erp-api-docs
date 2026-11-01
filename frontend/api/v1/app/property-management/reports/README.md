@@ -16,9 +16,10 @@ future one without hardcoding columns or colours. Each per-report page (e.g.
 that report: its extra filters, its buckets, and its numbers.
 
 > **One exception to "global filters".** [trial-balance.md](./trial-balance.md) is a company-wide
-> accounting snapshot rather than a party report: it takes **none** of the global filters (no
-> landlord, property, bucket or block/wing/floor selection) and has no `period` in its `header` —
-> only `as_at` and `currency_id`. Everything else on this page still applies to it unchanged.
+> accounting snapshot rather than a party report: it takes **none** of the scope filters (no
+> landlord, property or block/wing/floor selection) and has no `period` in its `header` —
+> only `as_at` and `currency_id`, plus the output-shaping `buckets`, `sort` and `columns` every report
+> takes. Everything else on this page still applies to it unchanged.
 
 ## What a report is
 
@@ -29,8 +30,11 @@ that report: its extra filters, its buckets, and its numbers.
   [`GET /reports`](#discovering-reports--get-reports) lists every report the caller may view with
   its URL, filters, buckets and export details. Build the nav from that, call the report's URL,
   and render the returned buckets. Never assume a fixed column set — read `fields`.
-- **Returned whole** — there is no pagination, sort, or include; a report is computed for the
-  resolved period and returned in full.
+- **Returned whole** — there is no pagination or include; a report is computed for the resolved
+  period and returned in full.
+- **Sorted and trimmed on the server** — each bucket comes back in its default order, or in the
+  order the request asks for with [`sort`](#sorting-rows--sort); [`columns`](#choosing-columns--columns)
+  picks which columns show. Both apply to the export too, so the file matches the screen.
 
 ---
 
@@ -206,7 +210,7 @@ drift from what the endpoint actually accepts.
 ```jsonc
 {
   "name": "currency_id",
-  "type": "integer",                          // integer | string | date | enum | boolean | number | array
+  "type": "integer",                          // integer | string | date | enum | boolean | number | array | object
   "required": false,                          // true only for a param the endpoint rejects when absent
   "default": "Each property's reporting currency",   // what omitting it means — prose, not a literal value
   "description": "The currency multi-property figures are converted to; …",
@@ -245,6 +249,26 @@ A **list filter** (see [Global filters](#global-filters)) is described with `typ
 }
 ```
 
+`sort` and `columns` are described as an **`object`** keyed by bucket id. `values` lists the
+bucket ids and patterns it may be keyed by, and `items` describes each entry: a list of field keys,
+with the key `pattern` and the most keys one entry may hold (`max_items`):
+
+```jsonc
+{
+  "name": "sort",
+  "type": "object",
+  "required": false,
+  "default": "…",
+  "description": "…",
+  "values": ["overview", "property_{id}"],    // the bucket ids and patterns it may be keyed by
+  "items": {
+    "type": "array",
+    "items": { "type": "string", "pattern": "^-?[a-z0-9_]+$" },   // columns: "^[a-z0-9_]+$"
+    "max_items": 5                                               // columns: 200
+  }
+}
+```
+
 A superseded filter that is still accepted carries `deprecated` and the filter that replaced it.
 Don't render it as its own control — the replacement covers it:
 
@@ -258,7 +282,7 @@ Don't render it as its own control — the replacement covers it:
 
 **Order.** The params the report's validation class declares come first, in declaration order
 (the global scalars, then the report's own). The list filters follow, always in this order:
-`landlord_ids`, `facility_ids`, `buckets`, then — on the fourteen
+`landlord_ids`, `facility_ids`, `buckets`, `sort`, `columns`, then — on the twelve
 [tenant reports](#splitting-by-block--wing--floor) only — `facility_block_ids`,
 `facility_wing_ids`, `facility_floor_ids`.
 
@@ -281,7 +305,8 @@ to expect.
 
 `fields` are the [column definitions](#fields--column-definitions) the report declares up front
 (`label`, `key`, `format`, `type`, `weight`, `background_color`, `alignment`, `visible`,
-`togglable`). Where `dynamic_columns` is set, the live response splices extra columns in at the
+`togglable`, `sortable`). A column that is [hidden because it is empty](#empty-columns-start-hidden)
+is only known at run time, so the catalogue never carries `empty`. Where `dynamic_columns` is set, the live response splices extra columns in at the
 position it describes — **always render from the response's own `fields`**; the catalogue tells
 you what to expect, the response tells you what you got.
 
@@ -354,7 +379,11 @@ GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facil
 - **It accepts every filter its report accepts** — same flat param names, same defaults, including
   that report's extra filters. The export is a rendering of the same generated report, so the
   frontend exports exactly what the user is looking at by **replaying the current query string with
-  `format` appended**.
+  `format` appended**. That query string includes the user's [`sort`](#sorting-rows--sort), so the
+  file comes out in the order on screen. The export prints **only visible columns** (see
+  [Exports print only visible columns](#exports-print-only-visible-columns)), so the frontend also
+  adds [`columns`](#choosing-columns--columns) for each bucket where the user changed the column
+  toggles.
 - `format` is **required** and must be `excel` or `pdf`. Anything else ⇒ `422` on `format`.
 
 > Exports return an attachment immediately. Use `format=excel` for an `.xlsx` workbook or
@@ -377,7 +406,8 @@ GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facil
 > appended — `Summary (KES)` — using the bucket's own `header.currency` when it has one, else the
 > report's (`header.property.currency`, then `header.currency`). The Excel sheet's first row carries
 > the same title. The PDF shrinks a wide bucket's table text (down to 5px from the normal 10px) so
-> every column fits the page width; padding and the total-row size steps shrink with it.
+> every column fits the page width; padding and the total-row size steps shrink with it. Only the
+> **visible** columns count towards that width, so hiding columns lets the text grow back.
 
 #### The PDF first page and footer
 
@@ -426,10 +456,11 @@ GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facil
 ## Global filters
 
 Every report except Trial Balance supports these filters (defined on the shared
-`App\Data\Reports\ReportFilterData`). Individual reports may add their own on top (e.g. Billings &
+`App\Data\Reports\ReportFilterData`). Trial Balance takes only the output-shaping three: `buckets`,
+`sort` and `columns`. Individual reports may add their own on top (e.g. Billings &
 Collections adds `leases_status`, `expense_category_id`, `lease_component_id`; Income & Expenditure
 adds `report_type` for period grouping, `account_id`, and a `currency_id` required for
-multi-property roll-ups). The fourteen tenant reports also take the block / wing / floor lists — see
+multi-property roll-ups). The twelve tenant reports also take the block / wing / floor lists — see
 [Splitting by block / wing / floor](#splitting-by-block--wing--floor).
 
 | Param | Type | Meaning when omitted |
@@ -441,6 +472,8 @@ multi-property roll-ups). The fourteen tenant reports also take the block / wing
 | `period_from` | date `Y-m-d` | **Start of the current month** |
 | `period_to` | date `Y-m-d` | **End of the current month** |
 | `buckets` | list of bucket ids | Every bucket — see [Selecting buckets](#selecting-buckets--buckets) |
+| `sort` | map: bucket id → field keys | Each bucket in its default order — see [Sorting rows](#sorting-rows--sort) |
+| `columns` | map: bucket id → field keys | Each field's own `visible` — see [Choosing columns](#choosing-columns--columns) |
 | `landlord_id` | `users.id` — **deprecated**, use `landlord_ids` | — |
 | `facility_id` | `facilities.id` — **deprecated**, use `facility_ids` | — |
 
@@ -545,9 +578,252 @@ GET …/reports/tenants/billings-and-collections?facility_ids[]=1&buckets[]=over
 
 ---
 
+## Sorting rows — `sort`
+
+Any bucket can be re-ordered by its columns. **The server does the sorting**, so the table on screen,
+the Excel sheet and the PDF page come out in the same order. A bucket the request does not sort comes
+back in its **default order**: on most reports that is alphabetical by the tenant, property, landlord
+or supplier each row names. Each report's page lists its defaults, and every response states them in
+[`header.sort`](#headersort--the-order-a-bucket-is-in).
+
+```
+GET …/reports/tenants/billings-and-collections?sort[overview]=name,-balance_cf
+GET …/reports/tenants/billings-and-collections?sort[overview][]=name&sort[overview][]=-balance_cf
+GET …/reports/tenants/ageing-report?sort[property-{id}]=-total&sort[property-12]=tenant
+```
+
+- **One entry per bucket.** `sort[{bucket}]` holds that bucket's sort keys as a comma-separated
+  string or as an array. The two forms are equivalent; the first two lines above are the same request.
+- **Keys are field `key`s of that bucket, in priority order.** The first key sorts the rows, the
+  second breaks its ties, and so on. A leading `-` sorts that key **descending** (`-balance_cf`); no
+  prefix sorts it ascending.
+- **`{bucket}` is a bucket id or a declared pattern.** A produced id (`overview`, `property_12`)
+  sorts that bucket. A declared pattern (`property_{id}`) sorts **every** bucket of that pattern.
+  When both name the same bucket, **the literal id wins**: in the third line `property-12` is sorted
+  by tenant and every other property bucket by `-total`. Patterns keep each report's own spelling
+  (`property_{id}`, `property-{id}`, `landlord-{id}`), exactly as for [`buckets`](#selecting-buckets--buckets).
+  Encode the braces if your HTTP client does not (`sort[property-%7Bid%7D]`).
+- **Buckets you don't name keep their default order.** Sorting one bucket never moves another.
+- **It applies to the view endpoint and its `/export` sibling alike.**
+
+Each of these is a `422`, keyed on the bucket's entry, `sort.{bucket}`:
+
+| Failure | Message |
+|---|---|
+| a bucket id the report does not declare (the same rule as `buckets`) | `The bucket weekly_totals is not one this report returns.` |
+| a key that is not a bare field key: it must match `^-?[a-z0-9_]+$` (lower-case letters, digits and underscores, with an optional leading `-`) | `The key Name is not a valid field key.` |
+| more than **5** keys for one bucket | `No more than 5 keys may be given for the bucket overview.` |
+
+```json
+{
+  "message": "The bucket weekly_totals is not one this report returns.",
+  "errors": { "sort.weekly_totals": ["The bucket weekly_totals is not one this report returns."] }
+}
+```
+
+A `sort` that is not keyed by bucket (`?sort=name`) fails the `array` rule on `sort` itself.
+
+A well-formed key that is **not a sortable field of that bucket in this run** is **dropped
+silently**. It is not an error. Dynamic columns such as `component_{id}` or `period_3` exist only
+at run time, so a sort saved against one month's columns keeps working in a month where the column
+is absent. A key on a field marked `sortable: false` is dropped the same way, and a `sort[…]` entry
+aimed at a [`sortable: false` bucket](#buckets-that-are-never-sorted) is ignored (still `200`).
+**When none of the keys survives, the bucket falls back to its default order** and
+`header.sort.source` reads `default`. `header.sort.applied` shows the keys that were actually used.
+
+### `header.sort` — the order a bucket is in
+
+Every sortable bucket's `header` carries a `sort` object:
+
+```jsonc
+"header": {
+  "label": "Summary",
+  "sort": {
+    "applied": ["name", "-balance_cf"],          // the keys actually used, after unknown ones were dropped
+    "default": ["name", "property", "lease_id"],  // the bucket's configured default order
+    "source": "user"                              // "user" when this request's sort[…] for the bucket was used, else "default"
+  }
+}
+```
+
+- **`applied`** drives the column-header arrows. A bare key is sorted ascending and a `-key`
+  descending. Its position in the list is its priority.
+- **`default`** is the order the bucket falls back to. It is `[]` for a bucket that has no configured
+  default and keeps the order the report builds it in. When `source` is `default`, `applied` equals
+  `default`, minus any default key this run does not produce.
+- **`source`** tells you whether the order on screen is the user's choice or the bucket's default.
+  It is `user` only when at least one of the request's keys for that bucket was applied. A request
+  whose keys were all dropped reads `default`.
+- **A [`sortable: false`](#buckets-that-are-never-sorted) bucket has no `header.sort`.** Use its
+  absence to switch the header click off for the whole bucket.
+
+### How rows are ordered
+
+- **Only data rows move.** A row moves when its `type` is `normal` and none of its cells has
+  `col_span > 1`. Every other row is an **anchor** and stays at its index: `subtotal` and
+  `grosstotal` rows, Total rows, section banners and label rows.
+- **Each run of data rows between two anchors is sorted on its own**, so grouped buckets stay
+  grouped. Property Expenses' `summary_by_type` sorts the sub-types inside each expense type's
+  banner and subtotal, never across types. A bucket's closing Total row always stays last.
+- **Comparison follows the field's `format`**, and compares the cell's raw value, not how a
+  renderer would format it:
+
+  | `format` | Compared as |
+  |---|---|
+  | `money`, `integer`, `number`, `percentage` | numbers |
+  | `date`, `datetime` | the ISO value as a string, which sorts chronologically |
+  | `id` | numbers when both values are numeric, otherwise text |
+  | `string` and anything else | text, **case-insensitive natural order**: `acme` and `ACME` are equal, and `Unit 2` comes before `Unit 10` |
+
+  Display-formatted dates and percentages sort by what they mean. A `string` cell such as
+  `12 Jul, 2026` sorts **chronologically**, and `86.48 %` sorts **numerically**: the server compares
+  them by their underlying date or number. That comparison value never appears in the payload.
+
+- **Blanks go last in both directions.** `null`, `''`, the placeholder `—` and an absent cell are
+  blank. They sit at the bottom whether the key is ascending or descending, so a descending sort
+  never opens on a run of empty cells.
+- **Ties keep their incoming order.** The sort is stable, so rows that tie on every key stay in
+  the order the report built them in, and that order is the final tie-break.
+- **Tree buckets are never sorted.** A bucket whose items carry `children` (the
+  [Tenancy Schedule](./tenancy-schedule.md)) keeps its structure.
+
+### Buckets that are never sorted
+
+Some buckets are **layouts**: the row order is the content. Examples are a statement, a budget or an
+ageing profile whose rows are the bands. Such a bucket is declared `sortable: false`. Then:
+
+- every field in it comes back `sortable: false`;
+- its `header` has no `sort`;
+- a `sort[…]` entry naming it is accepted, because the id is declared, and its keys are dropped.
+
+The bucket ids themselves are ordinary, so `buckets`, `columns` and the export treat it like any other.
+Each report's page says which of its buckets are `sortable: false`. Today they are Income &
+Expenditure and Facility Budget (all buckets), the Excess Service Charge statements, the `overall`
+buckets of Management Fee and Property Status, the Ageing Report's `overall` bands, Trial Balance
+and Tenancy Schedule. Tenancy Schedule is a tree: a tree bucket gets the same treatment, with
+`sortable: false` on every field and no `header.sort`.
+
+A single **field** can be `sortable: false` in a bucket that otherwise sorts. Don't offer a sort on
+that column.
+
+### Sorting from the column headers
+
+The frontend sorts DataTable-style:
+
+1. A click on a sortable column header cycles that column **ascending → descending → off**.
+2. **Several columns stack.** Each column the user turns on is added to the end of the bucket's list
+   as the next tie-break. Turning a column off removes it, and the others keep their order. Cap the
+   list at 5. The user's list starts **empty**, not as a copy of the default. While `source` is
+   `default` the arrows show the default keys, but the first click starts a new list with only that
+   column.
+3. Send the list as `sort[{bucket}]`, one entry per bucket the user has sorted. When a bucket's list
+   is empty, **omit its entry**: the bucket goes back to its default order and `header.sort.source`
+   reads `default`.
+4. Draw the arrows from `header.sort.applied` in the response, not from local state, so the screen
+   shows the order the server actually used.
+5. Offer no click on a field with `sortable: false`, and none anywhere in a bucket without
+   `header.sort`.
+
+Exports replay the same query string, so the user's sort goes into the file without extra work.
+
+---
+
+## Choosing columns — `columns`
+
+`columns[{bucket}]` lists the field keys to **show** in that bucket. It exists for the export: the
+frontend sends the columns the user has on screen, so the PDF and Excel print the same ones.
+
+```
+GET …/reports/tenants/billings-and-collections/export?format=pdf
+    &columns[overview]=lease_id,name,balance_bf,total_billings,total_collections,balance_cf
+    &columns[summary_by_property][]=name&columns[summary_by_property][]=component_1_billings&columns[summary_by_property][]=total_billings
+```
+
+- A comma-separated string or an array, as with `sort`. **The bucket-id rules are the same:** a
+  produced id or a declared pattern, and a literal id wins over a pattern.
+- **Listed keys come back `visible: true`. Every other field of that bucket comes back
+  `visible: false`**, fixed (`togglable: false`) fields included. Send the **complete** list of
+  visible columns, not only the ones the user toggled.
+- Unknown keys are ignored. An **empty list, or one that names no field of the bucket, is treated
+  as not given**: the bucket keeps its own `visible` flags.
+- **Buckets you don't name keep their own `visible` flags**, so a client may send `columns` for any
+  subset of buckets. The ERP frontend sends it only for buckets where the user's toggles differ from
+  the response.
+- `columns` sets visibility only. Columns stay in `fields` order, whatever order you list them in.
+- It is applied on the view endpoint too. That is harmless, and it keeps the view and the export
+  consistent.
+
+Each of these is a `422`, keyed on `columns.{bucket}`: a bucket id the report does not declare, a key
+that does not match `^[a-z0-9_]+$` (no `-` here), or more than **200** keys for one bucket. The
+messages are the same as for [`sort`](#sorting-rows--sort).
+
+Neither `sort` nor `columns` is echoed in `header.filters`. Read the effective order from
+`header.sort` and the effective visibility from each field's `visible`.
+
+```jsonc
+// …/billings-and-collections?columns[overview]=lease_id,name,balance_cf → the overview bucket's fields
+[
+  { "label": "Lease",       "key": "lease_id",            "visible": true,  "togglable": false, "sortable": true, … },
+  { "label": "Landlord ID", "key": "landlord_identifier", "visible": false, "togglable": true,  "sortable": true, … },
+  { "label": "Tenant",      "key": "name",                "visible": true,  "togglable": false, "sortable": true, … },
+  { "label": "Balance B/F", "key": "balance_bf",          "visible": false, "togglable": true,  "sortable": true, … },
+  …
+  { "label": "Balance C/F", "key": "balance_cf",          "visible": true,  "togglable": false, "sortable": true, … }
+]
+```
+
+### Empty columns start hidden
+
+A column with nothing in it is noise in a wide table. When **every data row** of a bucket has a
+blank cell in a text, id or date column, the column comes back hidden but still togglable:
+
+```jsonc
+{ "label": "Landlord ID", "key": "landlord_identifier", "format": "string", …,
+  "visible": false, "togglable": true, "sortable": true, "empty": true }
+```
+
+- **Only non-numeric columns are checked.** That means every format except `money`, `integer`,
+  `number` and `percentage`. A money column of zeros is information, and it always stays as declared.
+- "Blank" means the same as in sorting: `null`, `''`, `—`, or an absent cell.
+- **Only `normal` rows count.** A column whose only values sit on Total, subtotal or banner rows
+  counts as empty. A Total row's blank cell does not hide a column either.
+- **A bucket with no data rows hides nothing.** A bucket holding only its Total row keeps its declared columns.
+- The check runs **before** `columns`, so listing an empty column in `columns` shows it anyway. It
+  comes back `visible: true` and keeps `empty: true`.
+- A report can exempt a field (`'hide_when_empty' => false` in its config). That field keeps its
+  declared visibility even when blank.
+- `empty: true` is present only on a column the empty rule hid, and is omitted otherwise. It stays
+  when `columns` shows the column again. Use it in the column picker to say why a column is off
+  ("no values in this view").
+
+A typical case is **Landlord ID** (`landlord_identifier`) on a property whose leases carry none. It
+is `togglable: true` on every report, so the user can still turn it on.
+
+### Exports print only visible columns
+
+- The Excel and PDF writers **skip every field with `visible: false`**, after the empty-column check
+  and `columns` have been applied. The PDF's text scale is worked out from the visible columns only.
+- **Spans shrink with the columns they cover.** A cell with `col_span: N` covers N fields in the
+  full `fields` list. In the export its span becomes the number of those N that are **visible**,
+  with a minimum of 1. If the spanning cell's own field is hidden, the cell moves to the first
+  visible field it covers. Legal Fee Collection's subtotal label spans `tenant` … `unit`
+  (`col_span: 5`). With `landlord_identifier` hidden it spans 4 columns in the file.
+- The view endpoint keeps every field and every `col_span` as the report built them. A renderer that
+  skips hidden columns applies the same span rule on screen (see the
+  [render guide](#how-to-render-report-template)).
+
+> **Behaviour change.** Exports used to print **every** column, hidden ones included. The per-component
+> columns of Billings & Collections' `summary_by_property` (`visible: false` by default) appeared in
+> every PDF and Excel file. Now **a column that is `visible: false` is left out of the file unless
+> `columns[…]` lists it**. An export without `columns` prints each bucket's default visible set,
+> after empty columns are hidden. This is intended. To export a hidden column, turn it on (the
+> frontend then lists it in `columns`).
+
+---
+
 ## Splitting by block / wing / floor
 
-The fourteen **tenant reports** can be narrowed to part of a property:
+The twelve **tenant reports** can be narrowed to part of a property:
 [Billings & Collections](./billings-and-collections.md),
 [Property Collections](./property-collections.md),
 [Collections Summary](./collections-summary.md),
@@ -558,10 +834,8 @@ The fourteen **tenant reports** can be narrowed to part of a property:
 [Ageing Report](./ageing-report.md),
 [Debtors Listing](./debtors-listing.md),
 [Unbilled Leases](./unbilled-leases.md),
-[Output VAT Analysis](./vat-analysis-output.md),
-[Tenant Withholding](./tenant-withholding.md),
-[Billing & Collection Trend](./billing-collection-trend.md) and
-[Occupancy Trend](./occupancy-trend.md). They take three more [list filters](#list-filters):
+[Output VAT Analysis](./vat-analysis-output.md) and
+[Tenant Withholding](./tenant-withholding.md). They take three more [list filters](#list-filters):
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
@@ -796,15 +1070,17 @@ per report, so predictability beats leanness here.
 | Key | Type | Notes |
 |---|---|---|
 | `bucket` | string | Stable machine id, unique within the report (e.g. `overview`, `property_1`, `overall`). Use it as a React key / deep-link target — **don't parse it for meaning**. |
-| `header` | object | Info about this bucket. Always carries `label` (see below); a report may add more. |
+| `header` | object | Info about this bucket. Always carries `label` (see below). Every sortable bucket also carries [`sort`](#headersort--the-order-a-bucket-is-in). A report may add more. |
 | `fields` | array | This bucket's column definitions, in display order. |
 | `items` | array | This bucket's rows. |
 | `summary` | object | Bucket-level KPI scalars. May be `{}` — never `[]`. |
 
 `header.label` is the **only guaranteed key** and is always a non-empty human-readable string — a
-generic renderer can title a tab or section from it without knowing the report. Everything else in
-`header` is report-specific and documented on that report's page (e.g. Income & Expenditure adds
-`property` on its per-property buckets).
+generic renderer can title a tab or section from it without knowing the report. `header.sort` is
+shared too: it is present on every bucket that can be sorted and absent on the
+[`sortable: false`](#buckets-that-are-never-sorted) ones. Everything else in `header` is
+report-specific and documented on that report's page (e.g. Income & Expenditure adds `property` on
+its per-property buckets).
 
 Different buckets in one report **may have different columns** — always read each bucket's own
 `fields`.
@@ -822,8 +1098,10 @@ Render your table columns from this array, **in order**. Each field:
 | `weight` | Tailwind font weight | e.g. `font-normal`, `font-medium`, `font-bold`. Default `font-normal`. |
 | `background_color` | color enum | Tints the **whole column**. See [Colors](#colors). Default `none`. |
 | `alignment` | `left` \| `center` \| `right` | Convention: text → left, numbers → right. |
-| `visible` | boolean | Initial visibility. Hidden columns should not render by default. |
+| `visible` | boolean | Initial visibility. Hidden columns should not render by default. Set by the report, by the [empty-column rule](#empty-columns-start-hidden), or by the request's [`columns`](#choosing-columns--columns). |
 | `togglable` | boolean | If `true`, offer it in a column picker; if `false`, it is fixed. |
+| `sortable` | boolean | If `true` (the default), a click on the header sorts the bucket by this column. See [Sorting rows](#sorting-rows--sort). `false` on every field of a [never-sorted bucket](#buckets-that-are-never-sorted), and on any single field the report excludes. |
+| `empty` | `true` | **Only present on a column hidden because it is blank in every data row** (`visible: false`, `togglable: true`). See [Empty columns start hidden](#empty-columns-start-hidden). Omitted otherwise. |
 
 **Dynamic columns:** some buckets append runtime columns (one per account or per component) with keys
 like `account_2_billings`, `component_2`. These always come back `togglable: true` and carry an
@@ -959,7 +1237,10 @@ The generic algorithm the reusable frontend template implements, for any report:
 2. Iterate `report` **in array order** — that is the display order. Title each bucket from its
    `header.label`; key it by `bucket`. Then build that bucket's columns from its own `fields`
    **in order**; skip `visible: false` columns by default and expose `togglable: true` columns in a
-   column picker.
+   column picker (an `empty: true` column can say it has no values). Make `sortable: true` headers
+   clickable when the bucket has a `header.sort`, and draw their arrows from `header.sort.applied`
+   (see [Sorting from the column headers](#sorting-from-the-column-headers)). Rows already arrive
+   in display order, so never re-sort them on the client.
 3. For each row in `items`:
    - apply the row's `background_color` if present (whole-row tint); absent ⇒ no tint.
    - walk the `fields` in order keeping a **skip counter**. For each field:
@@ -968,8 +1249,15 @@ The generic algorithm the reusable frontend template implements, for any report:
        Otherwise apply (in order) the column's `background_color`, then the cell's `color` if present,
        then the field's `weight` and `alignment`; format `value` by the field's `format`. If the cell
        has `col_span: N`, render it across N columns and set the skip counter to `N − 1`.
+     - with hidden columns, walk the **full** `fields` list for the skip counter but draw only the
+       visible fields. A spanning cell spans as many **visible** fields as it covers (at least 1).
+       If its own field is hidden, draw it at the first visible field it covers. This is the rule
+       the exports use (see [Exports print only visible columns](#exports-print-only-visible-columns)).
    - render `type: "subtotal"` / `type: "grosstotal"` rows as footer / emphasised rows.
 4. Use `data.summary` for the report's headline KPI tiles, and each bucket's `summary` for its own.
+5. On export, replay the query string with `format` appended. For each bucket where the user's
+   column toggles differ from the response, add `columns[{bucket}]` listing that bucket's visible
+   field keys. Buckets left out keep the visibility the response gave them.
 
 Remember: a missing `color` / `background_color` means `none`, and a missing `col_span` means `1`.
 

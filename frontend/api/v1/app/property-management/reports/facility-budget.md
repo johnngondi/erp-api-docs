@@ -125,6 +125,12 @@ Beyond the shared header fields, this report adds:
 
 Order: `overall` first when present, then one bucket per property **sorted by property name**.
 
+**Never sorted.** Every bucket of this report is **`sortable: false`**: the rows are a fixed layout of
+sections, lines and totals. Every field carries `sortable: false`, no bucket has a `header.sort`, and
+`sort` keys sent for them are dropped ([never sorted](./README.md#buckets-that-are-never-sorted)).
+[`columns`](./README.md#choosing-columns--columns) still applies, and the export prints only the
+visible columns.
+
 Bucket `header` additions beyond the standard `label`:
 
 - `property` — `{ id, name, currency: { code, name } }` on each `property_{id}` bucket. **Absent on

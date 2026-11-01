@@ -73,6 +73,11 @@ One bucket:
 There are deliberately **no per-property buckets**: a property's bucket would be its own row repeated,
 and that row is already in `overall`. Select one property (`facility_ids`) to read it on its own.
 
+Its default order is property name (`header.sort.default` `["property"]`). Re-sort it with
+[`sort[overall]`](./README.md#sorting-rows--sort), for example `sort[overall]=total_variance` to put
+the biggest deficits first, and the `Total` row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and
+exported.
+
 ## Columns — generated from the cycle
 
 The period is sliced into the cycle's calendar periods, and **each period contributes three columns**:

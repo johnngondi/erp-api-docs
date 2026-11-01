@@ -121,7 +121,14 @@ One bucket:
 
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `overview` | `Output VAT` | every invoice and credit note in the period, one per row in date order, then a `subtotal` row |
+| `overview` | `Output VAT` | every invoice and credit note in the period, one per row, ordered by tenant, then document date, then id, then a `subtotal` row |
+
+**Row order.** The default is `header.sort.default` `["tenant"]`, so a tenant's invoices and
+credit notes read together. Ties fall back to the order the report builds, which is document date,
+then id. Re-sort with [`sort[overview]`](./README.md#sorting-rows--sort), for example
+`sort[overview]=-vat` for the largest VAT first. Blanks go last and the subtotal
+row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and
+exported.
 
 ## Columns
 
@@ -130,7 +137,7 @@ One bucket:
 | `invoice_date` | `Invoice Date` | `string` | `01 Jul, 2026` — from `created_at` |
 | `tenant` | `Tenant` | `string` | |
 | `lease_id` | `Lease` | `id` | The lease the document was raised on |
-| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`) on that lease; `null` when it has none |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`) on that lease; `null` when it has none. `togglable: true`; [hidden as empty](./README.md#empty-columns-start-hidden) when no row has one |
 | `invoice_no` | `Invoice No.` | `id` | The document's id |
 | `cu_invoice_no` | `CU Invoice No.` | `string` | Raw value, `null` when unsigned |
 | `pin_no` | `PIN No.` | `string` | The tenant's `users.tax_pin` |

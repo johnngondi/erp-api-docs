@@ -130,9 +130,15 @@ One bucket:
 
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `overview` | `Tenant Deposits` | one row per lease holding a deposit, ordered by property then tenant, then a `subtotal` row |
+| `overview` | `Tenant Deposits` | one row per lease holding a deposit, ordered by property, then tenant, then lease, then a `subtotal` row |
 
 A lease with no deposits does not appear at all — this is a register of deposits, not of leases.
+
+Its default order is `header.sort.default` `["property", "tenant", "lease_id"]`. Re-sort it with
+[`sort[overview]`](./README.md#sorting-rows--sort), for example `sort[overview]=-currently_held`.
+Blanks go last and the subtotal row stays last.
+[`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported. The
+hidden-by-default `refunded_by_exit_notice_id` is left out of an export unless `columns` lists it.
 
 ## Columns
 
@@ -141,7 +147,7 @@ A lease with no deposits does not appear at all — this is a register of deposi
 | `tenant` | `Tenant` | `string` | `—` where the lease has no tenant |
 | `property` | `Property` | `string` | |
 | `lease_id` | `Lease` | `id` | The lease's id |
-| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none. `togglable: true`; [hidden as empty](./README.md#empty-columns-start-hidden) when no lease has one |
 | `start_date` | `Start` | `string` | `01 Jan, 2026` |
 | `end_date` | `End` | `string` | `31 Dec, 2028`, or `—` |
 | `status` | `Status` | `string` | The lease's status |

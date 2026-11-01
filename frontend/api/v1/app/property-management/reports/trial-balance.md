@@ -35,6 +35,11 @@ owed and holds in cash, against what it owes. It is **read-only** and computed o
   columns: `label`, `debit`, `credit`.
 - **`header` has no `property` or `period`.** It carries `as_at`, `currency`, `filters`, `notes` and
   `generated_at` instead. A generic renderer that reads `header.period` must tolerate its absence.
+- **Never sorted.** `trial_balance` is a **`sortable: false`** bucket. Its sections, totals and the
+  Difference row are a fixed layout, so every field carries `sortable: false` and the bucket has no
+  `header.sort` ([never sorted](./README.md#buckets-that-are-never-sorted)). A `sort[trial_balance]`
+  entry is ignored. The export still prints only the
+  [visible columns](./README.md#exports-print-only-visible-columns), like every other report.
 
 ## Get the report
 
@@ -42,12 +47,15 @@ owed and holds in cash, against what it owes. It is **read-only** and computed o
 
 ### Filters (query params)
 
-Both are **optional** and flat (not nested under `filter[...]`).
+All are **optional** and flat (not nested under `filter[...]`).
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
 | `as_at` | date `Y-m-d` | **End of today.** The cut-off every figure is stated as at. |
 | `currency_id` | `currencies.id` | The company's `default_currency` setting. Every figure is converted into this currency. |
+| `buckets` | list of bucket ids | Every bucket. The only bucket is `trial_balance`. See [Selecting buckets](./README.md#selecting-buckets--buckets) |
+| `sort` | map: bucket id → field keys | Accepted and validated like every report's, but ignored here, because `trial_balance` is never sorted. See [Sorting rows](./README.md#sorting-rows--sort) |
+| `columns` | map: bucket id → field keys | Each field's own `visible`. See [Choosing columns](./README.md#choosing-columns--columns) |
 
 If neither `currency_id` nor a configured `default_currency` resolves, the endpoint answers `422` on
 `currency_id`.
@@ -127,9 +135,9 @@ misread.
         "bucket": "trial_balance",
         "header": { "label": "Trial Balance", "currency": { "code": "KES", "name": "Kenyan Shilling" } },
         "fields": [
-          { "label": "Account", "key": "label",  "format": "string", "alignment": "left",  "type": "normal", "weight": "font-normal", "background_color": "none", "visible": true, "togglable": false },
-          { "label": "Debit",   "key": "debit",  "format": "money",  "alignment": "right", "type": "normal", "weight": "font-normal", "background_color": "none", "visible": true, "togglable": false },
-          { "label": "Credit",  "key": "credit", "format": "money",  "alignment": "right", "type": "normal", "weight": "font-normal", "background_color": "none", "visible": true, "togglable": false }
+          { "label": "Account", "key": "label",  "format": "string", "alignment": "left",  "type": "normal", "weight": "font-normal", "background_color": "none", "visible": true, "togglable": false, "sortable": false },
+          { "label": "Debit",   "key": "debit",  "format": "money",  "alignment": "right", "type": "normal", "weight": "font-normal", "background_color": "none", "visible": true, "togglable": false, "sortable": false },
+          { "label": "Credit",  "key": "credit", "format": "money",  "alignment": "right", "type": "normal", "weight": "font-normal", "background_color": "none", "visible": true, "togglable": false, "sortable": false }
         ],
         "items": [
           { "label": { "value": "Assets", "col_span": 3 }, "type": "subtotal", "background_color": "primary" },

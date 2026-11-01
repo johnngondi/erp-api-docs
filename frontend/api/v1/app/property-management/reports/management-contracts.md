@@ -73,8 +73,12 @@ One bucket, always present:
 |---|---|---|
 | `overview` | `Management Contracts` | one row per contract, then a `subtotal` row |
 
-Rows are sorted by landlord name, then property name, then contract start date. A property with more
-than one contract has a row for each.
+By default rows are sorted by landlord name, then property name, then contract start date
+(`header.sort.default` `["landlord", "property", "start_date"]`). A property with more than one contract has a row for each. Re-sort with
+[`sort[overview]`](./README.md#sorting-rows--sort), for example `sort[overview]=days_to_expiry` to
+list the contracts closest to expiry first (open-ended contracts have no end date, so they go last).
+The `subtotal` row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns
+shown and exported.
 
 The closing `subtotal` row counts the contracts: a single `landlord` cell reading e.g. `3 contracts`
 (or `1 contract`) with `col_span: 9`, and `background_color: secondary`. Its other keys are absent.

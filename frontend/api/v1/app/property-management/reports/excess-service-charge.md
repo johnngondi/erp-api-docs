@@ -72,6 +72,14 @@ Always in this order:
 `property-{id}` buckets come last, sorted by property name, and each `header` adds `property` —
 `{ id, name, currency }`.
 
+**Sorting.** The statement buckets, `overall` and every `property-{id}`, are **`sortable: false`**:
+a statement's rows are its argument, so they never move. Their fields carry `sortable: false`, they
+have no `header.sort`, and `sort` keys sent for them are dropped
+([never sorted](./README.md#buckets-that-are-never-sorted)). `summary_by_properties` is sortable and
+defaults to property name (`header.sort.default` `["property"]`). Re-sort it with
+[`sort[summary_by_properties]`](./README.md#sorting-rows--sort), for example `=-excess`, and the
+`Total` row stays last. [`columns`](./README.md#choosing-columns--columns) applies to every bucket.
+
 ## Columns
 
 The statement buckets (`overall` and each `property-{id}`) have two columns only: `line` (string) and

@@ -114,6 +114,19 @@ grosstotal.
 Property buckets carry `header.property` `{ id, name }`. A property with no debt gets no bucket, and
 so gets no row in `properties-summary` either.
 
+### Row order
+
+| `bucket` | Default order (`header.sort.default`) |
+|---|---|
+| `overall` | **`sortable: false`**. The bands are the rows, always Current → 91+, so the bucket has no `header.sort` |
+| `properties-summary` | property name: `["property"]` |
+| `property-{id}` | tenant, then lease: `["tenant", "lease_id"]` |
+
+Re-sort `properties-summary` or the property buckets with
+[`sort`](./README.md#sorting-rows--sort), for example `sort[property-{id}]=-total` to put the biggest
+debtors first in every property. Blanks go last and the Total row stays last.
+[`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
+
 ## Columns
 
 **`overall`**
@@ -140,7 +153,7 @@ The Total row's `property` cell carries `col_span: 2`, so the row omits `status`
 |---|---|---|
 | `tenant` | `Tenant` | `string` |
 | `lease_id` | `Lease` | `id` — `null` on the Total row |
-| `landlord_identifier` | `Landlord ID` | `string` — what the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none, and on the Total row |
+| `landlord_identifier` | `Landlord ID` | `string`, `togglable: true` — what the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none, and on the Total row. [Hidden as empty](./README.md#empty-columns-start-hidden) when no lease in the bucket has one |
 | `current` / `d_1_30` / `d_31_60` / `d_61_90` / `d_91_plus` | `Current` / `1–30` / `31–60` / `61–90` / `91+` | `money` |
 | `total` | `Total` | `money`, `type: grosstotal` |
 

@@ -101,10 +101,17 @@ report takes:
 Each bucket's `header` carries `label` (the property name), `property { id, name }`, and `currency`
 (the property's reporting currency, for reference — see the currency note below).
 
+**Every bucket is `sortable: false`.** The tree's order (block → wing → floor → space) is the
+schedule, so every field carries `sortable: false`, no bucket has a `header.sort`, and a
+`sort[property_{id}]` entry is accepted but its keys are dropped. See
+[Buckets that are never sorted](./README.md#buckets-that-are-never-sorted).
+[`columns`](./README.md#choosing-columns--columns) still applies, and the export prints only the
+visible columns.
+
 ## Columns (`fields`)
 
 The leaf/space columns, in order: `name` (Space), `category`, `type`, `size`, `status`, `tenant`,
-`lease_id` (Lease), `landlord_identifier` (Landlord ID), `lease_start`, `lease_end`, `billing_cycle`, then one **money column per
+`lease_id` (Lease), `landlord_identifier` (Landlord ID, `togglable: true`), `lease_start`, `lease_end`, `billing_cycle`, then one **money column per
 autobilled component present in the property** (`component_{id}`, e.g. `Rent/M`, `Service Charge/M`, `Parking/M`, `Signage/M` —
 each carries `component_id`, `togglable:true`), then `total` (Total/M, `type: grosstotal`).
 
@@ -235,4 +242,5 @@ Both the bucket `summary` and the report-level `summary` are **segmented by spac
   `allocated` (`available` = `quantity − allocated`), so units shared by several spaces are not
   double-counted; `by_type` breaks it down per unit title.
 
-There is no pagination, sort, or include — a report is returned whole for the resolved period.
+There is no pagination, sort, or include — a report is returned whole for the resolved period, in
+tree order ([never sorted](./README.md#buckets-that-are-never-sorted)).

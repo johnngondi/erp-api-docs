@@ -46,7 +46,9 @@ All three conditions, as at `period_to`:
 
 Billing stops at the lease's end. The biller bills the last period only up to `end_at`, then sets
 `next_due_at` to the day after it, so an ended lease has a past due date with nothing missing. The
-second condition keeps it off this report.
+second condition keeps it off this report. A company with `bill_leases_after_end` on keeps billing
+leases past their end (holdover), so for that company an ended lease whose holdover period was not
+billed is listed like any other.
 
 The third condition is the one that matters, because there are two ways a lease stops being
 unbilled:
@@ -98,10 +100,15 @@ are filled from [`GET …/reports/filter-options/structure`](./README.md#picking
 
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `overview` | `Unbilled Leases` | one row per overdue lease, ordered by property then tenant, then a `subtotal` row |
+| `overview` | `Unbilled Leases` | one row per overdue lease, ordered by property, then tenant, then lease, then a `subtotal` row |
 
 The bucket is always present. When nothing is overdue it holds only its subtotal, reading
 `0 unbilled leases`.
+
+Its default order is `header.sort.default` `["property", "tenant", "lease_id"]`. Re-sort it with
+[`sort[overview]`](./README.md#sorting-rows--sort), for example
+`sort[overview]=-months_since_last_invoice`. Blanks go last and the subtotal row stays last.
+[`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ## Columns
 
@@ -109,7 +116,7 @@ The bucket is always present. When nothing is overdue it holds only its subtotal
 |---|---|---|---|
 | `tenant` | `Tenant` | `string` | `—` where the lease has no tenant |
 | `lease_id` | `Lease` | `id` | |
-| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none. `togglable: true`; [hidden as empty](./README.md#empty-columns-start-hidden) when no lease has one |
 | `property` | `Property` | `string` | |
 | `unit` | `Unit` | `string` | **Every** space on the lease, comma-separated |
 | `lease_start` | `Lease Start` | `string` | `01 Jan, 2026` |

@@ -61,8 +61,14 @@ GET …/reports/suppliers/expenditure-reports/bill-submission?period_from=2026-0
 
 ## Bucket
 
-One bucket, `overview` (`header.label`: `Bills Submitted`): one row per bill, oldest submission first,
-then a closing `grosstotal` row.
+One bucket, `overview` (`header.label`: `Bills Submitted`): one row per bill, then a closing
+`grosstotal` row.
+
+By default the rows are ordered by supplier, then property, then billed date
+(`header.sort.default` `["supplier", "property", "billed_date"]`). Ties keep the report's own order,
+oldest submission first. Re-sort
+with [`sort[overview]`](./README.md#sorting-rows--sort), for example `sort[overview]=billed_date` for
+the oldest submissions first. The closing row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ## Columns
 

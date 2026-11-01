@@ -112,6 +112,18 @@ a tenant who owes nothing gets no row.
 `landlord_identifier` or `months_in_arrears`, because those are properties of a lease, not of a property. Read each bucket's
 own `fields`, as the shared contract requires.
 
+### Row order
+
+| `bucket` | Default order (`header.sort.default`) |
+|---|---|
+| `overall` | property name: `["property"]` |
+| `property-{id}` | tenant, then lease: `["tenant", "lease_id"]` |
+
+Re-sort either with [`sort`](./README.md#sorting-rows--sort), for example
+`sort[property-{id}]=-debt_beyond_deposit` to list the riskiest tenants first. Blanks go last and the
+Total row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and
+exported.
+
 ## Columns
 
 **`overall`**: `property`, `month_rent`, `billed`, `collected`, `arrears`, `deposit_held`,
@@ -123,7 +135,7 @@ own `fields`, as the shared contract requires.
 |---|---|---|---|
 | `tenant` | `Tenant` | `string` | |
 | `lease_id` | `Lease` | `id` | |
-| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none. `togglable: true`; [hidden as empty](./README.md#empty-columns-start-hidden) when no lease in the bucket has one |
 | `month_rent` | `Monthly Rent` | `money` | Lease item components on `is_rent` components |
 | `billed` | `Billed` | `money` | |
 | `collected` | `Collected` | `money` | |

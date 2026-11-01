@@ -119,8 +119,21 @@ Beyond the shared header fields, this report adds:
 | `property_{id}` | one per property in scope | the property's name | expense (+ a totals row) | `invoice_number`, `date`, `notes`, `vendor`, `category`, `expense_type`, `amount`, `tax`, `total`, `invoice` |
 
 Order: the three summaries first (`summary_by_category`, `summary_by_type`, `all-properties`), then
-one `property_{id}` bucket per property **sorted by property name**. Rows in the category and type
-summaries are ordered **descending by total**; `all-properties` rows are properties **sorted by name**.
+one `property_{id}` bucket per property **sorted by property name**.
+
+Default row order per bucket (`header.sort.default`). Re-sort any of them with
+[`sort`](./README.md#sorting-rows--sort):
+
+| `bucket` | Default order |
+|---|---|
+| `summary_by_category` | **total, descending**: `["-total"]` |
+| `summary_by_type` | **total, descending**: `["-total"]`, **within each expense type**. The types themselves are ordered by total descending, and that order is fixed. The type banners and per-type subtotals are anchors, so a sort reorders the sub-types under their own type and never moves a sub-type to another type ([how rows are ordered](./README.md#how-rows-are-ordered)) |
+| `all-properties` | property name: `["property"]` |
+| `property_{id}` | vendor, then date **newest first**: `["vendor", "-date"]`. Ties fall back to the order the report builds, newest date then highest id first. The `invoice` column is `sortable: false` |
+
+Every bucket's closing totals row stays last. A sort key naming a `category_{id}` column the window
+does not produce is dropped. [`columns`](./README.md#choosing-columns--columns) picks the columns
+shown and exported.
 
 Bucket `header` additions beyond the standard `label`:
 

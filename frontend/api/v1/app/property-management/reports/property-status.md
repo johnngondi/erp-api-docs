@@ -48,13 +48,20 @@ Always in this order:
 
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `overall` | `Portfolio Health` | one `grosstotal` row, `Portfolio`, for the whole portfolio |
-| `all-properties` | `All Properties` | one row per property, sorted by name, then a `subtotal` row |
-| `landlord-{id}` | the landlord's name | one per landlord, sorted by landlord name: that landlord's properties only, then a `subtotal` row |
+| `overall` | `Portfolio Health` | one `grosstotal` row, `Portfolio`, for the whole portfolio. **`sortable: false`** |
+| `all-properties` | `All Properties` | one row per property, sorted by property name, then a `subtotal` row |
+| `landlord-{id}` | the landlord's name | one per landlord, sorted by landlord name with `Unassigned` last: that landlord's properties only, sorted by property name, then a `subtotal` row |
 
 - A `landlord-{id}` bucket `header` adds `landlord` — `{ id, name }`. A property with no landlord falls
   under `landlord-0`, `Unassigned`.
 - Every bucket declares the same columns.
+- **Bucket and row order.** The `landlord-{id}` buckets are ordered by landlord **name**,
+  case-insensitively (ties by landlord id), with **`Unassigned`** (`landlord-0`) **last**. That
+  order is fixed. `overall` is [`sortable: false`](./README.md#buckets-that-are-never-sorted). Within
+  each bucket, and in `all-properties`, rows default to property name (`header.sort.default`
+  `["property"]`). Re-sort with [`sort`](./README.md#sorting-rows--sort), for example
+  `sort[landlord-{id}]=-vacant`. The `subtotal` row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and
+  exported.
 - The `grosstotal` and `subtotal` rows open with a `property` cell spanning `property`, `type_` and
   `landlord` (`col_span: 3`), so those keys are absent on them.
 

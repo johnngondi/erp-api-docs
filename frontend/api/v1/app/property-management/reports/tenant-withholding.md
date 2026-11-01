@@ -112,10 +112,16 @@ One bucket:
 
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `overview` | `All Withholdings`, or `{method name} Withheld` when one is selected | one row per withholding receipt in date order, then a `subtotal` row |
+| `overview` | `All Withholdings`, or `{method name} Withheld` when one is selected | one row per withholding receipt, ordered by property, then tenant, then receipt date and id, then a `subtotal` row |
 
 The label is how a preset view announces itself — `VAT Withholding Withheld`,
 `Rental Withholding Withheld`.
+
+**Row order.** The default is `header.sort.default` `["property", "tenant"]`. Ties fall back to the
+order the report builds, which is receipt date, then receipt id. Re-sort with
+[`sort[overview]`](./README.md#sorting-rows--sort), for example `sort[overview]=-amount_withheld`.
+Blanks, including a `—` lease or invoice list, go last, and the subtotal row stays last.
+[`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ## Columns
 
@@ -124,7 +130,7 @@ The label is how a preset view announces itself — `VAT Withholding Withheld`,
 | `date` | `Date` | `string` | `12 Jul, 2026` — the receipt's transaction date |
 | `tenant` | `Tenant` | `string` | The paying user |
 | `lease_id` | `Lease` | `string` | **A list** — see below. `—` when the receipt is allocated to nothing |
-| `landlord_identifier` | `Landlord ID` | `string` | **A list**, like `lease_id`: the landlord's own identifier (`leases.landlord_identifier`) of each of those leases that carries one, in lease order, de-duplicated (`"ACME-1, NJ-2"`). `null` when none of them carries one, or the receipt is allocated to nothing |
+| `landlord_identifier` | `Landlord ID` | `string` | **A list**, like `lease_id`: the landlord's own identifier (`leases.landlord_identifier`) of each of those leases that carries one, in lease order, de-duplicated (`"ACME-1, NJ-2"`). `null` when none of them carries one, or the receipt is allocated to nothing. `togglable: true`; [hidden as empty](./README.md#empty-columns-start-hidden) when no row has one |
 | `property` | `Property` | `string` | |
 | `invoice_no` | `Invoice No.` | `string` | **Every** invoice the receipt was allocated against, comma-separated; `—` where it was allocated to none |
 | `amount_withheld` | `Amount Withheld` | `money` | The receipt amount |

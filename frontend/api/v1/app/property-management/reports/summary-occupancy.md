@@ -95,6 +95,11 @@ One bucket:
 **A property with no spaces still gets a row**, all zeros — so a newly onboarded property is visibly
 empty rather than missing.
 
+Its default order is property name (`header.sort.default` `["property"]`). Re-sort it with
+[`sort[overview]`](./README.md#sorting-rows--sort), for example `sort[overview]=-vacant_units`, and
+the `Total` row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and
+exported.
+
 ## Columns
 
 | `key` | `label` | `format` | Notes |

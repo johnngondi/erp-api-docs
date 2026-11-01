@@ -78,10 +78,17 @@ One bucket:
 
 | `bucket` | `header.label` | Rows |
 |---|---|---|
-| `overview` | `Legal Fee Collection` | one row per lease with legal fees billed or recovered in the window, ordered by property then tenant, then a `subtotal` row |
+| `overview` | `Legal Fee Collection` | one row per lease with legal fees billed or recovered in the window, ordered by property, then tenant, then lease, then a `subtotal` row |
 
 The bucket is **always present**, even when nothing matched: it then holds only its subtotal row,
 reading `0 leases` with zero totals.
+
+Its default order is `header.sort.default` `["property", "tenant", "lease_id"]`. Re-sort it with
+[`sort[overview]`](./README.md#sorting-rows--sort), for example `sort[overview]=-days_outstanding`.
+Blanks, including a `—` tenant or unit, go last, and the subtotal row stays last.
+[`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported. In an
+export with hidden text columns the subtotal label spans only the visible ones
+([span rule](./README.md#exports-print-only-visible-columns)).
 
 ## Columns
 
@@ -89,7 +96,7 @@ reading `0 leases` with zero totals.
 |---|---|---|---|
 | `tenant` | `Tenant` | `string` | The lease's tenant; `—` where the lease has none |
 | `lease_id` | `Lease` | `id` | Absent on the subtotal, which the label spans |
-| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none. Absent on the subtotal, which the label spans |
+| `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`); `null` when the lease has none. Absent on the subtotal, which the label spans. `togglable: true`; [hidden as empty](./README.md#empty-columns-start-hidden) when no lease has one |
 | `property` | `Property` | `string` | |
 | `unit` | `Unit` | `string` | **Every** space on the lease, comma-separated; `—` where the lease has no space |
 | `legal_fee_billed` | `Legal Fee Billed` | `money` | Billed in the window |

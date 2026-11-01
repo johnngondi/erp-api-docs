@@ -83,14 +83,21 @@ GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=20
 
 | `bucket` | When | `header.label` | Rows |
 |---|---|---|---|
-| `overview` | always, first | `Input VAT` | every bill in scope, in posting date order, then a `Total` row |
-| `all-properties` | always, second | `By Property` | one row per property with bills, sorted by name, then a `Total` row equal to `overview`'s |
-| `property-{id}` | one per property **with bills in the period**, sorted by property name | the property's name | that property's bills only, in posting date order, then its own `Total` row |
+| `overview` | always, first | `Input VAT` | every bill in scope, ordered by supplier, then posting date, then bill, then a `Total` row |
+| `all-properties` | always, second | `By Property` | one row per property with bills, sorted by property name, then a `Total` row equal to `overview`'s |
+| `property-{id}` | one per property **with bills in the period**, sorted by property name (case-insensitive) | the property's name | that property's bills only, ordered like `overview`, then its own `Total` row |
 
 `overview` and every `property-{id}` bucket share the bill columns (below); `all-properties` has its
 own (further below). Every bucket has its own `summary`. A property bucket's `header` also
 carries `property { id, name }`; use it rather than parsing the `bucket` id. A property with no bills in
 the period gets no bucket. The property buckets together add up to `overview`.
+
+**Row order.** `all-properties` defaults to property name (`header.sort.default` `["property"]`).
+`overview` and every `property-{id}` default to `["supplier", "invoice_billed_at"]`. Ties keep the
+report's own order, by bill. The `property-{id}` buckets are ordered by property name,
+case-insensitively, then id, and that order is fixed. Re-sort rows with [`sort`](./README.md#sorting-rows--sort),
+for example `sort[overview]=-vat`. The `Total` row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported. The
+`togglable` `description` column is left out of an export when the user has hidden it.
 
 ## Columns
 
