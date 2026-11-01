@@ -690,6 +690,7 @@ Typical `errors.etr` reasons:
 - `The landlord of this property has no KRA PIN.`: add the PIN on the landlord, then sign again.
 - `No URL is configured for the incotex ETR device.`: set the property's `esd_config.url` (or ask for the default device to be configured).
 - `The incotex ETR device rejected the document (HTTP 4xx): ...`: the device's own message follows.
+- `The Incotex ETR device could not be reached. Please contact your administrator.`: the device did not answer (it is off, offline or blocked). Retryable; the queued job tries again on its own. The device's address and the connection error are only in the server log, never in the message.
 
 The last failure is also saved on the invoice as `etr_error`, so show it next to the Sign button. Signing again clears it.
 
