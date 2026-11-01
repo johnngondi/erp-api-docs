@@ -31,6 +31,7 @@ Base prefix:
   - `docs/frontend/app/property-management/finance/settlement.md`
   - `docs/frontend/app/property-management/finance/vendor-statement.md`
   - `docs/frontend/app/property-management/finance/bank-statement-reconciliation.md`
+  - `docs/frontend/app/property-management/finance/bank-payments.md`
 - Reports
   - `docs/frontend/app/property-management/reports/README.md`
   - `docs/frontend/app/property-management/reports/billings-and-collections.md`
