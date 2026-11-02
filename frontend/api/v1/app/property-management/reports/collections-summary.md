@@ -6,9 +6,11 @@ Base route:
 
 `/api/v1/app/{company}/property-management/reports`
 
-Collections Summary is [Property Collections](./property-collections.md) **read across time**: the
-same three buckets, but each one a matrix with a money column per period of the chosen cycle. It
-answers **when** the money came in. It is **read-only** and computed on the fly.
+Collections Summary reads confirmed collections **across time**, in three buckets (by lease
+component, by property, and once per landlord), each a matrix with a money column per period of the
+chosen cycle. It answers **when** the money came in. Its sibling
+[Property Collections](./property-collections.md) lists the same money receipt by receipt. It is
+**read-only** and computed on the fly.
 
 > **Read [the shared reports contract](./README.md) first.** This page documents what is specific to
 > this report. The response envelope, the bucket keys, the field keys, the per-cell `{ value, color }`
@@ -30,9 +32,11 @@ The two permissions are **independent**, and neither is shared with
 ## Collections only
 
 There is **no billed figure anywhere in this report**. Billed against collected is what
-[Property Collections](./property-collections.md) is for; a matrix of what came in has no room for it.
+[Billings & Collections](./billings-and-collections.md) is for; a matrix of what came in has no room
+for it.
 
-Both reports read one shared source, so **`summary.total_collected` here equals Property Collections'
+This report and [Property Collections](./property-collections.md) (one row per receipt) read one
+shared source, so **`summary.total_collected` here equals Property Collections'
 `summary.total_collected`** for the same window — and it does not change when you change
 `report_cycle`, because the cycle only decides how the money is spread across columns, never how much
 of it there is. That equality is the quickest way to tell the two reports are in sync.
@@ -74,7 +78,7 @@ are filled from [`GET …/reports/filter-options/structure`](./README.md#picking
 
 ## Buckets
 
-The same three levels as Property Collections, always in this order:
+Three levels, always in this order:
 
 | `bucket` | `header.label` | Rows |
 |---|---|---|
@@ -182,8 +186,7 @@ Both bucket-level and report-level `summary`:
 }
 ```
 
-No cell in this report carries a `color` — there is no rate to band here. Colour lives in
-[Property Collections](./property-collections.md).
+No cell in this report carries a `color` — there is no rate to band here.
 
 ## Export
 
