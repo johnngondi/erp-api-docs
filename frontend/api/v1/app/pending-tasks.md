@@ -356,7 +356,7 @@ Errors (`422`):
 ```
 
 - `code` — required, 6 digits.
-- `decisions` — required, 1 to 50 items.
+- `decisions` — required, 1 to 100 items (one inbox page at its largest size).
 - `decisions.*.pending_task_id` — required integer, no repeats.
 - `decisions.*.status` — `approve` | `review` (send back for changes) | `reject`.
 - `decisions.*.comment` — required for `review` and `reject`, max 2000 characters.
