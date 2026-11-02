@@ -17,7 +17,13 @@ system then tries to tie it to a receipt:
    bank. It posts at once, its approval chain closes (open steps are skipped with the comment
    *"Confirmed by bank payment FT26300QQ5T3 received 27 Oct 2026"*), the cashbook line is
    reconciled against the payment, and the payment becomes `matched` (`matched_by: system`).
-   Two or more candidates are left as suggestions.
+   **Groups:** two or more pending receipts on the account that share the same transaction number
+   (compared without case, spaces or punctuation), the same tenant (`paying_user_id`) and the same
+   property (`facility_id`), each smaller than the payment, whose amounts add up to the payment
+   amount (at the cent) count as **one** candidate. The whole group must add up: no subset of a
+   group is ever tried. When that group is the only candidate, every receipt in it is confirmed
+   exactly as a single receipt is, and the payment is matched to all of them.
+   Two or more candidates (singles or groups) are left as suggestions.
 3. **Auto-receipt** — when the payer is certain, a **confirmed** receipt is created and allocated
    by the system and the payment becomes `receipted` (`matched_by: system`). See
    [When the system receipts by itself](#5-when-the-system-receipts-by-itself).
@@ -30,9 +36,9 @@ Other things to know:
 
 - **Pay-outs are listed only.** A payment with `direction.value = "out"` (negative amount at the
   bank) is parked and shown, and can be discarded/restored. It is never matched or receipted.
-- **Verification runs the other way too.** A receipt keyed normally is confirmed at once when
-  exactly one unmatched equal-amount pay-in exists on its receiving account
-  (see [Verified by bank](#15-verified-by-bank)).
+- **Verification runs the other way too.** A receipt keyed normally is confirmed at once when an
+  unmatched pay-in on its receiving account has exactly one candidate and that candidate includes
+  the new receipt, including the last receipt of a group (see [Verified by bank](#15-verified-by-bank)).
 - **Backfill.** `php artisan bank-ipn:import-logs` parks the notifications already written to the
   IPN log files and computes suggestions **without** auto-confirming or auto-receipting, so they
   can be reconciled by hand from the page (see [Backfill command](#17-backfill-command)).
@@ -151,6 +157,15 @@ relations only when included (`include=`).
     "status": { "value": "confirmed", "color": "success" },
     "paying_user": { "id": 77, "name": "Morris Murungi" }
   },
+  "receipts": [
+    {
+      "id": 2501,
+      "transaction_number": "FT26300HLFKM",
+      "amount": 6000.0,
+      "status": { "value": "confirmed", "color": "success" },
+      "paying_user": { "id": 77, "name": "Morris Murungi" }
+    }
+  ],
   "matched_by_user": null,
   "matched_at": "2026-10-27T11:42:14.000000Z",
   "discard_reason": null,
@@ -191,7 +206,8 @@ relations only when included (`include=`).
 | `signature_verified` | boolean | Whether the IPN signature was verified. |
 | `bank_account_id` | integer\|null | The account the payment was credited or debited to. `null` for [unresolved payments](#13-unresolved-payments). Always returned. |
 | `bank_account` | `{ id, account_name, account_number }` | Returned when loaded (lists and the other endpoints load it by default). `null` for unresolved payments. |
-| `receipt` | object | Include `receipt`. The matched or created receipt: `{ id, transaction_number, amount, status{value,color}, paying_user{id,name} }`. |
+| `receipt` | object | Include `receipt`. The matched or created receipt (for a group, the **first** one, lowest id): `{ id, transaction_number, amount, status{value,color}, paying_user{id,name} }`. |
+| `receipts` | array | **Every** receipt the payment confirmed or created, ascending id, same shape as `receipt`. One element for a single match, several for a group, `[]` while unmatched. Loaded by default on the list, show and action responses (also accepted as `include=receipts`). |
 | `matched_by_user` | `{ id, name }` | Include `matchedByUser`. Set when `matched_by` is `user`. |
 | `matched_at` | datetime\|null | When it was matched or receipted. |
 | `discard_reason`, `discarded_at` | string\|null | Set while `status` is `discarded`. |
@@ -208,6 +224,8 @@ relations only when included (`include=`).
   "receipts": [
     {
       "id": 2488,
+      "receipt_ids": [2488],
+      "receipts": [{ "id": 2488, "transaction_number": "CHQ-004512", "amount": 72900.0, "transaction_date": "2026-10-26" }],
       "transaction_number": "CHQ-004512",
       "amount": 72900.0,
       "transaction_date": "2026-10-26",
@@ -215,6 +233,21 @@ relations only when included (`include=`).
       "facility": { "id": 7, "name": "Riverside Apartments" },
       "score": 90,
       "reasons": ["Same amount", "Transaction date 1 day before the bank date", "Depositor name matches tenant"]
+    },
+    {
+      "id": 2491,
+      "receipt_ids": [2491, 2492],
+      "receipts": [
+        { "id": 2491, "transaction_number": "CHQ-004520", "amount": 40000.0, "transaction_date": "2026-10-25" },
+        { "id": 2492, "transaction_number": "CHQ-004520", "amount": 32900.0, "transaction_date": "2026-10-26" }
+      ],
+      "transaction_number": "CHQ-004520",
+      "amount": 72900.0,
+      "transaction_date": "2026-10-26",
+      "paying_user": { "id": 143, "name": "Hillary Kiprono" },
+      "facility": { "id": 7, "name": "Riverside Apartments" },
+      "score": 85,
+      "reasons": ["2 receipts with the same transaction number total the payment amount", "Transaction date 1 day before the bank date", "Depositor name matches tenant"]
     }
   ],
   "tenants": [
@@ -242,7 +275,7 @@ relations only when included (`include=`).
       "token": "481"
     }
   ],
-  "auto_confirm_receipt_id": null,
+  "auto_confirm_receipt_ids": null,
   "auto_receipt": {
     "user_id": 77,
     "facility_id": 7,
@@ -253,10 +286,16 @@ relations only when included (`include=`).
 
 | Key | Meaning |
 |---|---|
-| `receipts[]` | Pending receipts on this account with the same amount inside the match window, best first. `score` is higher for stronger evidence (compare scores within one list only); `reasons` are display strings. |
+| `receipts[]` | Receipt candidates inside the match window, best first: each pending receipt on this account with the same amount, and each **group** of pending receipts sharing a transaction number, tenant and property whose amounts add up to the payment (see step 2 at the top). `score` is higher for stronger evidence (compare scores within one list only); `reasons` are display strings. |
+| `receipts[].id` | The candidate's first receipt id (lowest). |
+| `receipts[].receipt_ids` | int[], ascending: every receipt in the candidate. One id for a single receipt. Send this list as `receipt_ids` to [match](#9-match-to-a-pending-receipt). |
+| `receipts[].receipts` | `[{ id, transaction_number, amount, transaction_date }]`, one per receipt in the candidate, ascending id (`transaction_date` is `Y-m-d`). |
+| `receipts[].amount` | The receipt amount, or the group total. |
+| `receipts[].transaction_date` | The receipt date, or the latest date in the group (the date score uses it). |
+| `receipts[].transaction_number`, `paying_user`, `facility` | Of the first receipt (a group shares them). A group's first reason is *"N receipts with the same transaction number total the payment amount"*, then the same reference / phone / name evidence as a single receipt. |
 | `tenants[]` | Candidate payers, found by phone, name, invoice numbers in the references, landlord identifier or the property's paybill account number. `open_invoices` are the tenant's posted invoices with a balance, oldest `due_at` first. |
 | `invoices[]` | Invoices detected from numbers typed in `customer_reference` / `narration` (see [section 4](#4-invoice-numbers-typed-by-the-payer)). `token` is the fragment of text that resolved to the invoice. |
-| `auto_confirm_receipt_id` | The single pending receipt the system would confirm, or `null`. |
+| `auto_confirm_receipt_ids` | int[] of the receipts the system would confirm (one id, or a whole group) when exactly one candidate exists, else `null`. Replaces the former `auto_confirm_receipt_id`. |
 | `auto_receipt` | What the system would create: `{ user_id, facility_id, allocations: [{ invoice_id, amount }] }`, or `null`. |
 
 Evidence that raises a receipt candidate's score: the bank reference equals the receipt's
@@ -328,13 +367,13 @@ Supported query params:
 
 | Param | Notes |
 |---|---|
-| `filter[status]` | `unmatched`, `matched`, `receipted`, `discarded`. Comma list allowed (`unmatched,matched`). |
+| `filter[status]` | `unmatched`, `matched`, `receipted`, `discarded`. Comma list allowed (`unmatched,matched`). Discarded payments are left out unless `filter[status]` names them. |
 | `filter[direction]` | `in` or `out`. |
 | `filter[transacted_between]` | `YYYY-MM-DD,YYYY-MM-DD` (inclusive, on `transacted_at`). |
 | `filter[has_suggestion]` | `1` = has at least one receipt, tenant or invoice suggestion; `0` = none. |
 | `filter[search]` | Matches the bank reference, request id, payer name, payer phone, narration, customer reference, or an **exact** amount (`6000`, `72900.00`). |
 | `sort` | `transacted_at`, `amount`, `received_at` (prefix `-` for descending). Default `-transacted_at,-id`. |
-| `include` | `bankAccount`, `receipt`, `matchedByUser`, `discardedBy` (comma list). |
+| `include` | `bankAccount`, `receipt`, `receipts`, `matchedByUser`, `discardedBy` (comma list). `receipts` is returned even without it. |
 | `per_page`, `page` | Pagination. `per_page` defaults to the application default. |
 
 Example:
@@ -371,20 +410,23 @@ Response (`200`), shown with one row:
       "signature_verified": true,
       "bank_account_id": 5,
       "receipt": null,
+      "receipts": [],
       "matched_at": null,
       "suggested_at": "2026-10-27T08:15:06.000000Z",
       "suggestions": {
         "receipts": [
-          { "id": 2488, "transaction_number": "CHQ-004512", "amount": 72900.0, "transaction_date": "2026-10-26",
+          { "id": 2488, "receipt_ids": [2488], "receipts": [{ "id": 2488, "transaction_number": "CHQ-004512", "amount": 72900.0, "transaction_date": "2026-10-26" }],
+            "transaction_number": "CHQ-004512", "amount": 72900.0, "transaction_date": "2026-10-26",
             "paying_user": { "id": 143, "name": "Hillary Kiprono" }, "facility": { "id": 7, "name": "Riverside Apartments" },
             "score": 90, "reasons": ["Same amount", "Transaction date 1 day before the bank date"] },
-          { "id": 2490, "transaction_number": "CHQ-004513", "amount": 72900.0, "transaction_date": "2026-10-27",
+          { "id": 2490, "receipt_ids": [2490], "receipts": [{ "id": 2490, "transaction_number": "CHQ-004513", "amount": 72900.0, "transaction_date": "2026-10-27" }],
+            "transaction_number": "CHQ-004513", "amount": 72900.0, "transaction_date": "2026-10-27",
             "paying_user": { "id": 151, "name": "Westlands Tenant Ltd" }, "facility": { "id": 9, "name": "Westlands Plaza" },
             "score": 60, "reasons": ["Same amount"] }
         ],
         "tenants": [],
         "invoices": [],
-        "auto_confirm_receipt_id": null,
+        "auto_confirm_receipt_ids": null,
         "auto_receipt": null
       },
       "permissions": { "view": true, "match": true, "createReceipt": true, "rematch": true, "discard": true, "restore": false }
@@ -452,10 +494,10 @@ suggestions it was settled with. Accepts the same `include` values as the list.
     "customer_reference": "HILLARY",
     "narration": "Chq Dep",
     "suggestions": {
-      "receipts": [ { "id": 2488, "transaction_number": "CHQ-004512", "amount": 72900.0, "score": 90, "reasons": ["Same amount"] } ],
+      "receipts": [ { "id": 2488, "receipt_ids": [2488], "transaction_number": "CHQ-004512", "amount": 72900.0, "score": 90, "reasons": ["Same amount"] } ],
       "tenants": [],
       "invoices": [],
-      "auto_confirm_receipt_id": null,
+      "auto_confirm_receipt_ids": null,
       "auto_receipt": null
     },
     "payload": {
@@ -488,20 +530,23 @@ Errors: `403`, `404` (payment not on this account).
 
 `POST {account}/payments/{payment}/match`
 
-Confirms a pending receipt **by** the bank payment. The receipt posts at once, any open approval
-steps are skipped with a recorded comment, its cashbook row is reconciled against the payment, and
-the payment becomes `matched` (`matched_by: user`, `matched_by_user`, `matched_at`).
+Confirms one pending receipt, or a group of them, **by** the bank payment. Each receipt posts at
+once, any open approval steps are skipped with a recorded comment, its cashbook row is reconciled
+against the payment, and the payment becomes `matched` (`matched_by: user`, `matched_by_user`,
+`matched_at`). For a group the payment's `receipt` is the first receipt (lowest id) and
+`receipts` lists them all.
 
 Authorization: `match-bank-payment`.
 
-Request body (`application/json`):
+Request body (`application/json`): send `receipt_ids` (preferred) or the legacy `receipt_id`.
 
 | Field | Required | Type | Notes |
 |---|---|---|---|
-| `receipt_id` | Yes | integer | Must be a pending receipt on this account with the same amount |
+| `receipt_ids` | Yes, unless `receipt_id` is sent | int[] (min 1, distinct) | Usually a candidate's `receipt_ids` from `suggestions.receipts[]`. One id: a pending receipt on this account with the payment's amount. Several: pending receipts on this account sharing the same transaction number, tenant and property, whose amounts add up to the payment amount. |
+| `receipt_id` | Yes, unless `receipt_ids` is sent | integer | Legacy single-receipt form; same as `receipt_ids: [id]`. |
 
 ```json
-{ "receipt_id": 2488 }
+{ "receipt_ids": [2491, 2492] }
 ```
 
 Response (`200`):
@@ -509,14 +554,21 @@ Response (`200`):
 ```json
 {
   "data": {
-    "message": "Receipt confirmed by bank payment successfully",
-    "payment": { "id": 413, "status": { "value": "matched", "color": "success" }, "matched_by": { "value": "user", "color": "primary" } },
-    "receipt": { "id": 2488, "status": { "value": "confirmed", "color": "success" } }
+    "message": "Receipts confirmed by bank payment successfully",
+    "payment": { "id": 413, "status": { "value": "matched", "color": "success" }, "matched_by": { "value": "user", "color": "primary" }, "receipts": [ { "id": 2491 }, { "id": 2492 } ] },
+    "receipts": [
+      { "id": 2491, "status": { "value": "confirmed", "color": "success" } },
+      { "id": 2492, "status": { "value": "confirmed", "color": "success" } }
+    ],
+    "receipt": { "id": 2491, "status": { "value": "confirmed", "color": "success" } }
   }
 }
 ```
 
-`payment` is the full [payment resource](#3-the-payment-resource) (shortened above).
+`payment` is the full [payment resource](#3-the-payment-resource) (shortened above), with
+`receipts` loaded. `receipts` lists every confirmed receipt by ascending id; `receipt` is the first
+of them, kept for compatibility. The message is *"Receipt confirmed by bank payment successfully"*
+for a single receipt.
 
 Errors:
 
@@ -528,7 +580,10 @@ Errors:
 | `422` | Receipt is not pending (`receipt_id`) | The receipt is not pending, so it cannot be confirmed by a bank payment. |
 | `422` | Receipt is on another account (`receipt_id`) | The receipt was not received into this bank account. |
 | `422` | Amounts differ (`receipt_id`) | The receipt amount (72,000.00) does not equal the bank payment amount (72,900.00). |
-| `422` | `receipt_id` missing or not an integer | Standard validation message. |
+| `422` | Group does not share one transaction number, tenant and property (`receipt_ids`) | Receipts matched together must share the same transaction number, tenant and property. |
+| `422` | Group total differs (`receipt_ids`) | The receipts total 70,000.00 does not equal the bank payment amount 72,900.00. |
+| `422` | An id is not a receipt of the company (`receipt_ids`, or `receipt_id` in the legacy form) | The selected receipt id is invalid. |
+| `422` | Neither field sent, an id not an integer, or ids repeated | Standard validation message (`receipt_ids` / `receipt_id`). |
 
 ---
 
@@ -564,7 +619,7 @@ automatic rule fired.
   "data": {
     "id": 413,
     "status": { "value": "unmatched", "color": "warning" },
-    "suggestions": { "receipts": [], "tenants": [], "invoices": [], "auto_confirm_receipt_id": null, "auto_receipt": null },
+    "suggestions": { "receipts": [], "tenants": [], "invoices": [], "auto_confirm_receipt_ids": null, "auto_receipt": null },
     "suggested_at": "2026-11-01T09:20:41.000000Z"
   }
 }
@@ -805,11 +860,17 @@ checked together, so a request that breaks several returns every message in `err
 ## 15. Verified by bank
 
 A receipt created **without** `bank_payment_id` stays pending and goes through approval as usual,
-**unless** exactly one unmatched pay-in with the same amount exists on its `receiving_account_id`
-inside the match window (`bank_payments_match_window_days`, measured from the receipt's
-`transaction_date`). Then the receipt is confirmed at once, as in
-[section 9](#9-match-to-a-pending-receipt) with `matched_by: system`, and the approval chain never
-prompts anyone. With none or several candidates the receipt proceeds through approval unchanged.
+**unless** an unmatched pay-in on its `receiving_account_id` inside the match window
+(`bank_payments_match_window_days`, measured from the receipt's `transaction_date`), of at least
+the receipt's amount, has exactly one receipt candidate and that candidate includes the new
+receipt. Then the receipt is confirmed at once, as in [section 9](#9-match-to-a-pending-receipt)
+with `matched_by: system`, and the approval chain never prompts anyone. The candidate can be a
+**group**: the new receipt may be the one that makes a set of receipts with the same transaction
+number, tenant and property add up to the payment, and then every receipt of the group is
+confirmed together. With no such payment the receipt proceeds through approval unchanged.
+
+Receipts of one group must differ in amount: the duplicate-payment rule refuses a second live
+receipt with the same reference, amount, tenant and property.
 
 The response of `POST receipts` has the same shape as always; read `receipt.status` to see whether
 it came back `confirmed` (verified by bank) or `pending`. The receipt then exposes `bank_payment`
@@ -820,7 +881,8 @@ it came back `confirmed` (verified by bank) or `pending`. The receipt then expos
 ## 16. Receipt resource additions
 
 `FacilityReceiptResource` gains `bank_payment`, returned when the relation is loaded (`null` for
-receipts with no bank payment):
+receipts with no bank payment). Every receipt of a matched group carries the same `bank_payment`
+(the link is `facility_receipts.bank_payment_id`):
 
 ```json
 {
