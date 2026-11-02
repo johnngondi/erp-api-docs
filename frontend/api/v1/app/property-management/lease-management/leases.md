@@ -427,13 +427,20 @@ php artisan leases:repair-snapped-due-dates --billed-from=2026-10-01   # only in
 
 For every active lease it takes the last invoice the biller raised (by the scheduler or the
 "generate invoice for next period" button; manual invoices, deposits, opening balances and utility
-bills are ignored), works out where the due date should have landed (one cycle after that invoice's
-period start) and what the old snap would have made of it. Only a lease whose current `next_due_at`
-is exactly the snapped value is a candidate. It is corrected when the billed day is the lease's
-start day, a real anniversary. Otherwise it is listed under "review" and left alone: for a lease
-whose due date had drifted (an import that saved 2 Oct 00:11) the snap was the correction. A corrected
-date that falls after the lease's end is still written, because left where it is the lease would be
-billed again, and flagged: the period billed past the end may need a credit note.
+bills are ignored) and works out where the due date should be: one cycle after the period that
+invoice billed, counted from the lease's billing day. The figures on a biller invoice always cover
+whole periods, so the day the queue got to it does not matter: a quarterly lease that started on
+the 1st and was invoiced on the 2nd (its due date had drifted) was billed "Oct - Dec", three whole
+months, and is next due on 1 Jan, not 2 Jan. For the month-based cycles the billing day is the day
+of the month the lease started on; a lease that bills on the 1st, whatever day it started on, is
+already right and is passed over.
+
+Only a lease whose current `next_due_at` is exactly what the old snap made of the advanced due
+date, and not the right date, is corrected. When the invoice was raised on neither the 1st nor the
+lease's start day the date is still written, because left where it is the lease would be billed
+again, and flagged so the billing day can be confirmed. A corrected date that falls after the
+lease's end is written and flagged too: the period billed past the end may need a credit note.
+Only a lease without a start date is listed under "review" and left alone.
 
 The same run lists any two biller invoices on one lease that cover the same days, with the days
 billed twice. Those are settled by credit note by hand; the command never raises one.
