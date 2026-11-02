@@ -50,7 +50,8 @@ Create/Update payload (`UtilityMeterData`):
 | `facility_id` | Yes | integer | `facilities.id` |
 | `utility_id` | Yes | integer | `lease_components.id` — populate the picker from lease components where `is_utility_charge = true`. |
 | `reading_unit_id` | Yes | integer | `stock_keeping_units.id` (SKU). |
-| `initial_reading` | Yes | number | Decimal, stored with 5 dp. Seeds `last_reading` on create. |
+| `initial_reading` | Yes | number | Decimal, stored with 5 dp. Seeds `last_reading` on create. On update any number is accepted; on a meter with no readings `last_reading` follows it unless `last_reading` is corrected in the same request. |
+| `last_reading` | No | number | Nullable decimal. A hand correction of the meter's last reading, any number (no check against `initial_reading` or the readings). Omit it, send `null`, or send the stored value unchanged to leave it to the readings. |
 | `lease_ids` | No | integer[] | Nullable. Each must be a `leases.id` on the same `facility_id`. Synced as a many-to-many relationship; send the full desired set on update (omit the key to leave the leases untouched). |
 | `status` | No | string | `active`, `inactive` (defaults to `active`). |
 
@@ -73,11 +74,16 @@ Example create payload:
 Response (`data`):
 
 - `message`
-- `utility_meter` — includes `utility` (lease component), `facility`, `reading_unit` (SKU), `leases` (each with its tenant `user`), `last_reading`, `last_reading_at`, `last_reading_image`, `reading_status`, `submitted_at`, `is_faulty`, `fault_reason`, and `permissions`.
+- `utility_meter` — includes `utility` (lease component), `facility`, `reading_unit` (SKU), `leases` (each with its tenant `user`), `last_reading`, `last_reading_at`, `last_reading_image`, `last_reading_image_issue`, `last_reading_image_flagged`, `reading_status`, `submitted_at`, `is_faulty`, `fault_reason`, and `permissions`.
+  `last_reading_image_issue` / `last_reading_image_flagged` say what the AI meter reader found wrong with the
+  last reading's photo (row 200; same enum object as a reading's `image_issue`); `null` / `false` when there is
+  no photo or it was never checked. Use them on the Submit readings list.
 
 `last_reading` tracks the latest recorded reading. It is set to `initial_reading`
 when the meter is created (with `last_reading_at` null, since no reading exists yet)
-and is bumped automatically each time a reading is added. `last_reading_at` records
+and follows the latest reading (newest `created_at`, then `id`) automatically whenever a
+reading is added, corrected or deleted; with no readings left it returns to `initial_reading`
+(`last_reading_at`/`last_reading_image` null, `is_faulty` false). `last_reading_at` records
 the timestamp of that most recent reading.
 
 `last_reading_image` is the `Upload` attached to the most recent reading (same
@@ -130,7 +136,10 @@ Response (`data`):
 - `message`
 - `utility_meters` — the submitted meters as a `UtilityMeterResource` collection (now carrying a populated `submitted_at`).
 
-Authorized by `update-utility-meter`. Every meter's `submitted_at` is cleared back to
+Authorized by `update-utility-meter` or `submit-meter-readings`. **Show the Submit readings button off
+`permissions.submitReadings`** on the meters, not `permissions.update`: `update` is false for a caretaker
+who holds only `submit-meter-readings`, and true for a meter's creator who may not submit. It is the
+same on every meter, since the rule is the user's, not the meter's. Every meter's `submitted_at` is cleared back to
 `null` automatically on the first day of each month by the
 `utility-meters:reset-submissions` scheduled command, reopening meters for the new
 billing period.
@@ -178,7 +187,7 @@ Create/Update payload (`UtilityMeterReadingData`):
 
 | Field | Required | Type | Notes |
 |---|---|---|---|
-| `current_reading` | Yes | number | Decimal, stored with 5 dp. Must be **≥ the meter's `last_reading`** (a meter cannot read backwards). |
+| `current_reading` | Yes | number | Decimal, stored with 5 dp. On create it must be **≥ the meter's `last_reading`** (a meter cannot read backwards); on update any number is accepted, to correct a reading. |
 | `reading_image_id` | No | integer | Nullable. Must exist in `uploads.id` when provided. |
 | `is_faulty` | No | boolean | Defaults to `false`. Set `true` when the meter is faulty/unreadable. The value is mirrored onto the parent meter's `is_faulty`, so a faulty reading flags the meter and a later clean reading clears it. |
 | `fault_reason` | No* | string | Max 500 chars. **Required when `is_faulty` is `true`.** Stored on the reading (fault history) and mirrored onto the meter's `fault_reason` while it stays faulty; cleared to `null` by the next clean reading. |
@@ -198,6 +207,13 @@ Each reading exposes `is_faulty` and `fault_reason` in its resource (so faults h
 history). The parent meter resource exposes `is_faulty` and `fault_reason` too
 (reflecting the latest reading); while `is_faulty` is `true`, billing should estimate
 the meter's consumption rather than trust the recorded reading.
+
+Each reading also exposes `image_issue` and `image_flagged` (row 200): what the AI meter reader found
+wrong with the reading's photo when it was read through `extract-reading`, copied from the photo when
+the reading is saved or its photo changed. `image_issue` is the enum object (`value`, `color`,
+`label`, `message`; see [meter reading extraction](meter-reading-extraction.md)), and
+`image_flagged` is `true` for anything but `none`. Both are `null`/`false` when the photo was never
+checked. Show a "photo flagged" marker on the reading when `image_flagged` is true.
 
 ## Importing meters from a spreadsheet
 
