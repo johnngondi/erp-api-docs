@@ -69,7 +69,10 @@ which made two things go wrong:
   end landed on 30 July. The server now reads any date it is sent as the day it means in Nairobi,
   so a timestamp no longer shifts it - but send `YYYY-MM-DD`.
 
-`end_at` is never accepted: it is start + term - 1 day. On an **update** it is worked out again
+`end_at` is never accepted: it is start + term - 1 day. When the month the term reaches has no
+such day, it is that month's last day instead: a month from 31 Jan ends 28 Feb (29 Feb in a leap
+year), a year from 29 Feb ends 28 Feb, a month from 31 Mar ends 30 Apr. A lease application's
+`proposed_end_date` follows the same rule. On an **update** it is worked out again
 only when `start_at`, `period_in_years` or `period_in_months` actually changes; any other edit keeps
 the end the lease has. Leases imported from EPMAS carry EPMAS's end date and a term counted a month
 short (6 years stored as 5 years 11 months), or run part-months (15 Jun to 13 Jun), so re-deriving
@@ -375,7 +378,12 @@ Behavior:
   the billing cycle), not the date it was generated.
 - Every invoice line carries a value. A component priced at zero stays on the lease but is never
   invoiced, so the invoice holds only the priced components.
-- `next_due_at` is advanced to the start of the next period when the invoice is created.
+- `next_due_at` is advanced by exactly one billing cycle from the period start when the invoice is
+  created, on the same day of the month, with any time of day dropped: an annual lease billed from
+  1 Nov 2026 is next due 1 Nov 2027, and a monthly lease due on the 15th stays on the 15th. (Until
+  2026-11-02 the date was also snapped to the start of its year, month or week, so an annual lease
+  billed on 1 Nov came out due the following 1 Jan and would have been billed again ten months into
+  the period it had just paid for. See [Repairing snapped due dates](#repairing-snapped-due-dates).)
 - **Billing stops at the lease's end.** When `end_at` falls inside the period, the invoice covers the
   period only up to `end_at`. The monthly price stays the same, and the `quantity` is the number of
   months actually billed. Whole months count 1 each, and the month the lease ends in counts its
@@ -385,11 +393,52 @@ Behavior:
   averaged over it, as usual.
 - The `invoices:generate` scheduler bills only `active` leases whose `next_due_at` is on or before
   their `end_at` (or that have no end).
+- **Billing past the end (holdover, row 181).** When the company's `bill_leases_after_end` setting is
+  `yes`, an `active` lease keeps billing after its end:
+  - The period it ends inside goes out as **two invoices with the same due date**: one up to `end_at`
+    (as above), and one for the rest of the period. A quarter from 1 Oct with `end_at` 15 Nov bills
+    `Oct 01 - Nov 15 2026` (`quantity` 1.5) and `Nov 16 - Dec 31 2026` (`quantity` 1.5). `next_due_at`
+    then moves to the next period (1 Jan), not the day after the end.
+  - Every period after that is billed in full, at the rate in force on `end_at`: escalations dated
+    after the end are not applied, on the invoice or by `escalations:process`.
+  - It stops when the lease is terminated, or when `end_at` is moved later (it is then an ordinary
+    running lease again).
+  - Invoices already raised in holdover stay as they are if the lease is later renewed at new rates.
+  - This endpoint serves a lease in holdover too, instead of the `ended` 422.
 
 Success response:
 
 - `message`: `Invoice for next period generated successfully.`
 - `invoice`: the created `FacilityInvoice`.
+
+### Repairing snapped due dates
+
+Leases the biller advanced before 2026-11-02 may still carry a snapped `next_due_at`: an annual or
+biennial lease billed from any month but January sits on 1 Jan, and a lease due mid-month sits on
+the 1st. Until that date arrives nothing has been billed twice, and the date can simply be put
+back. A console command does it; there is no endpoint:
+
+```bash
+php artisan leases:repair-snapped-due-dates                 # report only, nothing changes
+php artisan leases:repair-snapped-due-dates --apply         # write the corrected dates
+php artisan leases:repair-snapped-due-dates --company=3 --lease=6422 --lease=6423
+php artisan leases:repair-snapped-due-dates --billed-from=2026-10-01   # only invoices raised since
+```
+
+For every active lease it takes the last invoice the biller raised (by the scheduler or the
+"generate invoice for next period" button; manual invoices, deposits, opening balances and utility
+bills are ignored), works out where the due date should have landed (one cycle after that invoice's
+period start) and what the old snap would have made of it. Only a lease whose current `next_due_at`
+is exactly the snapped value is a candidate. It is corrected when the billed day is the lease's
+start day, a real anniversary. Otherwise it is listed under "review" and left alone: for a lease
+whose due date had drifted (an import that saved 2 Oct 00:11) the snap was the correction. A corrected
+date that falls after the lease's end is still written, because left where it is the lease would be
+billed again, and flagged: the period billed past the end may need a credit note.
+
+The same run lists any two biller invoices on one lease that cover the same days, with the days
+billed twice. Those are settled by credit note by hand; the command never raises one.
+
+Running it again finds nothing.
 
 ## Generate the letting fee
 
