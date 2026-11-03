@@ -174,7 +174,11 @@ currency** (like the other two summaries).
   columns); the amount cells are omitted. They carry `type: subtotal`, `background_color: primary`.
 - **`property_{id}` totals row** is a `Total` label with `col_span: 6` (covering the six leading text
   columns), then the `amount` / `tax` / `total` sums; `invoice` is omitted.
-- **`invoice`** cell value is `{ file_name, source_url }`, or `null` when no invoice is attached.
+- **`invoice`** cell value is `{ file_name, source_url }`, or `null` when no invoice is attached or
+  the attached upload has been deleted. `source_url` is the upload's full preview URL
+  (`…/api/v1/settings/file-management/uploads/{uuid}/preview`), the same one every other screen
+  opens an upload with. Use it as the link as it is: it needs no token, and opens the PDF or image
+  in the browser. Show `file_name` as the link text.
 - The expense-type column key is **`expense_type`** (not `type`) — `type` is reserved for row metadata.
 
 ### This report's presentation choices
@@ -278,7 +282,7 @@ separately [below](#sample-all-properties-bucket).
           { "label": "Invoice", "key": "invoice", "format": "string", "type": "normal", "weight": "font-normal", "background_color": "none", "alignment": "left", "visible": true, "togglable": false }
         ],
         "items": [
-          { "invoice_number": { "value": "INV-014" }, "date": { "value": "16 Jan, 2026" }, "notes": { "value": "Meter top-up" }, "vendor": { "value": "Kenya Power" }, "category": { "value": "Utilities" }, "expense_type": { "value": "Electricity" }, "amount": { "value": 800 }, "tax": { "value": 120 }, "total": { "value": 920 }, "invoice": { "value": { "file_name": "kplc-jan.pdf", "source_url": "https://…/kplc-jan.pdf" } }, "type": "normal" },
+          { "invoice_number": { "value": "INV-014" }, "date": { "value": "16 Jan, 2026" }, "notes": { "value": "Meter top-up" }, "vendor": { "value": "Kenya Power" }, "category": { "value": "Utilities" }, "expense_type": { "value": "Electricity" }, "amount": { "value": 800 }, "tax": { "value": 120 }, "total": { "value": 920 }, "invoice": { "value": { "file_name": "kplc-jan.pdf", "source_url": "https://…/api/v1/settings/file-management/uploads/0d9aab83-1355-44cc-bb3a-b1f821adb060/preview" } }, "type": "normal" },
           { "invoice_number": { "value": "INV-021" }, "date": { "value": "16 Jan, 2026" }, "notes": { "value": "Pipe repair" }, "vendor": { "value": "AquaFix" }, "category": { "value": "Repairs" }, "expense_type": { "value": "Plumbing" }, "amount": { "value": 900 }, "tax": { "value": 135 }, "total": { "value": 1035 }, "invoice": { "value": null }, "type": "normal" },
           { "invoice_number": { "value": "Total", "col_span": 6 }, "amount": { "value": 2200 }, "tax": { "value": 315 }, "total": { "value": 2515 }, "type": "grosstotal", "background_color": "secondary" }
         ],

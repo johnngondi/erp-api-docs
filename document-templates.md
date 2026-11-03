@@ -198,7 +198,7 @@ partials (`document-blocks/{key}.blade.php`) all include
 | `lpo_details` | lpo | `document.number` (`LPO0001`), `.issued_at`, `.due_at` (delivery), `.status`, `.currency` |
 | `lpo_title` | lpo | `lpo.title` (the order's title: a direct LPO's as entered, a workflow LPO's copied from its request), `document.notes` |
 | `voucher_details` | payment voucher | `document.number` (`PV0001`), `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
-| `remittance_details` | remittance | `document.number` (`REM0001`), `landlord.name`, `property.name`, `document.period`, `.memo` (e.g. `August 2026`), `.issued_at`, `.status` |
+| `remittance_details` | remittance | `document.number` (`REM0001`), `landlord.name`, `property.name`, `document.period`, `.type` (`Advance` or `Monthly`, from `is_advance`), `.memo` (e.g. `August 2026`), `.issued_at`, `.status`. `.type` is new (row 201): a block saved without a field list prints it, one with a list prints it once ticked |
 | `settlement_details` | settlement | `document.number` (`ST0001`), `.debit_bank`, `.debit_account_name`, `.debit_account`, `.method` (the settlement's payment method), `.payment_advice_number`, `.issued_at`, `.status` |
 
 **Content blocks**

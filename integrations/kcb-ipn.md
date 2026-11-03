@@ -158,8 +158,8 @@ The following are the only non-200 responses, and all indicate a configuration o
 
 ## 6. Idempotency and retries
 
-- Every delivery is recorded, **including retries**. We do not deduplicate on KCB's behalf.
-- We treat `requestId` and `transactionReference` as the natural deduplication keys. Please keep these stable across retries of the same notification.
+- Every delivery is acknowledged and logged, **including retries**.
+- We deduplicate on a fingerprint of `requestId`, `transactionReference`, `transactionAmount`, `narration` and `timestamp` (together with the bank), so a retried notification is never booked twice. Retries are safe, provided these fields are kept stable across retries of the same notification. (`requestId` and `transactionReference` alone are not unique: a payment and its charge may share both.)
 - A `statusCode` of `0` means the notification is safely recorded and **should not be retried**.
 
 > **Action required from KCB:** please confirm your retry policy — number of attempts, backoff interval, and the request timeout after which a delivery is considered failed.
@@ -207,6 +207,12 @@ Please direct integration queries and the items above to our integration team. W
 | Provider registry | [config/banks.php](../../config/banks.php) |
 | Log channel | `bank_ipn` → `storage/logs/bank-ipn/bank-ipn-YYYY-MM-DD.log`, retained 90 days |
 | Rate limiter | `bank-ipn`, defined in [app/Providers/RouteServiceProvider.php](../../app/Providers/RouteServiceProvider.php) |
+| Parked payment model | [app/Models/BankAccountPayment.php](../../app/Models/BankAccountPayment.php) — table `bank_account_payments` |
+| Parking action | [app/Actions/PropertyManagement/Finance/BankPayments/ParkBankPaymentAction.php](../../app/Actions/PropertyManagement/Finance/BankPayments/ParkBankPaymentAction.php) |
+| Matching job | [app/Jobs/MatchBankPaymentJob.php](../../app/Jobs/MatchBankPaymentJob.php) |
+| Matcher | [app/Services/PropertyManagement/Finance/BankPayments/BankPaymentMatcher.php](../../app/Services/PropertyManagement/Finance/BankPayments/BankPaymentMatcher.php) |
+| Backfill command | `php artisan bank-ipn:import-logs` (parks the notifications already in the log files; no auto actions) |
+| API for staff | [docs/frontend/api/v1/app/property-management/finance/bank-payments.md](../frontend/api/v1/app/property-management/finance/bank-payments.md) |
 | Tests | [tests/Feature/Integration/BankIpnTest.php](../../tests/Feature/Integration/BankIpnTest.php) |
 
 Environment variables:
@@ -216,4 +222,12 @@ BANK_KCB_IPN_ENABLED=true
 BANK_KCB_IPN_PUBLIC_KEY=      # PEM contents or absolute path; empty => signature logged, not enforced
 ```
 
-**Current phase:** notifications are logged only. Posting the credit to the cashbook (`bank_account_transactions`), matching `customerReference` to an invoice or lease, and resolving `creditAccountIdentifier`/`tillNumber` to a `BankAccount` are deliberately deferred until UAT traffic shows the real shape of the data.
+**What happens to a notification now:**
+
+1. The controller logs it (as before) and then **parks** it as a row in `bank_account_payments` through `ParkBankPaymentAction`. Pay-ins and pay-outs are both kept; the sign of `transactionAmount` decides the direction.
+2. **Deduplication** uses a fingerprint over bank, `requestId`, `transactionReference`, amount, `narration` and `timestamp`. `requestId` and `transactionReference` alone are not unique: a SWIFT payment and its charge share both, and both must be kept, while a bank retry of the same notification is absorbed.
+3. **Account resolution:** `creditAccountIdentifier` is compared with `bank_accounts.account_number` within the company. A notification for an unknown account is still parked, with no bank account, and surfaces as an unresolved payment that staff can assign.
+4. **Matching is queued** (`MatchBankPaymentJob`, run by `BankPaymentMatcher`), never done inside the request: confirm a unique equal-amount pending receipt, create a confirmed receipt when the payer is certain, otherwise store suggestions for staff. Both automatic steps are controlled by company settings (see the staff API document).
+5. **The acknowledgement is unchanged:** `statusCode` `0` is returned whenever the signature check passes. A failure to park is logged on our side and is never returned to the bank.
+
+`tillNumber`, `organizationShortCode` and the raw payload are stored with the payment. The signature result is recorded on the row (`signature_verified`).

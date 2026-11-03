@@ -32,9 +32,10 @@ Supported query params:
 - Filters:
   - `filter[search]` (Scout-backed search; supports CSV IDs)
   - `filter[facility_id]`, `filter[landlord_id]`, `filter[status]`
+  - `filter[is_advance]`: `1` for advance remittances, `0` for the regular (Monthly) ones
   - `filter[created_at]`, `filter[period_from]`, `filter[period_to]`
 
-**Ids, `status` and `type` match exactly.** They were partial until 2026-09-29, so
+**Ids, `status`, `type` and `is_advance` match exactly.** They were partial until 2026-09-29, so
 `filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
 returned rows for facility 60. Send the whole value. Date filters are still partial, so
 `filter[created_at]=2026-09` means that month.
@@ -124,6 +125,7 @@ Response shape (`DataResource`):
 
 - Returns only summary values per facility.
 - Does not include detailed collections or expense line items.
+- Amounts are rounded to the cent (they used to carry float error, e.g. `19399.999999999996`).
 - Each row carries `has_management_contract`. A property with no management contract is listed
   with zero amounts and the note "No management contract is set for this property." It used to
   fail the whole preview. Disable it for selection: creating a remittance for it is still
@@ -212,9 +214,9 @@ carries:
 
 | Field | Type | Notes |
 |---|---|---|
-| `remittable_amount` | number | The most this property can be advanced. Prefill the row's **To remit** input with it. |
+| `remittable_amount` | number | The most this property can be advanced, to the cent. Prefill the row's **To remit** input with it; that exact amount is accepted. |
 | `can_advance` | boolean | `false` when the property can't be advanced. Show the row disabled. |
-| `advance_refusal` | string or `null` | Why not: no management contract, the landlord holds the collection account, an advance is already open (pending or unpaid), or there is nothing available for the period. |
+| `advance_refusal` | string or `null` | Why not: no management contract, the landlord holds the collection account, collections or expenses from an earlier period are not remitted yet, an advance is already open (pending or unpaid), or there is nothing available for the period. |
 
 Properties that already have a regular remittance for the period are left out, as in the regular
 preview, because their collections are already remitted.
