@@ -126,6 +126,13 @@ Create/Update payload (`ProcurementRequestStepTemplateData`):
 | `description` | No | string | Optional |
 | `select_preferred_vendor` | No | boolean | Default `false` |
 | `handle_procurement` | No | boolean | Default `false` |
+| `signs_document_signature` | No | boolean | Default `false`. This step's approver signs the LPO raised from the request (its `signatories` block and public page) |
+
+Only the marked steps sign the LPO, in chain order, and the request's creator never does; with no
+marked step the LPO prints no signatories. The flag is copied onto each request step when the
+request's chain is attached, and is returned on the request's steps as `signs_document_signature`.
+`php artisan approvals:stamp-signing-steps` copies the current templates' flags onto requests
+already raised (see [Document signatures](../access-management/approval-templates.md#document-signatures)).
 
 ## Lease Management Settings
 

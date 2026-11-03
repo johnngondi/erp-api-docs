@@ -105,8 +105,10 @@ Response `200`:
 
 `422` with `errors.signature` for a missing value, a non-PNG, invalid base64, or an image over 1 MB.
 
-The signature is **encrypted at rest**. It is printed on every Letter of Offer the user approves
-(`{{approval_signatures}}`): the last two approvals of an offer's chain, each with the approver's
+The signature is **encrypted at rest**. It is printed wherever the user approves a step marked
+`signs_document_signature` (see
+[Document signatures](../app/access-management/approval-templates.md#document-signatures)): a
+Letter of Offer's `{{approval_signatures}}` and an LPO's signatories, each signer with their
 signature, name and role. An approver with no signature gets a blank signing line instead. An offer
 picks up a new or changed signature the next time its approval chain moves (a step approved, sent
 back or resubmitted), not the moment it is saved.

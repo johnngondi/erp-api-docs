@@ -296,7 +296,7 @@ mobile_money[]: { component, bank_name, paybill_number, account_number }  # invo
 payment_account:{ bank_name, branch, account_name, account_number }    # receipt
 transactions[]: { transaction_date, transaction_number, method, amount }  # receipt
 lpo:            { title }                                              # lpo
-approval_chain[]: { name, date }                                       # lpo, see §4.1
+approval_chain[]: { name, role, date, signature }                     # lpo, see §4.1
 signoff:        { prepared_by, prepared_at }                           # voucher, remittance
 withholding_columns[]: [ "WHT Professional", … ]                       # voucher, see §4.2
 summary:        { is_advance, total_collections, total_expenses,
@@ -352,28 +352,33 @@ Each mapper exposes:
 ### 4.1 LPO signatories
 
 `signatories` is LPO-only and replaces the generic `signature` block there
-specifically. The template designer sets `config.signatory_count` (1-8,
-default 3); the block computes **Created / Reviewed / Approved** from the raw,
-ordered `approval_chain[]` the mapper builds — index 0 is always the
-procurement request's creator (`procurementRequest.owner`), followed by each
-approval step in chain order (`procurementRequest.steps`, ordered by `id` —
-there is no `step_order` column on this table, and it is **not** the generic
-`Approvable`/`ApprovalStep` framework `FacilityInvoice`/`Loo`/the LPO's own
-approval use). Selection is intentionally computed at **render time** in
-`signatories.blade.php`, not in the mapper, because `signatory_count` is a
-per-block-instance config, not a document-level property:
+specifically. It prints the approvers marked to sign, from the ordered
+`approval_chain[]` the mapper builds. The procurement request's creator (or a
+direct LPO's creator) is **not** in the chain and never signs.
 
-- N=1 → `[Created]`
-- N=2 → `[Created, Approved(last step)]`
-- N=3 → `[Created, Reviewed(2nd-to-last step), Approved(last step)]`
-- N>3 → extra `Approved` slots are appended **after** the fixed trio, pulled
-  from the **front** of the step chain forward, never re-using the last two
-  steps already shown
-- Never pads with blanks — a short chain renders fewer than N signatories
+- **Workflow LPO** - the procurement request's steps (`procurementRequest.steps`,
+  ordered by `id`) whose `signs_document_signature` is true, copied from the
+  procurement request step template when the chain was attached.
+- **Direct LPO** - the `approved` steps of its own current approval attempt whose
+  `signs_document_signature` is true, copied from the approval template step.
+
+Each entry is `{ name, role, date, signature }`: the approver, the role the step
+was addressed to, when they acted, and their saved profile signature as a PNG
+`data:` URL (null when they have none). A chain with no marked step is `[]`, and
+the block prints nothing.
+
+The block config is `signatory_count` (1-8, default 3), a cap: the **last** N
+entries print, in chain order; and `show_date`. Each box holds the signature
+image (or a blank signing line), the name in bold, the role, and the date. The
+boxes are spread across the width: one sits right; two sit left and right; three
+or more run left, centred, right (`justify-content: space-between`, each box's
+text aligned to its side). The old `align` option is ignored.
 
 `CreateLpoAction` only ever runs once a procurement request's last step
 approves, so by the time an LPO document exists the chain is always complete;
-no status filtering is needed when building `approval_chain`.
+no status filtering is needed for a workflow LPO. `php artisan
+approvals:stamp-signing-steps` copies the current templates' flags onto steps
+created before a template was marked.
 
 ---
 
@@ -964,10 +969,10 @@ registered block rendering without error against its type's sample payload;
 and document-number formatting including ids ≥ 10000.
 
 `tests/Feature/DocumentTemplateSignatoriesTest.php` covers the LPO
-`signatories` block's Created/Reviewed/Approved selection algorithm for
-signatory counts 1/2/3/5, the short-chain no-padding fallback, and an
-end-to-end case building a real procurement request + approval-step chain and
-confirming `LpoPayloadMapper` produces the expected `approval_chain`.
+`signatories` block: the `signatory_count` cap, the spread layout for one, two
+and three signers, signature images, and end-to-end cases confirming
+`LpoPayloadMapper` builds `approval_chain` from only the marked steps (no
+creator) for workflow and direct LPOs.
 
 `tests/Feature/DocumentTemplateVoucherAndRemittanceTest.php` covers the payment
 voucher and remittance advice: per-tax withholding columns (including one that
