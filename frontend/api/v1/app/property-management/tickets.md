@@ -15,6 +15,8 @@ Base route:
 - `PUT/PATCH /tickets/{ticket}`
 - `DELETE /tickets/{ticket}`
 - `POST /tickets/{ticket}/elevate`
+- `PATCH /tickets/{ticket}/assign`: hand the ticket to a member of staff (row 179)
+- `PATCH /tickets/{ticket}/close`: close it with a resolution (row 179)
 
 ## List Tickets
 
@@ -134,9 +136,83 @@ Example response:
 }
 ```
 
+Who may elevate, and when. Drive the button off `permissions.elevate`; it is `true` only when all
+of these hold, and the endpoint refuses with `403` otherwise:
+
+- the caller has `elevate-facility-ticket` and is allocated to the ticket's property;
+- the ticket's category allows elevation (`is_procurable` on the
+  [ticket category](settings/ticket-categories.md)). Otherwise `403`:
+  `Tickets in this category cannot be elevated to a procurement request.`;
+- the ticket is open. Otherwise `403`: `This ticket is already closed.` Anything new after a
+  ticket is closed is raised as a new ticket;
+- the ticket has not been elevated already. Otherwise `403`:
+  `This ticket has already been elevated to procurement request #320.` A ticket raises one
+  procurement request; `procurement_request` on the ticket links it.
+
+A category allowed to elevate still needs its expense type and sub type set; without them the
+endpoint answers `422` on `ticket_category_id` naming what is missing.
+
+## After a ticket is raised (row 179)
+
+Every ticket response now carries `assigned_to_id` and `assigned_to` (`{ id, name }`), null until
+someone picks it up, and `permissions.assign` / `permissions.close`, which say whether the caller
+may do those - drive the two buttons off them.
+
+**Who hears about a new ticket.** A ticket category can name a person (see
+[ticket categories](settings/ticket-categories.md)). Raising a ticket under it - from the staff
+form, the tenant portal, or a dispute on an invoice, credit note or receipt - sends that person an
+in-app notification and an email, and gives them the ticket's **pending task**. A category with
+nobody named tells nobody, as before.
+
+**Tickets raised from the tenant portal.** A ticket belongs to its property's company, whoever
+raises it. Tickets and disputes raised from the tenant portal used to be saved with no company, so
+they never appeared on these lists and opening one answered `404`. New ones now appear like any
+other.
+
+**The ticket's history.** `GET /tickets/{ticket}` returns `entries`, oldest first, each with
+`title`, `description`, `created_at` and `owner` (`{ id, name }`, who wrote it). Closing with a
+resolution adds the last one, titled `Resolved`.
+
+### Assign
+
+`PATCH /tickets/{ticket}/assign` with `{ "user_id": 42 }`
+
+Fill the picker from `GET /facilities/{facility}/admins` with the ticket's `facility_id`: the
+active staff allocated to that property, which is who assign accepts. Send a row's `id`.
+
+- `user_id` must be active staff of the company, allocated to the ticket's property. Otherwise
+  `422` on `user_id` (`Choose an active member of staff.` / `<name> is not assigned to this
+  property.`).
+- Allowed for anyone with `update-facility-ticket` on the property, and for whoever the ticket is
+  currently with (so it can be passed on without the edit permission). `403` otherwise.
+- A closed ticket cannot be assigned: `403` with `message: "This ticket is already closed."`, and
+  `permissions.assign` is false.
+- The assignee gets an in-app notification and an email, and the pending task moves to them; the
+  person who had it loses the task.
+
+Response: `{ "data": { "message": "Ticket assigned to Jane.", "ticket": { ... } } }`.
+
+### Close
+
+`PATCH /tickets/{ticket}/close` with `{ "resolution": "Rent corrected and a credit note raised." }`
+(`resolution` optional, up to 2,000 characters).
+
+- Same people as assign. The person who raised the ticket does not close it. Already closed: `403`
+  with `message: "This ticket is already closed."`, and `permissions.close` is false.
+- A closed ticket is no longer edited: `PUT /tickets/{ticket}`, and the tenant portal's own edit,
+  answer `403` with the same message, and `permissions.update` is false.
+- The resolution is kept as the ticket's last entry (`entries[]`, `title: "Resolved"`), `status`
+  becomes `closed` with `closed`, the pending task is cleared, and the person who raised the ticket
+  (`owner`) gets an in-app notification and an email with the resolution.
+- A ticket raised by a **dispute** settles it: the invoice, credit note or receipt stops showing as
+  disputed (`disputed_at`, `dispute_details`, `disputed_by` cleared) and keeps `dispute_ticket_id`
+  pointing at the closed ticket as the record.
+
+Response: `{ "data": { "message": "Ticket closed.", "ticket": { ... entries ... } } }`.
+
 ## Common enum values in responses
 
-- `status`: `open`, `closed`
+- `status`: `open` (colour `secondary`), `closed` (colour `danger`)
 - `priority`: `high`, `normal`, `low`
 
 ## Errors

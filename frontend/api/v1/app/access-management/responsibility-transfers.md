@@ -129,6 +129,17 @@ Supported query params:
   - `filter[from_user_id]`
   - `filter[to_user_id]`
   - `filter[created_at]` (date: `YYYY-MM-DD`)
+  - `filter[search]`: matches, ignoring case:
+    - the other person's name or email (the caller's own name matches nothing, since the caller
+      is on every transfer)
+    - the name of an offered role or property, including a property deleted since
+    - a transfer id, when the term is only digits and that transfer is in the list; otherwise
+      the digits are searched as text
+    - comma-separated ids (`12,15,19`): those transfers, as on the other lists
+
+    Comma-separated words must all match, each on any field: `kamau, lodge` is a transfer with
+    Kamau on a property named like "lodge". It combines with every other filter and with paging.
+    A transfer carries no reason, so there is none to search.
 - Sort:
   - `sort=status`, `sort=timestamp_to`, `sort=accepted_at`, `sort=created_at`
 - Pagination:

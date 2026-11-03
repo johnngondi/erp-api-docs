@@ -9,6 +9,7 @@ Base route:
 ## Endpoints
 
 - `GET /receipts`
+- `GET /receipts/deadline` — where the monthly receipting deadline stands (row 166)
 - `POST /receipts`
 - `GET /receipts/{receipt}`
 - `PUT/PATCH /receipts/{receipt}`
@@ -52,7 +53,10 @@ Example:
 A receipt carries three dates:
 
 - **`transaction_date`** is the day the tenant paid, as entered. It is the date on the bank
-  statement and the cashbook line's `transaction_at`. It never changes on approval.
+  statement and the cashbook line's `transaction_at`. It never changes on approval. Label it
+  **Payment date**: its validation messages name it that way on create and on edit ("The payment
+  date field is required.", "The payment date field must be a date before or equal to now."), and
+  the printed receipt shows it as "Date".
 - **`created_at`** (`created` in the resource) is the day the receipt was **processed**. For a
   receipt that needs Receivables' approval, that's the day of the final approval, not the day it
   was captured. Captured on 30 Oct and approved on 2 Nov, it reads 2 Nov and falls in November.
@@ -77,7 +81,7 @@ Request body:
 |---|---|---|---|
 | `transaction_number` | Yes | string | Unique business transaction number |
 | `receiving_account_id` | Yes | integer | Must exist in `bank_accounts.id` |
-| `transaction_date` | Yes | date (`YYYY-MM-DD`) | - |
+| `transaction_date` | Yes | date (`YYYY-MM-DD`) | The payment date. Today or earlier |
 | `payment_method_id` | Yes | integer | Must exist in `payment_methods.id` |
 | `paying_user_id` | Yes | integer | Must exist in `users.id` |
 | `amount` | Yes | integer | - |
@@ -134,6 +138,7 @@ Example response:
 | `allocations` | An invoice is not on a lease of `facility_id` | Some of the allocated invoices do not belong to leases in the selected property. |
 | `allocations` | An invoice has no balance left (paid or already overpaid) | Invoice with invoice_id 9001 is already paid for fully |
 | `transaction_number` | Another live receipt has the same reference, amount, property and tenant | Duplicate payment: receipt #412 already records reference QJK3X7L2MP for 25,000.00 from this tenant on this property. |
+| `receipting` | Receipting has closed for the month and the caller lacks `receipt-after-deadline` (see [Monthly receipting deadline](#monthly-receipting-deadline)) | Receipting for October 2026 closed on Thu 29 Oct at 17:00. It reopens on Sun 1 Nov at 07:00. |
 
 **Duplicate payments (row 178).** A receipt is the same payment as another when the **reference
 (`transaction_number`), amount, property (`facility_id`) and tenant (`paying_user_id`)** all match.
@@ -211,7 +216,7 @@ Once confirmed, only the fields below may change:
 |---|---|---|---|
 | `transaction_number` | Yes | string | - |
 | `receiving_account_id` | Yes | integer | Must exist in `bank_accounts.id` |
-| `transaction_date` | Yes | date (`YYYY-MM-DD`) | - |
+| `transaction_date` | Yes | date (`YYYY-MM-DD`) | The payment date. Today or earlier |
 | `payment_method_id` | Yes | integer | Must exist in `payment_methods.id` |
 | `paying_user_id` | Yes | integer | Must exist in `users.id` |
 | `receiving_user_id` | Yes | integer | Must exist in `users.id` |
@@ -594,6 +599,87 @@ Rules:
 - **Download** is hidden, and `/pdf` returns `404`, when the company has no active receipt
   template the receipt's property can use.
 - Both routes are limited to 60 requests a minute per IP, and are marked `noindex`.
+
+## Monthly receipting deadline
+
+Row 166. When a company turns it on, **new receipts close on the second-last working day of each
+month** at the closing time, and **reopen on the 1st of the next month** at the reopening time. It
+all happens on its own; nobody closes or opens receipting by hand.
+
+- **Working days** are Monday to Friday, as for every deadline in the app (no holiday calendar).
+  October 2026 closes on Thu 29 Oct; November 2026 on Fri 27 Nov.
+- **Only creating receipts** is closed. Editing, backdating, reallocating, cancelling and proof of
+  payment are unaffected.
+- **Who still receipts while it is closed:** anyone with the `receipt-after-deadline` permission (the
+  receivables accountants). Everyone else gets `422` on `receipting` from `POST /receipts`.
+- **A day before it closes**, everyone in the company who can create receipts gets an in-app
+  notification ("Receipting closes soon"), and the receipt screens start the countdown.
+
+**Settings** (company settings, Finance group, all dropdowns):
+
+| Key | Values | Default |
+| --- | --- | --- |
+| `receipting_deadline_enabled` | `yes` / `no` | `no` |
+| `receipting_deadline_close_time` | `12:00` … `23:00` | `17:00` |
+| `receipting_deadline_reopen_time` | `06:00` … `09:00` | `07:00` |
+
+### Where it stands
+
+`GET /receipts/deadline` answers for the caller. The same object comes back as `receipting` on
+`GET /receipts` (next to `data`), so the list page needs no extra call.
+
+```json
+{
+  "data": {
+    "receipting": {
+      "enabled": true,
+      "state": "closing_soon",
+      "period": "October 2026",
+      "closes_at": "2026-10-29T17:00:00+03:00",
+      "countdown_from": "2026-10-28T17:00:00+03:00",
+      "reopens_at": "2026-11-01T07:00:00+03:00",
+      "seconds_until_close": 28800,
+      "seconds_until_reopen": null,
+      "message": "The receipting deadline is fast approaching: receipting for October 2026 closes on Thu 29 Oct at 17:00.",
+      "exempt": false,
+      "can_receipt": true
+    }
+  }
+}
+```
+
+| `state` | When | Show |
+| --- | --- | --- |
+| `open` | Not within a day of the deadline (or the deadline is off: `enabled: false`) | Nothing special |
+| `closing_soon` | From `countdown_from` (a day before) until `closes_at` | The **New Receipt** button in a warning colour with a countdown to `closes_at`, and a banner at the top of the form with `message` ("the deadline is fast approaching") and the countdown |
+| `closed` | From `closes_at` until `reopens_at` (the 1st, at the reopening time) | When `can_receipt` is false: no New Receipt button on the list; show `message` ("Receipting for October 2026 closed… It reopens on Sun 1 Nov at 07:00.") instead, and don't let the form submit |
+
+- `can_receipt` is what decides the button: `true` while open, and while closed for an `exempt` user
+  (`receipt-after-deadline`). An exempt user still sees `state: closed`, so the screen can say they
+  are receipting after the deadline.
+- Count down from `closes_at` (or to `reopens_at` when closed) with the device clock;
+  `seconds_until_close` / `seconds_until_reopen` are the server's figure at the time of the request,
+  should the device clock be off. Re-fetch when a countdown reaches zero: the state changes on its
+  own.
+- The notification carries `period`, `closes_at` and `reopens_at` in its data.
+
+### Testing before the deadline (not production)
+
+Outside production, `GET /receipts/deadline`, `GET /receipts` and `POST /receipts` take
+`?as_of=2026-10-29T09:00` (Nairobi time) and answer as if it were that moment, so every state can be
+seen now. Production ignores `as_of`, as does a value that is not a date. Useful moments for
+October 2026:
+
+| `as_of` | State |
+| --- | --- |
+| `2026-10-28T16:59` | `open` |
+| `2026-10-28T17:00` | `closing_soon` (countdown starts) |
+| `2026-10-30T09:00` | `closed` |
+| `2026-11-01T06:59` | `closed` (October's closure still holds) |
+| `2026-11-01T07:00` | `open` (November) |
+
+The notice can be fired for a test moment with
+`php artisan receipts:notify-receipting-deadline --as-of=2026-10-28T18:00`.
 
 ## Frontend Error Handling
 

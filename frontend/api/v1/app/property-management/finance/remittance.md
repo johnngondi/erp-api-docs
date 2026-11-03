@@ -11,7 +11,7 @@ Base route:
 - `GET /remittances`
 - `GET /remittances/create` (preview options/calculation before create)
 - `GET /remittances/create-bulk` (bulk preview by period; optional landlord filter)
-- `POST /remittances/create-bulk` (bulk create remittances)
+- `POST /remittances/create-bulk` (bulk create remittances, regular or advance)
 - `POST /remittances`
 - `GET /remittances/{remittance}`
 - `DELETE /remittances/{remittance}`
@@ -118,11 +118,16 @@ Query params:
 | `period_from` | Yes | date | Start of remittance period |
 | `period_to` | Yes | date | End of remittance period. Must be `>= period_from` |
 | `landlord_id` | No | integer | Optional filter (`users.id`) |
+| `is_advance` | No | boolean | Preview advance remittances. See [Bulk advance remittance](#bulk-advance-remittance) |
 
 Response shape (`DataResource`):
 
 - Returns only summary values per facility.
 - Does not include detailed collections or expense line items.
+- Each row carries `has_management_contract`. A property with no management contract is listed
+  with zero amounts and the note "No management contract is set for this property." It used to
+  fail the whole preview. Disable it for selection: creating a remittance for it is still
+  refused (`422` on `facility_id`).
 
 Sample response:
 
@@ -196,6 +201,56 @@ Sample response:
 Bulk create raises a chain per remittance, exactly as the single create does. The `pending`
 above is what a company with an approval template sees; without one each remittance comes back
 `unpaid`. See [Approval](#approval).
+
+## Bulk advance remittance
+
+The bulk flow can raise advance remittances. The rules are the single advance's, applied per
+property, and the amount input works like the bulk bill payment's.
+
+**Preview:** `GET /remittances/create-bulk?period_from=…&period_to=…&is_advance=1`. Each row also
+carries:
+
+| Field | Type | Notes |
+|---|---|---|
+| `remittable_amount` | number | The most this property can be advanced. Prefill the row's **To remit** input with it. |
+| `can_advance` | boolean | `false` when the property can't be advanced. Show the row disabled. |
+| `advance_refusal` | string or `null` | Why not: no management contract, the landlord holds the collection account, an advance is already open (pending or unpaid), or there is nothing available for the period. |
+
+Properties that already have a regular remittance for the period are left out, as in the regular
+preview, because their collections are already remitted.
+
+**Create:** `POST /remittances/create-bulk` with `is_advance: true` and one row per property:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `is_advance` | Yes | boolean | `true` |
+| `items` | Yes | array | At least one row |
+| `items[].facility_id` | Yes | integer | Distinct |
+| `items[].to_remit` | Yes | number | `> 0` and not above the property's `remittable_amount` |
+| `period_from`, `period_to` | Yes | date | As above |
+
+```json
+{
+  "is_advance": true,
+  "period_from": "2026-05-01",
+  "period_to": "2026-05-31",
+  "items": [
+    { "facility_id": 22, "to_remit": 50000 },
+    { "facility_id": 23, "to_remit": 12500.5 }
+  ]
+}
+```
+
+The user can lower an amount but not raise it above the maximum. Drop rows at `0` before
+submitting. `facility_ids` is ignored in advance mode.
+
+It is **all or nothing**. If any row is refused, nothing is created, and the `422` names the row:
+`errors["items.1.to_remit"] = ["Beta House: Amount to advance cannot exceed the calculated remittable amount."]`.
+Show it against that row.
+
+Each advance is created like a single one: no management fee bill, and an approval chain when the
+company has a template for remittances. Success says "Bulk advance remittances created
+successfully.". Without `is_advance` the endpoint works exactly as before.
 
 ## Approval
 

@@ -40,6 +40,9 @@ After every sync, and after a notice is applied, everyone in the system is **scr
   aliases) is in the person's name, in **any order**.
 - The person may have extra names (a middle name) and is still flagged.
 - An entry with a **one-word** name flags only a person whose whole name is that one word.
+- A **two-word alias** flags only a person whose whole name is those two words, in either order.
+  "Mohamed Hassan" (an alias on QDi.092) flags "Hassan Mohamed" but not "Nur Hassan Mohamed". A
+  two-word *listed* name, and an alias of three or more words, still allow extra names.
 - Case, spaces and punctuation (`-`, `.`, `,`, `'`) are ignored. Nothing else is forgiven: there is no typo
   tolerance and no "similar spelling".
 - UN aliases graded "Low" quality are not used. The UN itself says they are too broad to screen on.

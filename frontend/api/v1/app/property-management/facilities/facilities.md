@@ -341,6 +341,17 @@ Supports:
 - sorts: `name`, `size`, `status`, `space_type`, `created_at`
 - `per_page`
 
+`filter[name]` matches part of the stored name, in any case: `N9-3` finds `9TH FLOOR N9-3`. The
+`name` returned has the floor appended (`9TH FLOOR N9-3 - 9TH FLOOR`), so search with what the
+user typed, not with a returned name. Every other filter is exact; `status` takes a comma list:
+
+```
+filter[status]=available,only rent available,on notice&filter[space_type]=leasable&filter[name]=N9
+```
+
+The list is sorted by name and paged, so on a large property a space can sit past the first page.
+A picker that loads one page should send what the user types as `filter[name]`.
+
 Parking bays and signage positions, for a lease's "Add parking" and "Add signage" pickers:
 
 | Query | Returns |

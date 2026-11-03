@@ -16,7 +16,11 @@ definition of one — a vendor asked to upload a jobcard against an LPO holds on
 
 ## List my pending tasks
 
-Returns the authenticated user's own tasks, newest first.
+Returns the authenticated user's own tasks, newest first. A supplier's staff login (see
+[users-settings.md](users-settings.md#users)) also gets **the supplier's tasks** on records its roles
+let it view (today the "Upload jobcard" task on an LPO, with `view-facility-procurement-lpo`; the
+same record types as [notifications](notifications.md#list-my-notifications)). When the work is done
+the task goes from every inbox at once.
 
 Authorization: any authenticated Vendor user. **No permission is required** — the query is
 always constrained to the caller (`user_id`), so there is nothing further to

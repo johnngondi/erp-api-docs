@@ -98,6 +98,7 @@ Two fields decide which buttons to show, so the client never has to guess:
 | `expense_type_id` | No | integer | Must exist in `facility_expense_types.id` |
 | `expense_sub_type_id` | No | integer | Must exist **and belong to `expense_type_id`** |
 | `is_procurable` | No | boolean | Defaults to `false` |
+| `notifiable_user_id` | No | integer\|null | Who is told (in-app + email) and given the pending task whenever a ticket is raised under this category (row 179). Must be active staff of the company (`422` otherwise); pick from `GET /api/v1/settings/companies/{company}/users?filter[status]=active&filter[role]=staff` and send the row's `user.id` (the row's own `id` is the membership, a different number). Null tells nobody. The list and each category return `notifiable_user` (`{ id, name }`) beside it |
 | `status` | No | string | `active`, `inactive`. Defaults to `active` |
 
 Example request:

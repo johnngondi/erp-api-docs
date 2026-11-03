@@ -67,13 +67,13 @@ or type filter, or a date filter without its range, so these conventions hold fo
 | `property-management/facilities/{facility}/bank-accounts` | `bank_account_id` | — | — | `purpose`, `is_active` | — |
 | `property-management/facilities/{facility}/blocks` | `id` | `created_between` | `created_at` | `name` | — |
 | `property-management/facilities/{facility}/floors` | `id` | — | — | `name`, `is_parking`, `is_divisible`, `common_space`, `leasable_space`, `landlord_space`, `total_space` | — |
-| `property-management/facilities/{facility}/spaces` | `status`, `name`, `space_type`, `size`, `is_parking`, `is_signage`, `parking_type` | — | — | — | — |
+| `property-management/facilities/{facility}/spaces` | `status`, `space_type`, `size`, `is_parking`, `is_signage`, `parking_type` | — | — | `name` | — |
 | `property-management/facilities/{facility}/utilities` | `utility_id`, `vendor_id` | `created_between` | `created_at` | `utility_bill_distribution_method` | — |
 | `property-management/facilities/{facility}/utility-prices` | `utility_id`, `currency_id` | `created_between` | `created_at` | `price_per_unit` | — |
 | `property-management/facilities/{facility}/wings` | `id` | `created_between` | `created_at` | `name` | — |
 | `property-management/facility-spaces/spaces` | `id`, `space_type`, `size`, `status`, `facility_floor_id` | `created_between` | `created_at` | `name` | — |
 | `property-management/facility-types` | `id`, `division_type` | `created_between` | `created_at` | `title`, `has_tax` | `search` |
-| `property-management/finance/bills` | `invoice_validation_status`, `cu_validation_status`, `facility_id`, `vendor_id`, `expense_type_id`, `expense_category_id`, `type`, `status` | `invoice_date_between`, `created_between`, `invoice_uploaded_between`, `expense_posted_between` | `invoice_date (from/to)`, `created_at (from/to)`, `invoice_uploaded_at (from/to)`, `expense_posted_at (from/to)` | — | `search`, `contract_id`, `contract_type`, `lpo_number`, `landlord_id`, `payable` |
+| `property-management/finance/bills` | `invoice_validation_status`, `cu_validation_status`, `facility_id`, `vendor_id`, `expense_type_id`, `expense_category_id`, `type`, `status` | `invoice_date_between`, `created_between`, `invoice_uploaded_between`, `expense_posted_between` | `invoice_date (from/to)`, `created_at (from/to)`, `invoice_uploaded_at (from/to)`, `expense_posted_at (from/to)` | — | `search`, `contract_id`, `contract_type`, `lpo_number`, `landlord_id`, `payable`, `invoice_verification_status` |
 | `property-management/finance/bills/liabilities` | `vendor_id`, `facility_id`, `expense_type_id`, `expense_category_id`, `withholding_tax_id` | `expense_posted_between` | `expense_posted_at (from/to)` | — | — |
 | `property-management/finance/budgets` | `facility_id`, `status` | — | — | — | `search`, `period` |
 | `property-management/finance/expenses` | `facility_id`, `vendor_id`, `expense_type_id`, `expense_sub_type_id`, `expense_category_id`, `status` | `created_between`, `transaction_between` | `created_at`, `transaction_at` | — | `search` |
@@ -86,9 +86,9 @@ or type filter, or a date filter without its range, so these conventions hold fo
 | `property-management/frc-sanctions/matches` | `id`, `subject_type`, `frc_sanction_id` | `flagged_between` | — | — | `search`, `regime`, `current` (default `true`) |
 | `property-management/frc-sanctions/notices` | `id`, `status`, `regime` | `created_between` | — | — | — |
 | `property-management/lease-management/charges/utility-billings` | `id`, `facility_id`, `utility_id`, `created_by_id` | `created_between`, `bill_date_between` | `created_at`, `bill_date` | — | — |
-| `property-management/lease-management/credit-notes` | `facility_id`, `lease_id`, `status`, `cu_validation_status` | `due_between`, `created_between` | `due_at`, `created_at` | — | `search`, `etr_status`, `reversed` |
+| `property-management/lease-management/credit-notes` | `facility_id`, `lease_id`, `status`, `cu_validation_status` | `due_between`, `created_between`, `requested_between` | `due_at`, `created_at` | — | `search`, `etr_status`, `reversed` |
 | `property-management/lease-management/exit-notices` | `id`, `lease_id`, `initiated_by_id`, `status`, `tenant_id`, `facility_id`, `lease.user_id`, `lease.facility_id` | `exit_date_between`, `created_between` | `exit_date`, `created_at` | — | `search` |
-| `property-management/lease-management/invoices` | `facility_id`, `lease_id`, `status`, `cu_validation_status`, `user_id` | `created_between`, `due_between` | `due_at`, `created_at` | — | `search`, `etr_status`, `reversed`, `reissued` |
+| `property-management/lease-management/invoices` | `facility_id`, `lease_id`, `status`, `cu_validation_status`, `user_id` | `created_between`, `due_between`, `requested_between` | `due_at`, `created_at` | — | `search`, `etr_status`, `reversed`, `reissued` |
 | `property-management/lease-management/lease-applications` | `applicant_type`, `status`, `user_id`, `facility_type_id`, `city_id`, `applicant_registered_country_id`, `registration_type`, `is_renewal`, `lease_id`, `referral_source` | `application_submitted_between`, `proposed_start_date_between`, `reviewed_between`, `created_between` | `application_submitted_at`, `proposed_start_date`, `reviewed_at`, `created_at` | `parking_required`, `generator_required` | `search` |
 | `property-management/lease-management/lease-applications/{application}/escalations` | `lease_component_id` | — | — | `cycle` | — |
 | `property-management/lease-management/lease-applications/{application}/spaces` | `facility_space_id` | — | — | — | — |
@@ -104,13 +104,13 @@ or type filter, or a date filter without its range, so these conventions hold fo
 | `property-management/lease-management/loos` | `status`, `type`, `facility_id`, `loo_template_id`, `loo_preparation_type`, `loo_preparation_id` | — | — | `our_ref` | — |
 | `property-management/lease-management/loos/{loo}/comments` | `attempt`, `comment_in` | — | — | — | `resolved`, `unresolved` |
 | `property-management/lease-management/loos/{loo}/spaces` | `facility_space_id` | — | — | — | — |
-| `property-management/lease-management/receipts` | `receiving_account_id`, `payment_method_id`, `facility_id`, `status` | `transaction_date_between`, `created_between` | `transaction_date`, `created_at` | — | `search` |
+| `property-management/lease-management/receipts` | `receiving_account_id`, `payment_method_id`, `facility_id`, `status` | `transaction_date_between`, `created_between`, `requested_between` | `transaction_date`, `created_at` | — | `search` |
 | `property-management/lease-management/tenant-statements` | `lease_id`, `tenant_id` | `transaction_between` | `transaction_at (from/to)` | — | — |
 | `property-management/procurement/contracts` | `id`, `status`, `facility_id`, `vendor_id`, `expense_type_id`, `expense_category_id`, `expense_sub_type_id`, `asset_id`, `type`, `property_id`, `supplier_id`, `landlord_id` | `start_between`, `end_between`, `created_between` | `start_at`, `end_at`, `created_at` | `title` | `search` |
 | `property-management/procurement/inventories` | `facility_id`, `inventory_category_id`, `storage_room_id`, `shelf_id` | — | — | `name`, `current_stock` | — |
 | `property-management/procurement/inventories/categories` | `id`, `expense_type_id`, `expense_sub_type_id` | — | — | `name` | — |
 | `property-management/procurement/inventories/purchase-items` | `id`, `inventory_category_id`, `currency_id`, `tax_id` | — | — | `name`, `base_price` | `search`, `vendor_id`, `facility_id` |
-| `property-management/procurement/lpos` | `facility_id`, `is_direct`, `type`, `vendor_id`, `expense_category_id`, `expense_type_id`, `expense_sub_type_id`, `status` | `delivered_between`, `created_between` | `delivered_at`, `created_at` | `rating`, `amount`, `total` | `search` |
+| `property-management/procurement/lpos` | `facility_id`, `is_direct`, `type`, `vendor_id`, `expense_category_id`, `expense_type_id`, `expense_sub_type_id`, `status` | `delivered_between`, `created_between`, `requested_between` | `delivered_at`, `created_at` | `rating`, `amount`, `total` | `search` |
 | `property-management/procurement/requests` | `ticket_id`, `facility_id`, `asset_id`, `expense_type_id`, `expense_category_id`, `expense_sub_type_id`, `type`, `status` | `deadline_between`, `created_between` | `deadline`, `created_at` | `priority`, `is_emergency`, `require_site_visit` | `search` |
 | `property-management/procurement/requests/{procurementRequest}/bids` | `vendor_id`, `currency_id`, `status` | `delivery_between`, `created_between` | `delivery_at`, `created_at` | `amount`, `total` | `search` |
 | `property-management/procurement/requests/{procurementRequest}/items` | `id`, `inventory_id`, `selected_vendor_id` | — | — | `quantity` | — |

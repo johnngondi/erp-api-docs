@@ -148,7 +148,9 @@ GET …/settings/documents/templates/registry?document_type=facility_invoice
 | `component_allocations` | receipt | table | `component_allocations.component`, `.amount` — what the receipt settled per charge, VAT included as a final row. Config adds `show_total_row` (default true), `total_label` (default "Total"); `show_row_numbers` defaults to **false**. Draw the total as a footer row from `totals.allocated`, bold, spanning every column but the last |
 | `signatories` | **lpo only** | fields | See §1.3 |
 | `payee_details` | payment voucher | fields | `payee.name`, `.tax_pin`, `.address` — who the voucher pays |
-| `voucher_details` | payment voucher | fields | `document.number`, `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
+| `voucher_details` | payment voucher | fields | `document.number`, `.issued_at` (the voucher's date), `.credit_account`, `.method`, `.reference`, `.paid_at`, `.status` |
+| `voucher_paid_into` | payment voucher | fields | `paid_into.bank_name`, `.branch`, `.account_name`, `.account_number`: the payee's account the voucher pays into (its credit account). `heading_text` defaults to "Paid into" |
+| `voucher_paid_from` | payment voucher | fields | `paid_from.bank_name`, `.branch`, `.account_name`, `.account_number`: the company's account it is paid from (its debit account). `heading_text` defaults to "Paid from". For both: a template with no `heading_text` prints the default; a cleared one (`""`, stored as `null`) prints none |
 | `voucher_items` | payment voucher | table, **flow** | `items.transaction_date`, `.property`, `.memo`, `.total`, `.payable`, `.paid` + data-driven withholding columns and a total-paid footer — see §1.6 |
 | `sign_off` | payment voucher, remittance | sign_off | Rows of labelled fill-in slots — see §1.5 |
 | `remittance_details` | remittance | fields | `document.number`, `landlord.name`, `property.name`, `document.period`, `.memo`, `.issued_at`, `.status` |
@@ -279,6 +281,22 @@ column is not selected — printing an em dash where a row has no value for it.
 
 The footer total is the voucher's own total, not a re-sum of the visible rows — so
 do not recompute it client-side.
+
+### 1.7 Payment voucher: number and date, and bank details
+
+A voucher reads like an invoice or a receipt at the top. The voucher number and date sit directly
+under the title in a `voucher_details` block with no heading and the fields `document.number` and
+`document.issued_at`. `document.issued_at` is the voucher's own date. `document.paid_at` stays
+blank until the voucher is paid.
+
+Two blocks show the bank accounts in full (bank, branch, account name, account number):
+
+- `voucher_paid_into`: the payee's account the money goes into.
+- `voucher_paid_from`: the company's account it is paid from.
+
+The stock voucher layout uses all of this. That layout only applies to companies set up from now
+on. A company's saved voucher template is never changed for it: rearrange it in the designer by
+adding the two bank blocks and a heading-less `voucher_details` (number and date) under the title.
 
 ---
 
@@ -793,6 +811,16 @@ POST …/document-templates/{id}/render
   receipts, credit notes, payment vouchers (creator and releaser), remittances and
   LPOs. Whoever cancelled is not notified. `data` carries `document_type`,
   `document_id`, `reason` (null unless the cancel took one) and `cancelled_by`.
+- **Images in the PDF.** The server puts the logo and meter photos inside the PDF
+  itself, so printing never waits for them to download. A logo set by URL
+  (`source_url`) on another site is fetched once and reused for up to an hour, so
+  a new image saved at the same address can take that long to show on prints;
+  saving it at a new address shows at once. An image the server can't read keeps
+  its address and prints as it did before. The HTML view is unchanged: the browser
+  loads its images itself.
+- **The print picker** only needs `id`, `name`, `is_default` and `document_type`
+  from the list (§7). The list changes only when a template is saved, made default,
+  duplicated or deleted, so cache it and refetch after those.
 - For a live designer preview, save (or use a transient render of) the current
   layout, then hit `?preview=1&format=html` and drop the HTML into an iframe.
   The preview's `sample.company` reflects the current company's real letterhead

@@ -47,6 +47,10 @@ Example:
 
 `GET /api/v1/app/12/property-management/lease-management/credit-notes?filter[lease_id]=101&sort=-due_at`
 
+**`requested_at` and `created_at`.** `requested_at` is when the credit note was entered. `created_at` is
+when it was processed, which is the day of its final approval when it needs one. Filter on entry
+with `filter[requested_between]=Y-m-d,Y-m-d`. See [Document dates](../document-dates.md).
+
 ## CU number validation
 
 Every invoice, credit note and bill carries a verdict on whether its CU number is one KRA actually
@@ -112,14 +116,15 @@ Request body:
 | `due_at` | Yes | date (`YYYY-MM-DD`) | - |
 | `notes` | Yes | string | - |
 | `items` | Yes | array | At least one item |
-| `invoice_id` | No | integer | The invoice this credit note reverses. See [One invoice per credit note](#one-invoice-per-credit-note) |
-| `cu_reference_number` | No | string | Optional. Not used for signing: the ETR reference always comes from the linked invoice |
+| `invoice_id` | Yes | integer | The invoice this credit note corrects. Required when staff raise one: `422` `errors.invoice_id: ["Pick the invoice this credit note corrects. To credit a paid invoice, reallocate its payments to another invoice first."]`. See [One invoice per credit note](#one-invoice-per-credit-note) |
+| `cu_reference_number` | No | string | Optional. The CU number of the invoice being credited. Signing uses the linked invoice's CU number when it has one and falls back to this (e.g. on an opening balance invoice, which is never signed itself) |
 | `is_credit` | No | boolean | Defaults to `true` |
 | `paid` | No | number | Defaults to `0` |
 | `cu_invoice_number` | No | string | Optional |
 | `cu_serial_number` | No | string | Optional |
 | `cu_credit_note_verify_url` | No | string | Optional |
 | `supporting_upload_id` | Yes | integer | One upload id (`uploads.id`): the document the credit note is raised on. See [Supporting document](#supporting-document) |
+| `supporting_context` | No | string | Why the credit note is being issued, for whoever reviews it. Up to 2,000 characters. Never printed, never shown to the tenant. See [Supporting context](#supporting-context) |
 
 `items[]` fields:
 
@@ -197,13 +202,19 @@ any overpayment. Approval is never refused because the invoice has since been pa
 
 Every credit note reverses exactly one invoice, and `invoice_id` is the only record of which one.
 
-- **Raised against an invoice** (`invoice_id` sent): it is applied to that invoice when it is
-  processed. Its total cannot exceed the invoice's balance.
-- **Raised open** (no `invoice_id`, e.g. an overpayment brought forward or a goodwill credit): it
-  comes to rest `unapplied`. When the next invoice is raised on the lease, the credit note is
-  applied to it automatically and **that invoice becomes its `invoice_id`**. If the credit is
-  larger than the invoice, the rest stays `partially applied` and is drawn down by later invoices,
-  but `invoice_id` keeps pointing at the first one.
+- **Raised against an invoice** (`invoice_id`, required when staff raise one): it is applied to
+  that invoice when it is processed. Its total cannot exceed the invoice's balance.
+  - **A fully paid invoice** cannot be credited as it stands (`permissions.issueCreditNote` is
+    `false`): [reallocate its payments](./receipts.md#reallocate-receipt) to another invoice first,
+    which reopens it, then credit it.
+  - **A partially paid invoice:** credit up to its balance, or reallocate its payments first and
+    credit the whole amount.
+  - **A refund is a negative receipt** (cancel the receipt), never a credit note.
+- **Raised open** (no `invoice_id`): only the system does this - a negative opening balance, an
+  exit-notice settlement. Such a credit note comes to rest `unapplied`. When the next invoice is
+  raised on the lease it is applied automatically and **that invoice becomes its `invoice_id`**. If
+  the credit is larger than the invoice, the rest stays `partially applied` and is drawn down by
+  later invoices, but `invoice_id` keeps pointing at the first one.
 - **Signing needs the invoice.** An open credit note cannot be signed on the ETR: the device needs
   the CU number of the invoice it reverses. See [Sign Credit Note](#sign-credit-note-etr).
 
@@ -331,7 +342,8 @@ way a receipt carries its proof of payment (`pop_upload_id` / `pop_upload`).
 
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}/supporting-document`
 
-Body: `{ "supporting_upload_id": 123 }` - nothing else. Use this for a picker that swaps the document,
+Body: `{ "supporting_upload_id": 123 }`, `{ "supporting_context": "..." }`, or both - nothing else.
+Whichever is left out is kept; at least one must be sent. Use this for a picker that swaps the document,
 not the credit note's edit: the edit validates the whole credit note (lease, due date, notes,
 items), and resending those "unchanged" is fragile - item costs come back negative and are refused,
 and the due date's `raw` is a UTC timestamp that saves a day early.
@@ -351,6 +363,22 @@ Returned on list, show, and the create/update responses:
 |---|---|---|
 | `supporting_upload_id` | integer\|null | - |
 | `supporting_upload` | object\|null | The upload: `{ id, title, description, source_url, thumbnail_url, file_name, type, extension, size, created }`. Open `source_url` to view the file |
+| `supporting_context` | string\|null | Staff only: see below |
+
+### Supporting context
+
+Next to the document, a credit note can carry a few lines of **context** (row 171): why it is being
+issued, for the person reviewing it. Show it beside the supporting document on the credit note and in
+the approval screen. It is **optional**, up to 2,000 characters.
+
+- **Not `notes`.** `notes` prints on the credit note and the tenant sees it; `supporting_context` is
+  **staff only**: not printed, not on the public credit note page, not in the email, not in the tenant
+  portal.
+- **Create:** send `supporting_context` with `POST /credit-notes`.
+- **Edit while pending:** in `PUT /credit-notes/{creditNote}` or the document endpoint above. Left
+  out keeps it, text changes it, `null` clears it. Saving through the document endpoint resubmits a
+  credit note sent back for changes.
+- **Once approved it is fixed,** like the document (`403`).
 
 ## Cancel Credit Note
 
@@ -413,7 +441,7 @@ When to show the action: `permissions.sign` on the credit note resource is `true
 - the user lacks the `sign-facility-credit-note` permission
 - the credit note is `pending` (awaiting approval), `cancelled` or `rejected`
 - the credit note is already signed (`cu_invoice_number` is set)
-- it has no invoice yet (an open credit note), or its invoice is not signed yet (sign the invoice first). A typed `cu_reference_number` does not stand in for the invoice
+- there is no CU number to reference: its invoice is not signed (or it has none yet) **and** `cu_reference_number` is blank. The linked invoice's CU number is used when it has one; otherwise `cu_reference_number` is sent. That covers credit notes on an opening balance invoice, which rolls up invoices signed separately and is never signed itself
 
 Signing runs as a queued job. On a synchronous queue (the default locally) the request returns after the device answers; on a real queue it returns straight away and the CU fields fill in once the job runs. Refetch the credit note (or poll `GET /credit-notes/{creditNote}`) until `etr_signed_at` or `etr_error` is set.
 
@@ -453,7 +481,7 @@ Typical `errors.etr` reasons:
 - `No URL is configured for the incotex ETR device.`: set the property's `esd_config.url` (or ask for the default device to be configured).
 - `The incotex ETR device rejected the document (HTTP 4xx): ...`: the device's own message follows.
 - `The Incotex ETR device could not be reached. Please contact your administrator.`: the device did not answer (it is off, offline or blocked). Retryable; the queued job tries again on its own. The device's address and the connection error are only in the server log, never in the message.
-- `The credit note has no signed invoice to reference.`: sign the original invoice first.
+- `The credit note has no signed invoice to reference.`: sign the original invoice first, or set `cu_reference_number` to the CU number of the invoice being credited.
 
 The last failure is also saved on the credit note as `etr_error`, so show it next to the Sign button. Signing again clears it.
 

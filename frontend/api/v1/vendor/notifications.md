@@ -35,7 +35,12 @@ filed under a company workspace or against you personally.
 
 ## List my notifications
 
-Returns the caller's notifications, newest first.
+Returns the caller's notifications, newest first. A supplier's staff login (see
+[users-settings.md](users-settings.md#users)) also gets **the supplier's notifications about records
+its roles let it view** (LPOs, RFQs, quotes, bills, payment vouchers, contracts, site visit reports);
+ones about no record, such as the supplier's own categories, stay with the supplier's account. There
+is one copy for all of them: marking it read, here or by `read-all`, marks it read for everyone, and
+the unread counts follow.
 
 Supported query params:
 

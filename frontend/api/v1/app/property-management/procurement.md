@@ -71,6 +71,9 @@ it has gone out for quotes the way to change what was asked is a rebase (below).
 | `owner_id` | No | integer | Must exist in `users.id`, defaults to current user |
 | `is_emergency` | No | boolean | Default `false`. An emergency work request goes to its default supplier only; see [Locked supplier](#locked-supplier-emergency-and-preferred) |
 | `items` | Conditional | array | Required when `type=purchase` |
+| `context_information` | No | string | Notes for internal approvers. Returned as `context_information` |
+| `context_file` | No | integer | Must exist in `uploads.id`. Returned as `contextFile` (an upload). Omitting it on update clears it |
+| `uploads` | No | array of integer | Each must exist in `uploads.id`. The complete set: ids left out are released; omit the field to leave attachments untouched |
 
 An emergency request (`is_emergency=true`) needs a default supplier for its sub-category on its
 property (found as in [Default supplier first](#default-supplier-first)). Without one, create and
@@ -1264,6 +1267,32 @@ Do not add an upload step to those flows.
 
 Supporting documents in `uploads[]` — addendums, extensions — remain optional. A contract with
 addendums but no signed document is still refused.
+
+### One live contract per property, supplier and service
+
+A property can't hold two **live** contracts (`pending`, `active` or `suspended`) with the same
+supplier for the same service. The service is the contract's `expense_sub_type_id`, or its
+`expense_type_id` when it has no sub type. The dates don't matter: next year's contract can't be
+entered while this year's is still live. Terminate or delete the old one first. An ended contract
+(`expired`, `inactive`, `rejected`, `terminated`) never blocks.
+
+Creating a duplicate, or editing a contract into one, returns `422` with the usual `errors` plus the
+contract in the way, so the form can link to it:
+
+```json
+{
+  "message": "Riverside Plaza already has a contract with Usafi Cleaners for Cleaning (#14, active). Terminate or delete it before adding another.",
+  "errors": { "vendor_id": ["Riverside Plaza already has a contract with Usafi Cleaners for Cleaning (#14, active). Terminate or delete it before adding another."] },
+  "duplicate_contract": { "id": 14, "title": "Cleaning services 2026", "status": "active" }
+}
+```
+
+Show `message`, and link `duplicate_contract.id` to that contract's page.
+
+- **Edits** are only checked when they change the property, supplier, expense type or sub type.
+  Duplicates already on file stay editable otherwise.
+- **Contracts the system creates** (facility setup, the letting fee contract, utility sync) are not
+  checked. They still count as existing when a person adds one by hand.
 
 
 `status` is **no longer accepted** on create or update. A contract's status belongs to its

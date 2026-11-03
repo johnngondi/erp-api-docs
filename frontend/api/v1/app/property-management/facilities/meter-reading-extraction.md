@@ -25,11 +25,16 @@ Response:
       "expected_meter_number": "MTR-99",
       "recognised_meter_number": "MTR-99"
     },
+    "image_check": {
+      "issue": { "value": "none", "color": "success", "label": "Clear photo", "message": null },
+      "flagged": false
+    },
     "result": {
       "current_reading": "012345",
       "meter_number": "MTR-99",
       "is_legible": true,
-      "feedback": null
+      "feedback": null,
+      "image_issue": "none"
     }
   }
 }
@@ -41,6 +46,29 @@ Field reference (`result`):
 - `meter_number` — the meter number if visible on the image; otherwise `null`.
 - `is_legible` — `false` when the image could not be read; see `feedback`.
 - `feedback` — user-facing message (e.g. "image too blurry"); `null` when legible.
+- `image_issue` — what is wrong with the photo, one of the values below. Anything but `none`
+  makes `is_legible` false and the readings null.
+
+### Photo checks (`image_check`, row 200)
+
+The reader first decides whether the photo shows a meter, then whether it can be read.
+`image_check.issue` is the enum object (`value`, `color`, `label`, `message`) and
+`image_check.flagged` is `true` for anything but `none`. Show `issue.message` (or `result.feedback`,
+the model's own wording) and ask for a retake.
+
+| `value` | `label` | `color` | `message` |
+| --- | --- | --- | --- |
+| `none` | Clear photo | success | `null` |
+| `not_a_meter` | Not a meter | danger | This doesn't look like a meter. Retake the photo with the meter's dial and number in the frame. |
+| `blurry` | Blurry | warning | The photo is blurry. Hold the phone steady and retake it. |
+| `obstructed` | Smudged or obstructed | warning | The dial is smudged, covered or catching glare. Wipe the glass or change the angle, then retake it. |
+| `cropped` | Cropped | warning | Part of the dial is cut off. Retake it with the whole dial and the meter number in the frame. |
+| `too_dark` | Too dark | warning | The photo is too dark. Use more light or the flash, then retake it. |
+
+The verdict is kept with the photo. A reading saved with that photo (`reading_image_id`) carries it as
+`image_issue` (the same enum object) and `image_flagged` on the readings endpoints, so a flagged photo
+stays visible after the reading is saved. Both are `null`/`false` for a photo that was never checked.
+Saving is not refused for a flagged photo.
 
 Verification (`verification`):
 - `matches_meter` — `true` when the recognised meter number matches the target
@@ -59,11 +87,17 @@ Verification (`verification`):
       "expected_meter_number": "MTR-99",
       "recognised_meter_number": null
     },
+    "image_check": {
+      "issue": { "value": "not_a_meter", "color": "danger", "label": "Not a meter",
+                 "message": "This doesn't look like a meter. Retake the photo with the meter's dial and number in the frame." },
+      "flagged": true
+    },
     "result": {
       "current_reading": null,
       "meter_number": null,
       "is_legible": false,
-      "feedback": "The meter display is not clearly visible. Please retake the photo straight-on with better lighting."
+      "feedback": "This image appears to be a receipt, not a utility meter.",
+      "image_issue": "not_a_meter"
     }
   }
 }

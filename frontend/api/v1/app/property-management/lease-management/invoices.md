@@ -189,7 +189,10 @@ List rows and the show payload carry:
   approval is applied in full when approved, even if receipts have paid the invoice meanwhile;
   the invoice then goes below zero and carries forward like any overpayment.
 - `permissions.pay` is `false` only once the invoice `balance` is zero or below.
-  `permissions.issueCreditNote` is also `false` when something is held and nothing is available.
+  `permissions.issueCreditNote` is `false` then too (a paid invoice cannot be credited, so a
+  credit it, [reallocate its payments](./receipts.md#reallocate-receipt) to another invoice first,
+  which reopens it; a refund is a negative receipt, never a credit note - row 176), and also when something is held
+  and nothing is available.
 - In receipt pickers, show the available amount ("200.00 available, 800.00 held by pending
   documents") and **warn** when the input is above it; do not cap it. A pending receipt being
   edited holds money of its own: its available amount on an invoice is `available_balance` plus
@@ -253,6 +256,10 @@ invoice.
   `credits` is unchanged. It still lists only the credit notes whose `invoice_id` is this invoice.
 - `paid` = sum of `payments[].amount` + sum of `credit_applications[].amount` (within rounding).
   Invoices paid before 2026-10-21 may not add up exactly; see the notes above.
+
+**`requested_at` and `created_at`.** `requested_at` is when the invoice was entered. `created_at` is
+when it was processed, which is the day of its final approval when it needs one. Filter on entry
+with `filter[requested_between]=Y-m-d,Y-m-d`. See [Document dates](../document-dates.md).
 
 ## CU number validation
 
@@ -326,6 +333,7 @@ Request body:
 | `cu_serial_number` | No | string | Optional |
 | `cu_invoice_verify_url` | No | string | Optional |
 | `supporting_upload_id` | No | integer | One upload id (`uploads.id`) backing the invoice: a quote, a work order, an agreed charge. Optional. See [Supporting document](#supporting-document) |
+| `supporting_context` | No | string | Why the invoice is being raised, for whoever reviews it. Up to 2,000 characters. Never printed, never shown to the tenant. See [Supporting context](#supporting-context) |
 
 `items[]` fields:
 
@@ -556,6 +564,25 @@ imports) have none.
   and `source_url`) on the invoice: in create, show and update responses.
 - **The tenant sees it** on their invoice in the tenant portal. It is **not** attached to the invoice
   email.
+
+## Supporting context
+
+Next to the document, an invoice can carry a few lines of **context** (row 171): why it is being
+raised, for the person reviewing it. Show it beside the supporting document on the invoice and in the
+approval screen. It is **optional**, up to 2,000 characters.
+
+- **Not `notes`.** `notes` prints on the invoice and the tenant sees it; `supporting_context` is
+  **staff only**: it is not printed, not on the public invoice page, not in the invoice email, and
+  not in the tenant portal.
+- **Create:** send `supporting_context` with `POST /invoices`.
+- **Edit while pending:** in `PUT /invoices/{invoice}`, leave it out to keep it, send text to change
+  it, or `null` to clear it.
+- **With the document endpoint:** `PUT/PATCH /invoices/{invoice}/supporting-document` takes
+  `supporting_upload_id`, `supporting_context`, or both; whichever is left out is kept. At least one
+  must be sent. Saving resubmits an invoice sent back for changes, so a reviewer who asks for more
+  context gets the invoice back once it is added.
+- **Once approved it is fixed,** like the document (`403`).
+- **Read it** as `supporting_context` on the staff invoice responses (create, show, update, list).
 
 ## Cancel Invoice
 

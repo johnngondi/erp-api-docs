@@ -25,6 +25,7 @@ Nairobi, but send `YYYY-MM-DD`.
 - `PATCH /bills/{bill}/backdate`: change the posting date. See [Change Bill Date (Backdate)](#change-bill-date-backdate)
 - `PUT /bills/{bill}/post-bill`
 - `PUT /bills/{bill}/reject-invoice`: reject the vendor's submitted invoice. See [Reject invoice](#reject-invoice)
+- `PUT /bills/verify-invoice`: mark one or more bills' invoices as verified. See [Verify invoice](#verify-invoice)
 - `PUT /bills/bulk-post-bill`
 - `POST /bills/merge`
 - `POST /bills/{bill}/customer-invoice`: generate its customer invoice. See [Customer invoice](#customer-invoice)
@@ -75,6 +76,8 @@ Every date filter also takes a range, `filter[created_between]=2026-09-01,2026-0
     table lists. Off by default, so the unfiltered index is unchanged.
   - `filter[invoice_validation_status]`, `filter[cu_validation_status]` — exact. `failed` gives
     the bills someone needs to look at
+  - `filter[invoice_verification_status]` — `verified`, `not_verified` or `rejected`, the manual
+    check, one or several comma-separated. See [Verify invoice](#verify-invoice)
   - Date-range filters: `filter[invoice_date]`, `filter[created_at]`, `filter[invoice_uploaded_at]`, `filter[expense_posted_at]` — see [Date-range filtering](#date-range-filtering)
 
 ### Invoice and CU validation
@@ -125,8 +128,9 @@ and reporting that as a match would be worse than saying nothing.
 `null` on all four means the bill has not been posted, or predates this. Neither needs attention.
 
 **It is queued**, so posting does not wait on it and the ledger does not depend on the document
-pipeline being reachable. That also means **a queue worker has to be running** - without one the
-status sits on `pending` and the feature looks stuck rather than working.
+pipeline being reachable. That also means **a queue worker has to be running** on the
+`etr_verification` queue, where both checks run - without one the status sits on `pending` and the
+feature looks stuck rather than working.
 
 **Correcting a posted bill re-runs it.** Changing the invoice number, invoice date, CU number or
 the attached document puts the status back to `pending`, clears the old reason and queues a fresh
@@ -141,9 +145,25 @@ every hour. A document or CU number added after posting, or a check lost to a qu
 still gets a verdict without anyone re-saving the bill. Unposted bills are left alone, because
 posting runs both checks.
 
-**The CU check is a shell.** It needs a KRA lookup that is not built, so `cu_validation_status`
-stays `null`. A bill's CU number comes from the supplier's own fiscal device, so unlike an invoice
-we sign, there is no verification URL to link to yet.
+**Where KRA is asked.** Two kinds of CU number reach KRA in different places:
+
+| CU number | Example | Checked on |
+|---|---|---|
+| eTIMS: `KRA`, the control unit, a slash and the receipt number | `KRASRN000436786/1`, `KRACU0100042159/1241` | KRA's eTIMS receipt page, with the slash as a dash (`…indexEtimsInvoiceData?Data=KRACU0100042159-1241`) |
+| Anything else | `0190433170000000703` | KRA's iTax invoice checker |
+
+The iTax checker answers "Please enter valid Middleware Invoice Number" for every eTIMS number,
+so until row 194 a valid eTIMS bill was `failed` an hour after it was posted. Both places are held
+to the same rules: total, amount and tax must match, a number KRA does not know waits out the
+settling hour before failing, and a page that cannot be read leaves the bill `pending` and retrying.
+
+**On eTIMS the seller is checked too.** The receipt shows the seller's KRA PIN, so a bill whose
+supplier has a different `tax_pin` fails with "KRA has this invoice from seller PIN …, but the
+supplier's KRA PIN is …". It is skipped when the supplier has no PIN on file. The iTax checker
+returns the seller's name only, so iTax numbers are not checked for the seller.
+
+eTIMS bills already `failed` by the old check are re-checked with
+`php artisan documents:recheck-etims --apply` (it lists them without `--apply`).
 
 **Suppliers do not see any of this.** The vendor bill endpoints use their own resource, which
 carries none of these fields - it is an internal control, not something to put in front of the
@@ -280,11 +300,15 @@ offering a download.
 
 `tax_invoice_number` is the CU invoice number. There is no verify URL on a bill — unlike our own
 invoices and credit notes, a bill's CU number belongs to the supplier and our fiscal device never
-issued it. Build the link client-side:
+issued it. Build the link client-side, and pick it by the number's shape:
 
-```
-https://itax.kra.go.ke/KRA-Portal/invoiceChk.htm?actionCode=loadPage&invoiceNo=<tax_invoice_number>
-```
+| `tax_invoice_number` | Link |
+|---|---|
+| eTIMS, matching `/^KRA[A-Z0-9]+\/\d+$/i` (e.g. `KRACU0100042159/1241`) | `https://etims.kra.go.ke/common/link/etims/receipt/indexEtimsInvoiceData?Data=<number with the slash as a dash>`, e.g. `…?Data=KRACU0100042159-1241` |
+| Anything else | `https://itax.kra.go.ke/KRA-Portal/invoiceChk.htm?actionCode=loadPage&invoiceNo=<tax_invoice_number>` |
+
+The iTax page says an eTIMS number is invalid, so sending one there shows a genuine invoice as
+fake. Trim the number before testing it.
 
 This is display only and changes nothing server-side: `cu_validation_status` and
 `invoice_validation_status` are still checked against KRA on our side, on the usual sweep, and
@@ -493,7 +517,8 @@ vendor can submit it again. It never posts the bill.
 
 Show a **Reject Invoice** item in the bills list row actions and in the view page header actions,
 but only when `bill.permissions.validate === true`. The flag needs the `validate-bill-invoice`
-permission and is `false` for any bill that is not `pending`. The reject flow is separate from Post
+permission and is `false` for any bill that is not `pending`, and for one with no invoice submitted
+(no invoice number, CU number or document), which includes a bill whose invoice was just rejected. The reject flow is separate from Post
 Bill and uses its own modal.
 
 Request body:
@@ -534,9 +559,103 @@ Errors:
 
 - `422` `errors.reason`: the reason is missing or longer than 1000 characters. Show it under the
   reason field.
-- `422` `errors.bill`: the bill has no invoice to reject, or it stopped being pending after the
-  screen loaded. Show it as a toast and close the modal.
-- `403`: the user lacks `validate-bill-invoice`, or the bill is not pending.
+- `403`: the user lacks `validate-bill-invoice`, the bill is not pending, or it has no invoice to
+  reject (for example, it was rejected from another screen). Show a toast and refresh the row.
+
+## Verify invoice
+
+`PUT /api/v1/app/{company}/property-management/finance/bills/verify-invoice`
+
+Marks bills' uploaded invoices as checked by a person. It is the counterpart of
+[Reject invoice](#reject-invoice). It sits beside the automatic invoice and CU checks and does not
+replace them. It is **for information only**: posting and paying ignore it.
+
+One endpoint serves both screens: send one id from the bill page's **Accept** action, or the
+selected rows from the list's bulk **Accept**.
+
+Show **Accept** only when `bill.permissions.verifyInvoice === true`. The flag needs the
+`validate-bill-invoice` permission, the same one as Reject. It is `false` when the bill:
+
+- is not `pending` (like Reject, a posted or cancelled bill can't be verified),
+- has no uploaded invoice document (`invoice_upload_id` is `null`), even if it has an invoice
+  number, or
+- is already verified.
+
+Accept also works when the automatic invoice or CU check failed. That is a person overriding the
+check, and both statuses stay as they are. A bill verified while pending stays verified after it is
+posted.
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `bill_ids` | Yes | integer array, 1 to 500 | Distinct bill ids. |
+
+```json
+{ "bill_ids": [56124, 56123] }
+```
+
+What happens:
+
+- **All or nothing.** If any bill can't be verified, none is. The `422` lists each refused bill.
+- **Already verified bills are skipped.** They keep their first verifier and date, and are counted
+  in `already_verified_count`.
+- **The rest are recorded.** Each one gets `invoice_verified_at` and `invoice_verified_by`.
+
+Success (`200`):
+
+```json
+{
+  "data": {
+    "message": "2 invoices verified successfully.",
+    "verified_count": 2,
+    "already_verified_count": 0,
+    "bills": [ { "id": 56124, "invoice_verification_status": { "value": "verified", "color": "success" }, "...": "..." } ]
+  }
+}
+```
+
+The bills come back as list rows, so the list can update them in place.
+
+**Changing the invoice undoes the verification.** If the invoice number, invoice date, CU invoice
+number or invoice document changes, the bill goes back to `not_verified`. That covers the vendor
+uploading a new invoice, a staff edit, and a rejection. Other edits, posting and payments leave it
+alone.
+
+Bill resource fields (on the list, the bill page and this endpoint's response):
+
+| Field | Type | Notes |
+|---|---|---|
+| `invoice_verification_status` | `{value, color}` | `verified` (`success`), `not_verified` (`secondary`) or `rejected` (`danger`). See below. |
+| `invoice_verified_at` | `{raw, formatted, diff}` or `null` | When it was verified. `raw` is a UTC timestamp with the time; show it in Nairobi time. `formatted` is the date only. |
+| `invoice_verified_by` | `{id, name}` | Who verified it. Present on the list and bill page. |
+| `invoice_rejected_at`, `invoice_rejection_reason`, `invoice_rejected_by` | as in [Reject invoice](#reject-invoice) | When, why and by whom the invoice was last rejected. `invoice_rejected_by` is now loaded on the list and the bill page too. |
+
+The three states:
+
+- **`verified`**: someone accepted the invoice the bill carries now.
+- **`rejected`**: the invoice was rejected and nothing has been submitted since. Rejecting clears
+  the invoice number, CU number and document, so a rejected bill shows no invoice lines and no
+  "View invoice". Show who, when and why instead.
+- **`not_verified`**: everything else, including a bill with no invoice yet, and a rejected bill
+  once a new invoice number, CU number or document comes in. The last rejection stays in the
+  `invoice_rejected_*` fields as history.
+| `permissions.verifyInvoice` | boolean | Show Accept. |
+
+List filter: `filter[invoice_verification_status]=verified`, `=not_verified` or `=rejected`, or
+several comma-separated (`=verified,rejected`). Unknown values are ignored, and all three together
+filter nothing.
+
+Errors:
+
+- `422` `errors.bill_ids`: one message per refused bill, as `Bill #56124: <reason>`. The reasons
+  are "Only a pending bill's invoice can be verified." and "Upload the invoice document before
+  verifying it." Show them as a toast. Nothing was saved.
+- `422` `errors.bill_ids`: "One or more bills could not be found." An id doesn't exist, or the bill is
+  on a property the user isn't allocated to.
+- `422` `errors.bill_ids` / `errors.bill_ids.N`: `bill_ids` is missing or empty, or an id is unknown
+  or repeated.
+- `403`: the user lacks `validate-bill-invoice`.
 
 ## Change Bill Date (Backdate)
 
