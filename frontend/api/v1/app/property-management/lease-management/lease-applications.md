@@ -256,6 +256,11 @@ this payload. One difference: `residential_unit_types` is optional here for ever
 application. Leaving it out keeps the recorded unit types and the space allocation as
 they are, which is what an application with allocated spaces but no unit types needs. Use [Review Application](#review-application) to decide one.
 
+**Property type.** `facility_type_id` may be any facility type, not only the property's
+own: staff may change the property type the application is for. The edit form shows it
+as a select that starts on the recorded type. `facility_id` and `city_id` are still sent
+back as recorded.
+
 **Who and when.** It needs `update-lease-application`, the application's property must
 be allocated to the caller, and the application must be **open** (`pending` or
 `review`). An `approved` or `rejected` application returns `403`. The application's
