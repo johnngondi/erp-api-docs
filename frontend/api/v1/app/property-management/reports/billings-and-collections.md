@@ -104,10 +104,10 @@ Read the order from the `bucket` keys rather than assuming an index.
 | `bucket` | `header.label` | One row per… | Columns |
 |---|---|---|---|
 | `summary_by_property` | Summary by Property | property — **unless exactly one property is selected** | `facility_id`, `name`, `balance_bf`, per-component `component_{id}_billings` (before `total_billings`), `total_billings`, `total_expected`, per-component `component_{id}_collections` (before `total_collections`), `total_collections`, `balance_cf` |
-| `overview` | Summary | lease | `lease_id`, `landlord_identifier`, `name`, `property`, `balance_bf`, `total_billings`, `total_collections`, `balance_cf` |
-| `overall_b_c_by_tenant` | Billings and Collections by Tenant | lease | `lease_id`, `landlord_identifier`, `name`, `property`, `balance_bf`, per-component `component_{id}_billings` (before `billings_tax`), `billings_tax`, `total_billings`, `total_expected`, per-component `component_{id}_collections` (before `collections_tax`), `collections_tax`, `total_collections`, `balance_cf` |
+| `overview` | Summary | lease | `lease_id`, `landlord_identifier`, `name`, `property`, `total_sqft`*, `balance_bf`, `total_billings`, `total_collections`, `balance_cf` |
+| `overall_b_c_by_tenant` | Billings and Collections by Tenant | lease | `lease_id`, `landlord_identifier`, `name`, `property`, `total_sqft`*, `balance_bf`, per-component `component_{id}_billings` (before `billings_tax`), `billings_tax`, `total_billings`, `total_expected`, per-component `component_{id}_collections` (before `collections_tax`), `collections_tax`, `total_collections`, `balance_cf` |
 | `summary_by_account` | Summary by Account | lease | overview columns **plus** per-account `account_{id}_billings` (before `total_billings`) and `account_{id}_collections` (before `total_collections`) |
-| `billings` | Billings | lease | `lease_id`, `landlord_identifier`, `name`, `property`, `balance_bf`, per-component `component_{id}` (before `total_amount`), `total_amount`, `total_tax`, `gross_total`, `balance_cf` |
+| `billings` | Billings | lease | `lease_id`, `landlord_identifier`, `name`, `property`, `total_sqft`*, `balance_bf`, per-component `component_{id}` (before `total_amount`), `total_amount`, `total_tax`, `gross_total`, `balance_cf` |
 | `collections` | Collections | lease | same shape as `billings`, for money received |
 
 Every lease bucket carries **`landlord_identifier`** (label `Landlord ID`, `format: string`,
@@ -121,6 +121,15 @@ Every lease bucket also carries **`property`** (label `Property`, `format: strin
 `togglable: false`) immediately after the tenant's `name`: the name of the lease's property (`facilities.name`). On a multi-property
 run it tells apart two leases of the same tenant, and it is the second key of the default order
 (below). It is `null` on the Total row.
+
+\* Every lease bucket also carries **`total_sqft`** (label `Total SqFt`, `format: integer`,
+`togglable: true`) immediately after `property`, **only when a property let by area is in scope**
+— one whose facility type has `division_type: size`. It is the summed `size` of the lettable spaces
+the lease holds (parking bays and signage excluded; a space held under two lease items counts
+once). A lease on a `size` property with no spaces is `0`; a lease on any other property is
+`null`. The Total row sums the leases, and the bucket `summary` leads with the same
+`total_sqft`. When no lease in scope sits on a `size` property, the field, the cells and the
+summary key are all left out.
 
 Each bucket's `header` carries only the standard `label` — this report's buckets are sections of one
 scope, not separate entities. Each bucket's `summary` holds that bucket's column totals (the same
@@ -335,21 +344,21 @@ Column order (keys) for the dynamic buckets, for reference:
   "total_collections", "balance_cf" ]
 
 // the `overall_b_c_by_tenant` bucket's fields
-[ "lease_id", "landlord_identifier", "name", "property", "balance_bf",
+[ "lease_id", "landlord_identifier", "name", "property", "total_sqft", "balance_bf",
   "component_{id}_billings",    // ← per-component (net of tax), injected before billings_tax
   "billings_tax", "total_billings", "total_expected",
   "component_{id}_collections", // ← per-component (net of tax), injected before collections_tax
   "collections_tax", "total_collections", "balance_cf" ]
 
 // the `summary_by_account` bucket's fields
-[ "lease_id", "landlord_identifier", "name", "property", "balance_bf",
+[ "lease_id", "landlord_identifier", "name", "property", "total_sqft", "balance_bf",
   "account_{id}_billings",   // ← per-account, injected before total_billings
   "total_billings",
   "account_{id}_collections",// ← per-account, injected before total_collections
   "total_collections", "balance_cf" ]
 
 // the `billings` / `collections` buckets' fields
-[ "lease_id", "landlord_identifier", "name", "property", "balance_bf",
+[ "lease_id", "landlord_identifier", "name", "property", "total_sqft", "balance_bf",
   "component_{id}",          // ← per-component, injected before total_amount
   "total_amount", "total_tax", "gross_total", "balance_cf" ]
 ```
