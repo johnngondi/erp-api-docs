@@ -718,8 +718,8 @@ type-specific message from the type's `label` (e.g. `Receipt not found for this
 company.`).
 
 **Statuses that cannot be printed.** Invoices, receipts, credit notes and LPOs
-cannot be printed while they are `pending` or `rejected`, nor a payment voucher
-while it is `pending`. A render of one returns `422` keyed on `resource_id`, e.g.
+cannot be printed while they are `pending` or `rejected`. A payment voucher prints
+in every status, `pending` included. A render of one returns `422` keyed on `resource_id`, e.g.
 `Invoice #12 is rejected and cannot be printed.` A `cancelled` document does print:
 `DocumentRenderer` passes `cancelled` to the shell (`documents/template.blade.php`),
 which lays a fixed, translucent red **CANCELLED** watermark over every page. The

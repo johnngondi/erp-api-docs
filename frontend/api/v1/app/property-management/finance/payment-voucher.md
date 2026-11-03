@@ -153,10 +153,9 @@ The voucher's own items are offered only while the query names the voucher's own
 - `permissions.update` is `true` only on a `pending` voucher the user may edit.
 - `permissions.delete` is `true` only on a `pending` or `cancelled` voucher, matching what
   `DELETE` accepts.
-- A `pending` or `cancelled` voucher cannot be printed: the template render endpoints refuse it with
-  `422` on `resource_id` (`"... is pending and cannot be printed."`), the same rule as invoices, credit
-  notes, receipts and LPOs. Hide the print action unless the status is `paid`. The payee's public page
-  already hid pending vouchers.
+- A voucher prints in every status, `pending` included, so show the print action on every row. A
+  `cancelled` one prints under a CANCELLED watermark. The payee's public page still hides pending
+  vouchers with a `404`.
 
 ## Pay payload (`PaymentAdviceData`)
 
