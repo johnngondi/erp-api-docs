@@ -31,6 +31,7 @@ permission can be given to staff roles; the button should move with it.
 | `email` | yes | email | The link is sent here |
 | `tax_pin` | yes | string | KRA PIN, `A` or `P`, 9 digits, a letter (`P051234567X`). Case-insensitive |
 | `facility_id` | yes | integer | The property |
+| `facility_type_id` | no | integer | The property type the application is for (`GET …/property-management/facility-types`). Defaults to the property's own type; the form pre-selects that type when a property is picked and staff may change it |
 | `proposed_start_date` | yes | date `Y-m-d` | |
 | `proposed_period_in_years` | yes | integer 0–99 | |
 | `proposed_period_in_months` | no | integer 0–11 | Years and months together must be at least one month |
