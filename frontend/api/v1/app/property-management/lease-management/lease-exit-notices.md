@@ -195,7 +195,9 @@ Request body may include:
 
 Each `leases.*.lease_id` must be on the notice (`422` otherwise). The top-level `reason_for_exit`,
 `supporting_upload_id`, `repair_damages_cost` and `repairs_cost_quote_upload_id` still work on a notice
-with one lease; on a notice with several they answer `422` on `leases` - send them per lease. Every
+with one lease; on a notice with several they answer `422` on `leases` - send them per lease. A
+notice raised before row 148 (its `items.0.id` is `null`) takes them both ways too: under `leases`
+with its one `lease_id`, or at the top level. Every
 edit re-reads each lease's deposit held and arrears exactly as create does: deposit held is the lease's
 full deposit, whether or not its deposit invoice is paid (an unpaid deposit invoice shows in the
 arrears, so it cancels out), and arrears are the lease's balance (billed less collected).
