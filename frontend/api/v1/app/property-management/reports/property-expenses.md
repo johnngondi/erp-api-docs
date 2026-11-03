@@ -71,10 +71,16 @@ All filters are **optional** and flat (not nested under `filter[...]`). The
 | `landlord_id` / `facility_id` | single id — **deprecated** aliases, merged into the lists | (global) |
 | `expense_category_id` | `expense_categories.id` | All categories |
 | `expense_type_id` | `facility_expense_types.id` | All types |
+| `supplier_id` | `users.id` — the **Supplier** | All suppliers |
 | `currency_id` | `currencies.id` | **Required unless exactly one property is selected** (see currency below) |
 
 - **`expense_category_id` / `expense_type_id`** narrow every bucket to that category / type
   (`facility_expenses.expense_category_id` / `facility_expenses.expense_type_id`).
+- **`supplier_id`** narrows every bucket to the expenses billed by that supplier
+  (`facility_expenses.vendor_id`). Pick it from the suppliers endpoint; an unknown id is a `422`.
+  Like the taxonomy filters it applies before anything is summed, so the summaries, the
+  properties × categories matrix and each property register all show that supplier's expenses only,
+  and a property with none of them still gets its (empty) bucket.
 - **`currency_id`** is **required unless exactly one property is selected** (one `facility_ids`
   entry, or the `facility_id` alias). Requesting a multi-property roll-up without it returns `422`
   with a `currency_id` error.
@@ -85,6 +91,7 @@ Example:
 ```
 GET …/reports/suppliers/expenditure-reports/property-expenses?facility_ids[]=1&period_from=2026-01-01&period_to=2026-01-31
 GET …/reports/suppliers/expenditure-reports/property-expenses?landlord_ids[]=7&period_from=2026-01-01&period_to=2026-01-31&currency_id=1
+GET …/reports/suppliers/expenditure-reports/property-expenses?facility_ids[]=1&supplier_id=42&period_from=2026-01-01&period_to=2026-01-31
 ```
 
 ### Currency
@@ -219,6 +226,7 @@ separately [below](#sample-all-properties-bucket).
         "properties_status": null,
         "expense_category_id": null,
         "expense_type_id": null,
+        "supplier_id": null,
         "currency_id": null
       },
       "generated_at": "2026-07-18T14:52:57+03:00"

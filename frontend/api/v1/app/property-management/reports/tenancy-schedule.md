@@ -8,9 +8,10 @@ Base route:
 
 The Tenancy Schedule report is a **point-in-time occupancy schedule**. For each property it lays out
 the physical hierarchy **Block › Wing › Floor › Space** and, for every space, shows its name,
-category, type, size, status, the tenant (when leased), the tenant's lease start/end and billing
-cycle, and the per-month billable amounts (Rent, Service Charge, Parking, Signage — any autobilled
-component). It is **read-only** and computed on the fly.
+category, type, size, status, the tenant (when leased), the tenant's lease start/end, billing
+cycle and escalation, and the per-month billable amounts (Rent, Service Charge, Parking, Signage — any
+autobilled component), each beside the rate captured on the lease (per SqFt, per bay, per sign). It is
+**read-only** and computed on the fly.
 
 Occupancy is reconstructed **as of the selected period** (`period_from` … `period_to`, defaulting to
 the current month): the report shows who held each space *then*, not just now — see
@@ -111,13 +112,26 @@ visible columns.
 ## Columns (`fields`)
 
 The leaf/space columns, in order: `name` (Space), `category`, `type`, `size`, `status`, `tenant`,
-`lease_id` (Lease), `landlord_identifier` (Landlord ID, `togglable: true`), `lease_start`, `lease_end`, `billing_cycle`, then one **money column per
-autobilled component present in the property** (`component_{id}`, e.g. `Rent/M`, `Service Charge/M`, `Parking/M`, `Signage/M` —
-each carries `component_id`, `togglable:true`), then `total` (Total/M, `type: grosstotal`).
+`lease_id` (Lease), `landlord_identifier` (Landlord ID, `togglable: true`), `lease_start`, `lease_end`,
+`billing_cycle`, `escalation_rate` (Escalation, `togglable: true`), then, **per autobilled component
+present in the property**, two columns: its monthly **amount** and, immediately after it, its
+**rate**, then `total` (Total/M, `type: grosstotal`).
 
-The text columns use `format: string`; `component_{id}` and `total` use `format: money` and carry
-**bare numbers** (`120000.0`, 2dp) — the currency is named once on the bucket, not repeated in every
-cell. A space that does not carry one of the property's component columns has `value: null`.
+| Key | Label | Format | Notes |
+|---|---|---|---|
+| `escalation_rate` | Escalation | `string`, left | e.g. `"5% every 12 months"`; static, `togglable: true` |
+| `component_{id}` | `{component}/M`, e.g. `Rent/M`, `Parking/M` | `money`, right | dynamic, carries `component_id`, `togglable: true` |
+| `component_{id}_rate` | `{component}/SqFt` (area-priced), `{component}/Bay` (the parking-fee component), `{component}/Sign` (the signage-fee component), e.g. `Rent/SqFt`, `Service Charge/SqFt`, `Parking/Bay` | `money`, right | dynamic, right after its amount column, carries the same `component_id`, `togglable: true` |
+
+So a property with Rent, Service Charge and Parking ends its columns
+`… billing_cycle, escalation_rate, component_1, component_1_rate, component_2, component_2_rate,
+component_8, component_8_rate, total`.
+
+The text columns use `format: string`; `component_{id}`, `component_{id}_rate` and `total` use
+`format: money` and carry **bare numbers** (`120000.0`, 2dp) — the currency is named once on the
+bucket, not repeated in every cell. A space that does not carry one of the property's component
+columns has `value: null` in both its amount and its rate column. **Rates are never summed into
+`total`** and have no entry in the `summary`.
 
 ### Derivations
 
@@ -142,6 +156,22 @@ cell. A space that does not carry one of the property's component columns has `v
   so the column is blank on them. Monthly amount per component is `SUM(lease_item_components.cost_per_month)`
   over autobilled components. Parking and signage occupancy is resolved through the lease's
   `is_parking_fee` / `is_signage_fee` components (there is no dedicated occupancy column for them).
+- **component_{id}_rate** — the rate captured on the tenancy schedule for that component on the
+  space: `lease_item_components.cost_per_sqft` for an area-priced component (`/SqFt`); for the
+  parking-fee (`/Bay`) and signage-fee (`/Sign`) components, where one bay or sign is one space, the
+  space's own `lease_item_components.cost_per_month`. When several leases overlap the space the
+  amount sums them, but the rate is taken from **one** lease: the space's primary lease (the one the
+  tenant and lease columns show) when it carries the component, otherwise the latest overlapping
+  lease that does. `null` on a vacant space or a space without that component; group nodes carry no
+  cells.
+- **escalation_rate** — the primary lease's escalation from `lease_escalations`, preferring the one
+  on its **Rent** component (`lease_components.is_rent`) and falling back to an escalation on any
+  other component when Rent has none. Among those, the one whose window covers today (`start_at` ≤
+  today, `end_at` open or ≥ today) wins, else the latest by `start_at`. Shown as
+  `"{rate}% every {period} {cycle}"` — the rate without trailing zeros (`5`, `7.5`), the cycle
+  singular for a period of one (`"3% every 1 year"`). The cell also carries the numeric rate as
+  `sort_value` (stripped from the HTTP payload, see the
+  [shared contract](./README.md)). `null` when the space is vacant or the lease has no escalation.
 
 ### Currency
 
@@ -183,7 +213,7 @@ component flag — so a parking bay or signage panel correctly shows its histori
 // Group node (block / wing / floor)
 { "row_kind": "block", "depth": 0, "label": "Block A", "children": [ /* … */ ] }
 
-// Space leaf
+// Space leaf (a 40 SqFt shop: Rent 3,000/SqFt, Service Charge 750/SqFt; component 8 is Parking)
 {
   "row_kind": "space", "depth": 3,
   "name":        { "value": "Shop G1" },
@@ -197,9 +227,13 @@ component flag — so a parking bay or signage panel correctly shows its histori
   "lease_start": { "value": "2026-01-01" },
   "lease_end":   { "value": "2028-12-31" },
   "billing_cycle": { "value": "monthly" },
+  "escalation_rate": { "value": "5% every 12 months" },
   "component_1": { "value": 120000.0 },
+  "component_1_rate": { "value": 3000.0 },
   "component_2": { "value": 30000.0 },
+  "component_2_rate": { "value": 750.0 },
   "component_8": { "value": null },
+  "component_8_rate": { "value": null },
   "total":       { "value": 150000.0 }
 }
 ```
