@@ -70,12 +70,14 @@ Per lease, summed over any set of leases (a property, a team, all teams):
 | `arrears` | `expected - collections` |
 | `collections_percent` | `collections / expected × 100`, 2 dp; `null` when `expected` is 0 or less |
 | `collections_percent_color` | `success` above 80, `warning` from 50 to 80 inclusive, `danger` below 50, `none` when the percent is `null` |
+| `period_collections_percent` | `collections / billings × 100`, 2 dp; `null` when `billings` is 0 or less |
+| `period_collections_percent_color` | same bands as `collections_percent_color` |
 
 These are the same figures as the [Billings & Collections](./billings-and-collections.md) balance
 c/f for the same leases. They are **not** the [Debtors Listing](./debtors-listing.md) figures,
 which read invoice balances.
 
-**Totals rows recompute the percentage from their summed figures.** They never average the rows'
+**Totals rows recompute both percentages from their summed figures.** They never average the rows'
 percentages.
 
 **Money is a string with 2 decimals** (`"6300.00"`, no thousands separator). Format it on the
@@ -116,7 +118,9 @@ nothing in scope still appears, with zeros and `properties_count: 0`.
         "collections": "4400.00",
         "arrears": "2500.00",
         "collections_percent": 63.77,
-        "collections_percent_color": "warning"
+        "collections_percent_color": "warning",
+        "period_collections_percent": 69.84,
+        "period_collections_percent_color": "warning"
       }
     ],
     "totals": {
@@ -131,7 +135,9 @@ nothing in scope still appears, with zeros and `properties_count: 0`.
       "collections": "4400.00",
       "arrears": "2500.00",
       "collections_percent": 63.77,
-      "collections_percent_color": "warning"
+      "collections_percent_color": "warning",
+      "period_collections_percent": 69.84,
+      "period_collections_percent_color": "warning"
     }
   }
 }
@@ -175,7 +181,9 @@ The team's properties in scope, ordered by name.
         "collections": "3500.00",
         "arrears": "2400.00",
         "collections_percent": 59.32,
-        "collections_percent_color": "warning"
+        "collections_percent_color": "warning",
+        "period_collections_percent": 66.04,
+        "period_collections_percent_color": "warning"
       }
     ],
     "totals": {
@@ -187,7 +195,9 @@ The team's properties in scope, ordered by name.
       "collections": "4400.00",
       "arrears": "2500.00",
       "collections_percent": 63.77,
-      "collections_percent_color": "warning"
+      "collections_percent_color": "warning",
+      "period_collections_percent": 69.84,
+      "period_collections_percent_color": "warning"
     }
   }
 }
