@@ -24,6 +24,8 @@ Base prefix:
   - `docs/frontend/api/v1/app/access-management/company-department-divisions.md`
 - Company Users:
   - `docs/frontend/api/v1/app/access-management/company-users.md`
+- Property Teams:
+  - `docs/frontend/api/v1/app/access-management/property-teams.md`
 - Approval Templates:
   - `docs/frontend/api/v1/app/access-management/approval-templates.md`
 - Approvable Models:
@@ -51,6 +53,7 @@ Apply shared auth, tenancy, query, and error handling guidance from:
 | Company Departments | `POST /company-departments` | `company-departments.md` |
 | Company Department Divisions | `POST /company-departments/{companyDepartment}/divisions` | `company-department-divisions.md` |
 | Company Users | `POST /company-users` | `company-users.md` |
+| Property Teams | `POST /property-teams` | `property-teams.md` |
 | Approval Templates | `POST /approval-templates` | `approval-templates.md` |
 | Approval Steps (Action) | `POST /approval-steps/{approvalStep}` | `approvals.md` |
 | Responsibility Transfers | `POST /responsibility-transfers` | `responsibility-transfers.md` |

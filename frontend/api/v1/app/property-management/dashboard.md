@@ -17,7 +17,9 @@ Every widget reads the same set of properties, resolved once:
 
 1. the properties the acting user is **allocated to** (see
    `docs/backend/property-allocation-scoping.md`; a user allocated to nothing sees empty widgets),
-2. narrowed by the `landlord_id`, `facility_id` filters.
+2. narrowed by the `landlord_id`, `facility_id` and `property_team_id` filters (`property_team_id` keeps only
+   the properties assigned to that property team, see
+   `docs/frontend/api/v1/app/access-management/property-teams.md`).
 
 `filters.property_count` in the response says how many properties survived, so the UI can show
 "No data for the selected filter scope" when it is `0`.
@@ -30,6 +32,7 @@ All are optional. Omit them all for the default view: every allocated property, 
 |---|---|---|
 | `landlord_id` | integer (`users.id`) | Only properties owned by this landlord. |
 | `facility_id` | integer (`facilities.id`) | Only this property. |
+| `property_team_id` | integer (`property_teams.id`) | Only the properties assigned to this property team (still within the user's allocated properties). Replaces the old `company_department_id`. |
 | `period_from` | date (`Y-m-d`) | Start of the period. Omit for an open start. |
 | `period_to` | date (`Y-m-d`) | End of the period. Omit for an open end. |
 
@@ -42,7 +45,7 @@ Period rules:
   immediately before `period_from`; the cards compare against it.
 - If `period_from` is after `period_to` the two are swapped.
 
-An unknown `landlord_id`, `facility_id` or `company_department_id`, or an unparsable date, returns
+An unknown `landlord_id`, `facility_id` or `property_team_id`, or an unparsable date, returns
 `422` with the usual validation payload.
 
 ## Response
@@ -53,6 +56,7 @@ An unknown `landlord_id`, `facility_id` or `company_department_id`, or an unpars
     "filters": {
       "landlord_id": 12,
       "facility_id": null,
+      "property_team_id": null,
       "period": { "from": "2026-05-01", "to": "2026-05-31" },
       "previous_period": { "from": "2026-03-31", "to": "2026-04-30" },
       "property_count": 3
@@ -180,8 +184,11 @@ rows (`total` is the full count). `reference` is `TK-` plus the id zero-padded t
 
 - Treat the payload as read-only dashboard data.
 - Send the filter values as plain query parameters, e.g.
-  `?landlord_id=12&company_department_id=3&period_from=2026-05-01&period_to=2026-05-31`. The
+  `?landlord_id=12&property_team_id=3&period_from=2026-05-01&period_to=2026-05-31`. The
   "All Time" choice simply omits both period params.
+- The Team select lists property teams (`GET /access-management/property-teams?per_page=200`);
+  `company_department_id` is no longer accepted. `filters.property_team_id` echoes the requested
+  team (or `null`).
 - Every list widget carries its own `total` and `items`; render "See All" from `total`.
 - If any widget key is missing, hide that widget rather than failing the whole page.
 
