@@ -250,6 +250,14 @@ invoice.
     reads `0` here and keeps its `carried_forward` rows, so the audit trail is complete.
   - Carry-overs made before 2026-10-21 have `carried_from_invoice: null` and no
     `carried_forward`: the source was not recorded then.
+  - **Reallocated money is not listed.** Reallocating a receipt cancels its allocations rather
+    than deleting them. A cancelled allocation is left out of `payments[]`, and so is its
+    `carried_from_invoice` pointer. A cancelled part is also dropped from `carried_forward[]`, so
+    the source invoice stops saying "carried to" as well. The one exception is the emptied source
+    above (`amount` 0, `cancelled`), which stays listed while the part it carried on is still live.
+    `has_allocated_payments` still counts cancelled rows, because they block deleting (see
+    [Delete Invoice](#delete-invoice)). The invoice PDF and the public invoice page leave cancelled
+    allocations out of their payment rows, and so does the tenant portal.
 - **`credit_applications[]`** list every credit note that paid part of this invoice, with the
   amount it paid here, including credit notes raised on another invoice or raised open (see
   [Credit notes → Applications](./credit-notes.md#applications-which-invoices-a-credit-note-paid)).
