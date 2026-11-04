@@ -599,6 +599,11 @@ On an invoice with payments allocated, `permissions.cancel` is still `true`, but
 refused with **422** and `status: ["This invoice has payments allocated to it. Reallocate them to
 another invoice before removing it."]`. Reallocate the payments first, then cancel.
 
+Only live allocations count: `pending` or `confirmed`. Reallocating a receipt leaves the
+allocation it moved off on this invoice as a `cancelled` row in `payments[]`, for example one an
+overpayment carried here from an earlier invoice. That row no longer pays anything, so it does
+not block cancelling. Once `paid` is back to 0, the invoice can be cancelled.
+
 ### Deposit invoices
 
 An invoice that bills lease deposits (one Deposit line, see Lease Deposits) carries the deposit
@@ -739,7 +744,7 @@ One endpoint, four outcomes, decided by the invoice.
 
 | Invoice | Outcome |
 |---|---|
-| **Payments allocated** | Refused. `permissions.delete` is `false`, so hide the action; a direct call returns **403**. The money is reallocated to another invoice first |
+| **Payments allocated** | Refused. `permissions.delete` is `false`, so hide the action; a direct call returns **403**. The money is reallocated to another invoice first. A `cancelled` allocation counts here too, unlike in [Cancel Invoice](#cancel-invoice). The row stays as the record of money that once passed through the invoice (lease collections can still point at it), so an invoice that ever held a payment can be cancelled but not deleted. A direct call that gets past the policy is refused with **422** and `status: ["Payments were allocated to this invoice before, so it cannot be deleted. Cancel it instead."]` |
 | **Issued and carrying a CU number** | **Reversed**, not deleted. A credit note for the full value is raised and signed to ETR. The invoice survives |
 | **Live and unfiled** (unpaid, partially paid) | Refused — **cancel it first**. `permissions.delete` is `false`; a direct call returns **403** with `"Cancel this invoice before deleting it."` |
 | **Cancelled, pending or rejected** | Removed, along with its tenant statement entries, lease billings and any lease deposit rows it billed |
