@@ -1365,9 +1365,9 @@ A run takes the provider's bill (optionally recorded as a `facility_bills` row v
 | company_id | bigint | companies.id | |
 | facility_id | bigint | facilities.id | The property. |
 | utility_id | bigint | lease_components.id | The utility charge billed. |
-| tax_id | bigint | taxes.id | Tax applied to every lease in the run. |
+| tax_id | bigint | taxes.id | The utility's tax picked for the run. Above 0% it is charged to VAT-able leases (`leases.tax_id` above 0) only; under 0% every lease's lines carry it. |
 | distribution_method | varchar | | Same values as `facility_utilities.utility_bill_distribution_method`, as used for this run. |
-| charge_rate | decimal(50,5) | | Per-unit rate charged to tenants. |
+| charge_rate | decimal(50,5) | | Per-unit rate charged to VAT-able tenants (net of tax on a taxed run). Non-VAT tenants of a taxed run pay the gross rate, which is not stored. |
 | notes | text | | |
 | bill_id | bigint | facility_bills.id | The supplier bill raised for the provider's invoice. |
 | bill_upload_id | bigint | uploads.id | Scan of the provider's bill. |
@@ -1594,7 +1594,7 @@ Live rows are `status = 'active'` for "current tenancies"; use `status IN ('acti
 | `facility_id` | bigint | facilities.id | The property. |
 | `facility_type_id` | bigint, nullable | facility_types.id | Property type the lease was classified under (1 NULL in dev). |
 | `currency_id` | bigint, nullable | currencies.id | Currency of the lease amounts (all but one row are currency 1 in dev). |
-| `tax_id` | bigint, nullable | taxes.id | Default tax on the lease; the tax that actually applies to a charge is on `lease_item_components.tax_id`. |
+| `tax_id` | bigint, nullable | taxes.id | Default tax on the lease; the tax that actually applies to a charge is on `lease_item_components.tax_id`. Utility billing reads it to decide whether the tenant is VAT-able (set, value above 0): on a taxed utility run a VAT-able lease is billed the net rate plus the run's tax, any other lease the gross rate with no tax (`facility_invoice_items.tax_id` null). |
 | `status` | enum | | See above. |
 | `billing_cycle` | enum `biennial, annually, biannual, quarterly, monthly, weekly, daily, hourly` | | How often the lease is invoiced. Dev uses only monthly, quarterly, annually, biannual and biennial. There is no PHP enum for this column; `LeaseApplicationBillingCycle` (monthly, quarterly, biannual, annually) is the narrower list offered to applicants. |
 | `start_at` | datetime | | Start of the term. |
