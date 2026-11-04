@@ -140,16 +140,18 @@ All five read the stored schedule. The four first-period figures come off row 1.
 | `rent_first_period_annual` | per annum |
 | `rent_breakdown` | every period, as an HTML table: one row per escalating component, per month / per quarter / per annum |
 
-All are tax-inclusive and read the period's own figures, so they cover the **escalating
+All are **net of tax**: the tax is stated once, in `{{money_computations}}`. The four
+`rent_first_period*` tags add up the first period's rent lines (`monthly_net`); the table and
+`rent_breakdown_monthly` read the period's own `net`, so they cover the **escalating
 components only** (every component when nothing escalates — see [Stored shape](#stored-shape)).
-`rent_breakdown_monthly` reads the same figures.
 
 **`rent_breakdown` is a table, not prose.** For each period it prints a header row with
 the period label, then one row per escalating component (across all granted spaces
-together, never per space) with the component's figure per month, per quarter (×3) and per
-annum (×12), tax included, escalated as the period states, and a **Total** row from the
-period's own `monthly` / `quarterly` / `annual`, which is therefore the sum of the rows
-above it. Lines with `escalates: false` are not printed; when no line escalates every line
+together, never per space) with the component's `monthly_net` per month, per quarter (×3)
+and per annum (×12), escalated as the period states, and a **Total** row from the period's
+own `net` ÷ `months` (×3, ×12), which is therefore the sum of the rows above it. A period
+corrected by hand with no `net` prints its stored `monthly` / `quarterly` / `annual` as
+they are. Lines with `escalates: false` are not printed; when no line escalates every line
 prints, and a line without the key (a schedule stored before the flag) prints. A
 hand-corrected period that carries no `components` prints only its Total row.
 
@@ -954,9 +956,10 @@ Only `utility_security_deposit` is never recomputed: utilities are not priced th
 either.
 
 > **Net of tax.** The recomputed service-charge and deposit columns are net,
-> matching the components they come from. The rent *schedule* is tax-inclusive,
-> because that is what a tenant actually pays per period. `has_vat` tells the
-> clause whether tax is added on top.
+> matching the components they come from. The rent *schedule*'s period figures are
+> tax-inclusive, because that is what a tenant actually pays per period, but every tag
+> reads its net figures: the tax is stated once, in `{{money_computations}}`. `has_vat`
+> tells the clause whether tax is added on top.
 
 ### Comments
 
