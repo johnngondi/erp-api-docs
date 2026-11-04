@@ -608,9 +608,10 @@ refused with **422** and `status: ["This invoice has payments allocated to it. R
 another invoice before removing it."]`. Reallocate the payments first, then cancel.
 
 Only live allocations count: `pending` or `confirmed`. Reallocating a receipt leaves the
-allocation it moved off on this invoice as a `cancelled` row in `payments[]`, for example one an
-overpayment carried here from an earlier invoice. That row no longer pays anything, so it does
-not block cancelling. Once `paid` is back to 0, the invoice can be cancelled.
+allocation it moved off on this invoice as a `cancelled` row, for example one an overpayment
+carried here from an earlier invoice. That row no longer pays anything and is not listed in
+`payments[]`, so it does not block cancelling. Once `paid` is back to 0, the invoice can be
+cancelled.
 
 ### Deposit invoices
 
