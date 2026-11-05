@@ -133,6 +133,12 @@ On create, a single `credit-note` `FacilityBill` is recorded:
 - One negative **line item** is created.
 - A negative **`FacilityExpense`** is posted automatically (status `unpaid`), so the credit note
   immediately reduces the vendor's outstanding payable and is available to add to a payment voucher.
+- **Posting date** (`posted_at`, `expense_posted_at` and the expense's `transaction_at`) is now,
+  with one exception: a credit note against a **management fee bill whose remittance was cancelled
+  or rejected** is posted on that remittance's `period_to`, the same day the fee bill was posted.
+  The fee and its credit then net out in the remittance's period instead of the credit landing in
+  the current one. `invoice_date` is always the date sent. A fee bill raised before remittances
+  were recorded as its `billable` cannot be traced back to its remittance and is credited now.
 
 Sample response (`FacilityBillResource`):
 
