@@ -92,7 +92,7 @@ Body fields:
 | `tax_id` | Yes | integer | The utility's tax for this run: a 0% tax for an untaxed utility such as water, the VAT for electricity. Above 0% it is charged only to **VAT-able** leases (the lease's own `tax_id` is above 0%); see [VAT-able and non-VAT leases](#vat-able-and-non-vat-leases). Must exist in `taxes.id` |
 | `total_bill_amount` | Cond. | number | **Total monthly bill charged** (tax-inclusive) — the sum of the current period's charges, NOT the amount payable/balance due after credits or arrears. Required unless `charge_rate` is supplied; drives the derived rate |
 | `bill_consumption` | Cond. | number | Total metered consumption on the provider bill. Required for the `utility provider rate` and `defined` methods |
-| `bill_tax_amount` | Cond. | number | Tax portion of the provider bill. When the selected tax is above 0% the rate is priced on `total_bill_amount − bill_tax_amount`; when it is omitted the net falls back to `total_bill_amount / (1 + tax value)`. Ignored for the rate under a 0% tax. Carried to the provider bill. Recommended whenever tax applies |
+| `bill_tax_amount` | No | number | Tax portion of the provider bill. Used **only** for the provider bill (see [Process Utility Billing](#process-utility-billing)); it never changes the tenant rate, which backs the tax out as `total_bill_amount / (1 + tax value)` |
 | `charge_rate` | No | number | **Optional flat override**, read as the **net** rate. When supplied, the distribution method is ignored and no indirect consumption is computed. Above 0%, VAT-able leases pay it plus the tax and non-VAT leases pay `charge_rate × (1 + v)` with no tax; under a 0% tax every lease pays it as given |
 
 ### How the tenant rate is derived
@@ -116,8 +116,8 @@ A lease with no tax, or a 0% tax, is **non-VAT**.
   - a **non-VAT** lease is priced on the **gross** bill (tax included in the rate) and gets
     no invoice tax. Rows carry `tax_id = null` and `is_taxable = false`.
 
-Both kinds of tenant pay the same per unit in the end. With `T = 11,600`, `X = 1,600`,
-`Cb = 1,000` and 16%: the net rate is 10.00 and the gross 11.60. A VAT-able tenant on 100
+Both kinds of tenant pay the same per unit in the end. With `T = 11,600`, `Cb = 1,000`
+and 16%: the net rate is 10.00 and the gross 11.60. A VAT-able tenant on 100
 units pays 1,000 + 160 tax = 1,160; a non-VAT tenant on 100 units pays 1,160 with no tax.
 
 The two main methods differ in **what the bill is divided by**:
@@ -128,11 +128,11 @@ The two main methods differ in **what the bill is divided by**:
 - **`distribute to tenants`** — the **whole** bill is spread over what tenants actually
   used, so the denominator is **tenant** consumption. Nothing is left over.
 
-With `T = total_bill_amount`, `X = bill_tax_amount`, `Cb = bill_consumption`,
+With `T = total_bill_amount`, `Cb = bill_consumption`,
 `Ct = Σ(billable tenant consumption)`, `v = the selected tax's value` (a fraction, `0.16` = 16%):
 
 - `taxed = v > 0`
-- `net = T − X` when `bill_tax_amount` is supplied, else `T / (1 + v)`
+- `net = T / (1 + v)`
 - `D` = the method's denominator: `Cb` for `utility provider rate` and `defined`, `Ct` for
   `distribute to tenants`
 
@@ -153,16 +153,19 @@ Each priced row then carries:
 
 The indirect figures use the row's own rate and tax the same way.
 
-The fallback net **divides by `(1 + v)`**, it does not multiply by `(1 − v)`. The provider
+The net **divides by `(1 + v)`**, it does not multiply by `(1 − v)`. The provider
 bill total is tax-inclusive, so the tax-exclusive figure is `T / (1 + v)`; re-adding `v` on the
 invoice then rebuilds the gross exactly. Under `distribute to tenants` this makes
-`Σ(amount + tax) = T` to the cent. (Multiplying by `(1 − v)` would yield `(1 − v)(1 + v) = 1 − v²`
-of the bill — a silent shortfall of `v²`, 2.56% at `v = 0.16`.)
+`Σ(amount + tax) = T`, give or take per-row rounding. (Multiplying by `(1 − v)` would yield
+`(1 − v)(1 + v) = 1 − v²` of the bill — a silent shortfall of `v²`, 2.56% at `v = 0.16`.)
 
-A typed-in `bill_tax_amount` wins over the fallback because provider bills carry levies and
-rounding that a percentage does not reproduce. The invoice tax is still `amount × v`, so when
-the bill's `X` is not exactly `v` of its net, a VAT-able tenant's `amount + tax` differs from
-its gross share by that gap. A non-VAT tenant pays the gross share exactly.
+`bill_tax_amount` is **not** used for the tenant rate. A provider bill's tax is rarely exactly
+`v` of the rest (levies carry no VAT), and the invoice tax is always `amount × v`. Pricing on
+`T − X` would make a VAT-able tenant pay `(T − X)(1 + v) / D` per unit instead of `T / D`, so
+the tenants would no longer pay back the bill. On a Kenya Power bill of 703,053.12 with
+88,680 of tax spread over 12,228.7 tenant units, VAT-able tenants would have paid 58.28 per
+unit against the non-VAT tenants' 57.49, and the run would have collected 8,443 more than the
+bill.
 
 The response returns the net rate as `resolved_charge_rate` (what VAT-able leases are
 charged, and every lease under a 0% tax) and the gross rate as **`resolved_gross_charge_rate`**
@@ -180,7 +183,7 @@ and independent of the distribution method. Display it beside `resolved_charge_r
 user can see what the tenants are charged versus what the provider charged. It is `null`
 when `total_bill_amount` or `bill_consumption` was not supplied (e.g. a flat `charge_rate`
 override). When the selected tax is above 0%, `resolved_charge_rate` is derived net of tax
-(e.g. `(T − X) / Cb`), so it is legitimately lower than `bill_rate`; under
+(e.g. `T / (1 + v) / Cb`), so it is legitimately lower than `bill_rate`; under
 `utility provider rate` `resolved_gross_charge_rate` equals `bill_rate`.
 
 ### Tenant vs. bill consumption
@@ -606,7 +609,7 @@ Body fields:
 | `bill_number` | No | string | Provider bill/reference number, stored on the contract bill as `invoice_number` |
 | `bill_tax_invoice_number` | No | string | Provider tax invoice number, stored on the contract bill as `tax_invoice_number` |
 | `total_bill_amount` | No | number | Total monthly bill charged — **tax-inclusive**, not the amount payable after credits. When omitted, no provider bill is raised |
-| `bill_tax_amount` | No | number | Tax portion of the provider bill |
+| `bill_tax_amount` | No | number | Tax portion of the provider bill. Only the provider bill uses it; the tenant rows do not change with it |
 | `bill_consumption` | No | number | Total metered consumption on the provider bill (stored as the bill line quantity) |
 | `generate_bill` | No | boolean | Default `true`. `false` raises **no** provider bill (tenants are still invoiced and the run's `bill_id` stays `null`). The bill fields above still price the run. The billing screen sends it from the **Generate provider bill** checkbox beside Process, ticked by default |
 
