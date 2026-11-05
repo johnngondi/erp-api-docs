@@ -837,6 +837,9 @@ override is always honoured, even when the bills agree.
 - One item per merged bill: `title` from that bill's first item (falling back to `Bill#{id}`),
   `notes` = the merged bill's notes, `amount`/`tax`/`total` copied across, and `billable` pointing at
   the merged bill.
+- `company_id` = the merged bills' company, or the property's company when none of them records one.
+  It is copied from the bills rather than taken from the route, because the vendor portal route has
+  no `{company}` segment.
 - `notes`: the client's `notes` if supplied; otherwise the shared note when every merged bill has the
   same one, else `Merged {n} bills: {note}; {note}; …`.
 - `withholding_tax_ids` = the union of the merged bills' withholding taxes, recalculated against the

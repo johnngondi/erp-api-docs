@@ -164,6 +164,8 @@ this route — the merged bills must already agree on them.
 - `amount`, `tax`, `total` = the sums of the merged bills; `paid = 0`, `balance = total`,
   `status = pending`, no invoice number yet — upload the invoice on the merged bill as usual.
 - One item per merged bill, keeping that bill's title, notes and figures.
+- It belongs to the same company as the bills it replaces (the property's company if none of them
+  records one), so it shows up in the landlord's bill list straight away.
 - `notes`: your `notes` if supplied; otherwise the shared note when every merged bill has the same
   one, else `Merged {n} bills: {note}; {note}; …`.
 
