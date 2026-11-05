@@ -121,9 +121,31 @@ cancel or reverse. On any other lease, opening balances bill at once, as before.
 
 Use the same payload shape as create.
 
+A changed `amount` is billed as given and **tax-free**: `tax_amount` is not read here, and the
+component's tax is never added on top. `billed_amount` becomes the new `amount`.
+
+| The balance's document | What the change raises |
+|---|---|
+| An unpaid invoice | The invoice is cancelled and the new amount is billed afresh: an invoice when positive, a credit note when negative |
+| A paid or partly paid invoice, or a credit note | The difference only: an invoice for an increase, a credit note for a decrease |
+| None that is live: cancelled, rejected or deleted | The new amount afresh, as above. Nothing of the old amount is on the statement any more, so billing a difference would bill it short |
+
 ## Delete Lease Opening Balance
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/leases/{lease}/opening-balances/{leaseOpeningBalance}`
+
+Deleting takes the balance back off the statement:
+
+| The balance's document | What deleting does |
+|---|---|
+| An unpaid invoice | Cancels it |
+| A paid or partly paid invoice | Raises a reversal credit note for `billed_amount` |
+| A credit note | Raises a reversal invoice for `billed_amount` |
+| None that is live: cancelled, rejected or deleted | **Nothing.** Cancelling or deleting the document already took the balance off the statement, and reversing it again would bill the tenant a second time |
+
+A reversal carries the balance's own split of principal and tax: principal `amount`, tax
+`billed_amount - amount`. It never adds the component's tax rate on top, so the reversal always
+equals `billed_amount`.
 
 ### Balances raised together cannot be changed one at a time
 

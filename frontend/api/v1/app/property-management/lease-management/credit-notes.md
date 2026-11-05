@@ -516,6 +516,11 @@ Public link field on the credit note resource:
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}`
 
+A live credit note is cancelled first (see [Cancel Credit Note](#cancel-credit-note)). It is then removed **along
+with its tenant statement entries**: its credit line and the `Cancelled Credit Note #` debit line both go,
+as they do for a deleted invoice. A deleted credit note leaves nothing on the statement. To keep the
+record of a withdrawn credit, cancel it and do not delete it.
+
 A credit note signed on the ETR cannot be deleted, because KRA has it. Cancel it instead, which
 re-bills the credit with a new invoice. Deleting a signed one returns `422` with
 `errors.status: ["A credit note signed on the ETR cannot be deleted. Cancel it instead."]`.
