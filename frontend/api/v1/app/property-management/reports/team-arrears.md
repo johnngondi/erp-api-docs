@@ -86,8 +86,10 @@ scope (`{ id, code, name }`), or `null` when they use different currencies or th
 
 ## GET `/reports/teams/arrears`
 
-Lists **every team of the company**, or the teams in `team_ids`, ordered by name. A team with
-nothing in scope still appears, with zeros and `properties_count: 0`.
+Lists **every team of the company**, or the teams in `team_ids`, ordered by
+`period_collections_percent`, **highest first**. Teams with no period rate (`null`: nothing billed in
+the period) come last, and ties are ordered by name, then id. A team with nothing in scope still
+appears, with zeros and `properties_count: 0`.
 
 ```json
 {
@@ -156,7 +158,8 @@ nothing in scope still appears, with zeros and `properties_count: 0`.
 
 ## GET `/reports/teams/arrears/{propertyTeam}`
 
-The team's properties in scope, ordered by name.
+The team's properties in scope, ordered like the teams: `period_collections_percent` highest first,
+`null` last, ties by name, then id.
 
 ```json
 {
