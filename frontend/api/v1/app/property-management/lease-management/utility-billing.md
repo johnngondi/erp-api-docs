@@ -557,14 +557,38 @@ A lease is skipped only when it was already billed **for this utility** inside t
 (on or after the first of the current month): its `utility_billed_at` falls in the period **and**
 one of its invoices raised in the period carries a utility line for this utility. Each utility is
 billed once a period on its own, so billing water does not stop the same tenants' electricity. A
-cancelled or rejected invoice does not count, so cancelling a wrong utility bill reopens that
-utility for the period. The skip reads `Lease 93 skipped: Water already billed for this period.`
+cancelled, rejected or reversed (credit note) invoice does not count, so cancelling a wrong utility
+bill reopens that utility for the period. The skip reads `Lease 93 skipped: Water already billed for this period.`
 A lease with no `utility_billed_at` has simply
 never been billed and is read as *last billed in the previous period*, so it qualifies — a
 lease onboarded today bills on the very first run, and a lease last billed in an earlier
 period reopens on its own. The `leases:reset-utility-billing` command is therefore no longer
 required monthly; it remains a manual override to force a re-bill within the current period.
 Rows with zero/negative consumption or an error are skipped.
+
+### Withdrawing a utility invoice releases its readings
+
+Cancelling a utility invoice (`PATCH .../invoices/{invoice}/cancel`), reversing a filed one with a
+credit note (the same endpoint, or delete), rejecting it in its approval chain, or deleting it
+undoes what the run stamped, so the lease can be billed again from the same readings without
+clearing dates by hand:
+
+- Each **current** reading linked from the invoice's utility lines gets `billed_at` cleared, so the
+  next fetch shows it as the current reading again and the consumption is the same.
+- The lease's `utility_billed_at` goes back to when its latest remaining live utility invoice was
+  raised, or `null` when it has none. It is not simply cleared, because the one stamp covers every
+  utility: a lease that was also billed water this month stays billed for water.
+
+A reading is left billed when clearing it would bill someone twice:
+
+- **Shared meter**: another lease's live invoice still bills the same reading. The reading is
+  released only when the last invoice that bills it is withdrawn, so withdrawing the whole run
+  releases it; withdrawing one tenant's invoice does not. That tenant has to be invoiced by hand.
+- **The meter has moved on**: a later reading of the same meter has been billed since. The next
+  run already measures from that later reading.
+
+A live invoice is one that is not `cancelled` or `rejected` and has not been reversed by a credit
+note. Nothing changes in the API responses; refetch the readings after withdrawing an invoice.
 
 Body fields:
 

@@ -613,6 +613,13 @@ carried here from an earlier invoice. That row no longer pays anything and is no
 `payments[]`, so it does not block cancelling. Once `paid` is back to 0, the invoice can be
 cancelled.
 
+### Utility invoices
+
+An invoice raised by utility billing frees its meter readings and the lease's utility period when it
+is cancelled, reversed, rejected or deleted, so the utility can be billed again from the same
+readings. Shared meters and meters billed again since are the exceptions; see "Withdrawing a utility
+invoice releases its readings" in Utility Billing.
+
 ### Deposit invoices
 
 An invoice that bills lease deposits (one Deposit line, see Lease Deposits) carries the deposit
