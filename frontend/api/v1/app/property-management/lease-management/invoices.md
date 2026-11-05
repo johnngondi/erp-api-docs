@@ -613,6 +613,31 @@ carried here from an earlier invoice. That row no longer pays anything and is no
 `payments[]`, so it does not block cancelling. Once `paid` is back to 0, the invoice can be
 cancelled.
 
+### Credit that paid the invoice
+
+Credit notes are not payments, and they do not block cancelling. An invoice paid by a credit note,
+for example an open credit drawn down when the invoice was processed (a negative opening balance,
+an exit-notice settlement), is cancelled like any other. The credit then **goes back to the credit
+note it came from**:
+
+- each of the invoice's `credit_applications[]` is removed, and its amount goes back onto that
+  credit note's `balance` and comes off its `paid`;
+- the credit note returns to `unapplied`, or `partially applied` while it still pays another
+  invoice, so the lease's next invoice draws on it again;
+- the cancelled invoice's `paid` drops by the same amount, so it ends at 0 when credit alone paid it.
+
+The tenant statement needs nothing more. The credit note's line stands and the cancellation line
+takes the invoice off, so the tenant holds the credit again, and the credit note's `balance` now
+says so.
+
+A credit note that was cancelled after it was signed keeps its applications (it stands, see
+[Cancel Credit Note](./credit-notes.md#cancel-credit-note)), so its credit is not given back.
+
+A filed invoice is reversed rather than cancelled (see [Delete Invoice](#delete-invoice)). Its
+credit is given back the same way first, and the reversing credit note then covers the full
+invoice. Before this, the reversal landed on an invoice the credit had already paid and left it
+overpaid by that amount, with nothing to carry it to the next invoice.
+
 ### Utility invoices
 
 An invoice raised by utility billing frees its meter readings and the lease's utility period when it
@@ -761,7 +786,7 @@ One endpoint, four outcomes, decided by the invoice.
 | Invoice | Outcome |
 |---|---|
 | **Payments allocated** | Refused. `permissions.delete` is `false`, so hide the action; a direct call returns **403**. The money is reallocated to another invoice first. A `cancelled` allocation counts here too, unlike in [Cancel Invoice](#cancel-invoice). The row stays as the record of money that once passed through the invoice (lease collections can still point at it), so an invoice that ever held a payment can be cancelled but not deleted. A direct call that gets past the policy is refused with **422** and `status: ["Payments were allocated to this invoice before, so it cannot be deleted. Cancel it instead."]` |
-| **Issued and carrying a CU number** | **Reversed**, not deleted. A credit note for the full value is raised and signed to ETR. The invoice survives |
+| **Issued and carrying a CU number** | **Reversed**, not deleted. Credit that paid it goes back to its credit notes first (see [Credit that paid the invoice](#credit-that-paid-the-invoice)), then a credit note for the full value is raised and signed to ETR. The invoice survives |
 | **Live and unfiled** (unpaid, partially paid) | Refused — **cancel it first**. `permissions.delete` is `false`; a direct call returns **403** with `"Cancel this invoice before deleting it."` |
 | **Cancelled, pending or rejected** | Removed, along with its tenant statement entries, lease billings and any lease deposit rows it billed |
 
