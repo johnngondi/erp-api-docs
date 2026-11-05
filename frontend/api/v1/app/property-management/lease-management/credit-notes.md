@@ -261,6 +261,10 @@ This happens in these cases:
   apart further, so show it as "recorded before tracking began".
 - Cancelling an unsigned credit note reverses each application on its own invoice and removes
   it. A signed credit note keeps its applications (it stands, see below).
+- Cancelling or reversing an **invoice** gives back each application on that invoice: the amount
+  returns to the credit note's `balance`, and the credit note goes back to `unapplied` or
+  `partially applied` for the lease's next invoice to draw on. A cancelled credit note is left as
+  it is. See [Cancel Invoice](./invoices.md#credit-that-paid-the-invoice).
 
 ### Signs
 
