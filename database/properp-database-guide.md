@@ -5673,7 +5673,7 @@ When a bill is raised, each withholding tax it carries produces one `facility_bi
 | value | decimal(10,2) | | The rate as a **fraction**, like `taxes.value`: `0.05` = 5 % |
 | minimum_amount | decimal(50,5) | | Threshold on the base: below it nothing is withheld. 0 = no threshold |
 | cap_amount | decimal(50,5) | | Maximum amount withheld per bill. 0 = no cap |
-| calculated_on | enum('amount_before_tax','only_taxable_amount','amount_after_tax','tax_amount') | | Which bill figure the rate applies to: net amount, only the taxable lines, gross amount, or the VAT amount |
+| calculated_on | enum('amount_before_tax','only_taxable_amount','amount_after_tax','tax_amount') | | Which bill figure the rate applies to: net amount, only the taxable lines, gross amount, or the VAT amount. `only_taxable_amount` is worked back from the tax: for each bill line that carries tax, the line's `tax` ÷ its tax rate (`taxes.value` of the line's `tax_id`), summed — so `amount` = `value` × bill tax ÷ rate on a single-rate bill. A taxed line with no rate (a fixed tax amount, or a merged line) uses the `default_tax` setting's rate, and its own amount when there is no usable rate |
 | withhold_when | enum('always','when_has_tax','when_no_tax') | | `when_has_tax` applies only to bills that carry VAT; `when_no_tax` only to bills without VAT |
 | deleted_at | timestamp | | Soft delete |
 
