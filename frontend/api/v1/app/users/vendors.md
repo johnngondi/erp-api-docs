@@ -74,7 +74,7 @@ elevation is what made a returning email look like a new supplier with blank fie
 On an elevation, identity is deliberately left alone: `name`, `phone` and `email` belong to the
 person, who may already be a tenant or landlord under that name. Only supplier fields are written —
 `tax_pin`, `address`, `business_registration_number`, `country_id`, `city_id`, `has_vat`,
-`is_tax_merchant`, `is_statutory_vendor`, `is_withholding_exempt` — and only where the request
+`force_vat`, `is_tax_merchant`, `is_statutory_vendor`, `is_withholding_exempt` — and only where the request
 actually sent them.
 
 ## Suspend, Terminate and Activate
@@ -184,6 +184,7 @@ Request fields:
 | `terms` | Conditional | boolean/accepted | Required for brand-new user |
 | `policy` | Conditional | boolean/accepted | Required for brand-new user |
 | `has_vat` | No | boolean | - |
+| `force_vat` | No | boolean | Default `false`. The supplier charges VAT even on exempt goods: on an LPO raised from a purchase request, a line whose purchase item is taxed at `0` takes the company's `default_tax`. Only applies while `has_vat` is `true`. Also accepted on update, and returned on the vendor resource |
 | `tax_pin` | Conditional | string | Required if `has_vat=true`; unique |
 | `is_statutory_vendor` | No | boolean | Optional |
 | `is_withholding_exempt` | No | boolean | Optional; when `true`, no withholding is applied to the vendor's bills even if withholding ids are supplied |
