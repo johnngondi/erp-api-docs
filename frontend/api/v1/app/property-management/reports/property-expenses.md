@@ -181,11 +181,28 @@ currency** (like the other two summaries).
   columns); the amount cells are omitted. They carry `type: subtotal`, `background_color: primary`.
 - **`property_{id}` totals row** is a `Total` label with `col_span: 6` (covering the six leading text
   columns), then the `amount` / `tax` / `total` sums; `invoice` is omitted.
-- **`invoice`** cell value is `{ file_name, source_url }`, or `null` when no invoice is attached or
-  the attached upload has been deleted. `source_url` is the upload's full preview URL
+- **`invoice`** cell value is one of two shapes, or `null`. Tell them apart by `export_url`:
+  - **The customer invoice** `{ id, number, status, export_url }`, on an expense that posted from a
+    bill the company invoiced the landlord for: a **management fee** (raised by a remittance) or a
+    **letting / re-letting fee**. The company's own invoice is that expense's invoice, so it takes
+    the place of an upload, even when one is attached. It applies while that customer invoice
+    stands; a cancelled or deleted one falls back to the upload.
+  - **The upload** `{ file_name, source_url }`, otherwise.
+  - `null` when there is neither (no upload attached, or the attached upload has been deleted).
+- **Upload** — `source_url` is the upload's full preview URL
   (`…/api/v1/settings/file-management/uploads/{uuid}/preview`), the same one every other screen
   opens an upload with. Use it as the link as it is: it needs no token, and opens the PDF or image
   in the browser. Show `file_name` as the link text.
+- **Customer invoice** — `number` is the invoice's `CI0012` number and `status` its
+  `CustomerInvoiceStatus` (`unverified` | `verified` | `sent` | `signed`). `export_url` is the
+  full URL of
+  [`GET …/finance/customer-invoices/{id}/export?format=pdf`](../finance/customer-invoices.md),
+  the same download the customer invoices screen uses. Unlike an upload's `source_url` it is an
+  **authenticated app API route**: fetch it with the user's bearer token (`responseType: 'blob'`)
+  and save the response as `{number}.pdf`, rather than opening it as a plain link. It needs
+  `view-customer-invoice` on a property the user is allocated to; a user without it gets a `403`,
+  so hide or disable the download when the user lacks that permission. Show `number` as the
+  download text. Exports (Excel / PDF) print the `number`.
 - The expense-type column key is **`expense_type`** (not `type`) — `type` is reserved for row metadata.
 
 ### This report's presentation choices
@@ -292,6 +309,7 @@ separately [below](#sample-all-properties-bucket).
         "items": [
           { "invoice_number": { "value": "INV-014" }, "date": { "value": "16 Jan, 2026" }, "notes": { "value": "Meter top-up" }, "vendor": { "value": "Kenya Power" }, "category": { "value": "Utilities" }, "expense_type": { "value": "Electricity" }, "amount": { "value": 800 }, "tax": { "value": 120 }, "total": { "value": 920 }, "invoice": { "value": { "file_name": "kplc-jan.pdf", "source_url": "https://…/api/v1/settings/file-management/uploads/0d9aab83-1355-44cc-bb3a-b1f821adb060/preview" } }, "type": "normal" },
           { "invoice_number": { "value": "INV-021" }, "date": { "value": "16 Jan, 2026" }, "notes": { "value": "Pipe repair" }, "vendor": { "value": "AquaFix" }, "category": { "value": "Repairs" }, "expense_type": { "value": "Plumbing" }, "amount": { "value": 900 }, "tax": { "value": 135 }, "total": { "value": 1035 }, "invoice": { "value": null }, "type": "normal" },
+          { "invoice_number": { "value": "MF-2026-01" }, "date": { "value": "31 Jan, 2026" }, "notes": { "value": "Management fee Jan 2026" }, "vendor": { "value": "Propx Ltd" }, "category": { "value": "Management" }, "expense_type": { "value": "Management Fee" }, "amount": { "value": 500 }, "tax": { "value": 60 }, "total": { "value": 560 }, "invoice": { "value": { "id": 12, "number": "CI0012", "status": "verified", "export_url": "https://…/api/v1/app/1/property-management/finance/customer-invoices/12/export?format=pdf" } }, "type": "normal" },
           { "invoice_number": { "value": "Total", "col_span": 6 }, "amount": { "value": 2200 }, "tax": { "value": 315 }, "total": { "value": 2515 }, "type": "grosstotal", "background_color": "secondary" }
         ],
         "summary": { "total_amount": 2200, "total_tax": 315, "total": 2515, "expense_count": 4 }
