@@ -548,6 +548,20 @@ Request body:
 | `details` | Yes | string | Dispute description |
 | `ticket_upload_id` | No | integer | Optional attachment upload id (`uploads.id`) |
 
+**Disputing again.** Only an open dispute holds the next one back: `disputed_at` is set, or the
+linked ticket (`dispute_ticket_id`) is not `closed`. Until then the endpoint answers `422` keyed
+`credit_note`, "This credit note has already been disputed. See ticket#{id}", naming that ticket,
+with `open_ticket: { "id": … }` beside `errors` for a link to it. Once the ticket is closed, the
+credit note can be disputed again: a new ticket is raised and `dispute_ticket_id` points at it. The
+closed ticket stays in the tickets list with its resolution, as the history of the first dispute.
+`permissions.dispute` does not look at an open dispute, so keep the button and show the `422`
+message.
+
+The list and the credit note itself carry `dispute_ticket` (`id`, `title`, `status`) whenever one is
+linked, open or closed. The credit note is disputed while `disputed_at.raw` is set or
+`dispute_ticket.status.value` is not `closed`; otherwise a linked ticket is the settled history of
+the last dispute. `disputed_at` is always sent, as `raw: null` when nothing is open.
+
 ## Withdraw Credit Note Dispute
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/credit-notes/{creditNote}/dispute`

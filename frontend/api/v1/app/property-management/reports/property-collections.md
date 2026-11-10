@@ -10,7 +10,7 @@ Property Collections is a **receipt listing**: every receipt that paid a lease i
 per receipt per lease, with what it paid against each lease component, the VAT on it and its total.
 It answers **who paid, when, under which receipt, and for what**. Its columns follow the legacy
 "Property Collections" report: Property | Tenant | Txn Date | Ref. | Rent | S.Charge | Parking | VAT |
-Total. It is **read-only** and computed on the fly.
+Total, plus a Payment Date. It is **read-only** and computed on the fly.
 
 > **Read [the shared reports contract](./README.md) first.** This page documents what is specific to
 > this report. The response envelope, the bucket keys, the field keys, the per-cell `{ value, color }`
@@ -20,6 +20,12 @@ Total. It is **read-only** and computed on the fly.
 > (`lease-components`, `all-properties`, `landlord-{id}`) with a collection rate and variance. That
 > shape repeated [Collections Summary](./collections-summary.md) and is gone. Billed against
 > collected per lease lives in [Billings & Collections](./billings-and-collections.md).
+
+> **Changed 2026-11-05.** `transaction_date` (Txn Date) is now the **collection's** date
+> (`lease_collections.transaction_date`), the date that puts a row in the period. The receipt's own
+> date (`facility_receipts.transaction_date`), which Txn Date used to show, moved to the new
+> `payment_date` (Payment Date) column. A row is now one receipt on one lease **on one collection
+> date**, and the Total row's label spans one more column.
 
 ## Endpoints
 
@@ -36,12 +42,14 @@ The two permissions are **independent**, and neither is shared with
 
 ## What is counted
 
-- **A row is one receipt on one lease.** The report reads `lease_collections` whose status is
-  **`confirmed`** and whose own `transaction_date` falls in the period, and groups them by the receipt
-  they were allocated from (`lease_collections.receipt_allocation_id` →
-  `facility_receipt_allocations.receipt_id` → `facility_receipts`) and by lease. A receipt that pays
-  two leases is two rows; a receipt that pays Rent and Service Charge on one lease is **one** row
-  with both amounts.
+- **A row is one receipt on one lease on one collection date.** The report reads
+  `lease_collections` whose status is **`confirmed`** and whose own `transaction_date` falls in the
+  period, and groups them by the receipt they were allocated from
+  (`lease_collections.receipt_allocation_id` → `facility_receipt_allocations.receipt_id` →
+  `facility_receipts`), by lease and by the collection's date (the day of
+  `lease_collections.transaction_date`). A receipt that pays two leases is two rows; a receipt that
+  pays Rent and Service Charge on one lease the same day is **one** row with both amounts. A receipt
+  whose money reaches a lease on two days (say, a credit applied to a later invoice) is one row per day.
 - A `cancelled` collection is not money collected and never appears.
 - **Component cells are net** (pre-tax): the sum of `lease_collections.amount` for that component on
   that receipt and lease. A collection reaches its component through its lease item
@@ -50,9 +58,10 @@ The two permissions are **independent**, and neither is shared with
   percentage of the net, so a zero-rated or partly taxed receipt shows exactly what was posted.
 - **`total` is the stored total, summed** (`lease_collections.total`), so on every row
   `total = component cells + vat`.
-- `transaction_date` and `reference` are the **receipt's** own (`facility_receipts.transaction_date`
-  and `facility_receipts.transaction_number`). The period is applied to the collection's date, which
-  is normally the same day.
+- `transaction_date` is the **collection's** date (`lease_collections.transaction_date`), the date
+  the period is applied to. `payment_date` and `reference` are the **receipt's** own
+  (`facility_receipts.transaction_date` and `facility_receipts.transaction_number`). The two dates
+  are normally the same day; they differ when a receipt is allocated to the lease after it was paid.
 - Rows reach their property through the lease (`leases.facility_id`).
 
 [Collections Summary](./collections-summary.md) and
@@ -121,12 +130,13 @@ Default row order (`header.sort.default`):
 
 | `bucket` | Default order |
 |---|---|
-| `overall` | `["property", "transaction_date", "tenant"]` — property name, then receipt date (oldest first), then tenant name |
+| `overall` | `["property", "transaction_date", "tenant"]` — property name, then collection date (oldest first), then tenant name |
 | `property-{id}` | `["transaction_date", "tenant"]` |
 
 Names compare case-insensitively with blanks last; ties keep the receipt order. Re-sort any bucket
 with [`sort`](./README.md#sorting-rows--sort), e.g. `sort[overall]=-transaction_date` for the newest
-receipts first or `sort[property-7]=-total` for the largest; the `Total` row stays last.
+collections first, `sort[overall]=-payment_date` for the newest receipts, or
+`sort[property-7]=-total` for the largest; the `Total` row stays last.
 [`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ## Columns
@@ -136,7 +146,8 @@ receipts first or `sort[property-7]=-total` for the largest; the `Total` row sta
 | `property` | `Property` | `string` | **`overall` only** — the `property-{id}` buckets omit it |
 | `tenant` | `Tenant` | `string` | The lease's tenant (`leases.user_id` → `users.name`) |
 | `lease_id` | `Lease` | `id` | Togglable, **hidden by default** (`visible: false`). For drill-down to the lease |
-| `transaction_date` | `Txn Date` | `string` | The receipt's date, `YYYY-MM-DD` |
+| `transaction_date` | `Txn Date` | `string` | The collection's date (`lease_collections.transaction_date`), `YYYY-MM-DD` |
+| `payment_date` | `Payment Date` | `string` | The receipt's date (`facility_receipts.transaction_date`), `YYYY-MM-DD` |
 | `reference` | `Ref.` | `string` | The receipt's transaction number |
 | `component_{id}` | the component's name | `money` | **Dynamic**, see below |
 | `vat` | `VAT` | `money` | Summed stored tax |
@@ -162,8 +173,8 @@ Its label cell spans the text columns via `col_span`, and the row **omits** the 
 
 | Bucket | Label cell | `col_span` | Omitted keys |
 |---|---|---|---|
-| `overall` | `property` = `Total` | 5 | `tenant`, `lease_id`, `transaction_date`, `reference` |
-| `property-{id}` | `tenant` = `Total` | 4 | `lease_id`, `transaction_date`, `reference` |
+| `overall` | `property` = `Total` | 6 | `tenant`, `lease_id`, `transaction_date`, `payment_date`, `reference` |
+| `property-{id}` | `tenant` = `Total` | 5 | `lease_id`, `transaction_date`, `payment_date`, `reference` |
 
 The span counts `lease_id` even while it is hidden; per the shared contract, a renderer (and the
 exports) reduce the span to the visible columns it covers.
@@ -173,7 +184,7 @@ exports) reduce the span to the visible columns it covers.
 | Key | Bucket `summary` | Report `summary` | Meaning |
 |---|---|---|---|
 | `total_collected` | yes | yes | Sum of the rows' `total` — confirmed collections in the period |
-| `receipt_count` | yes | yes | Rows listed (receipt + lease pairs) |
+| `receipt_count` | yes | yes | Rows listed (receipt + lease + collection date) |
 | `property_count` | — | yes | Properties in scope, i.e. `property-{id}` buckets |
 
 The report-level `total_collected` and `receipt_count` equal the `overall` bucket's.
@@ -208,6 +219,7 @@ The report-level `total_collected` and `receipt_count` equal the `overall` bucke
           { "label": "Tenant", "key": "tenant", "format": "string", "alignment": "left" },
           { "label": "Lease", "key": "lease_id", "format": "id", "alignment": "left", "togglable": true, "visible": false },
           { "label": "Txn Date", "key": "transaction_date", "format": "string", "alignment": "left" },
+          { "label": "Payment Date", "key": "payment_date", "format": "string", "alignment": "left" },
           { "label": "Ref.", "key": "reference", "format": "string", "alignment": "left" },
           { "label": "Rent", "key": "component_1", "format": "money", "alignment": "right", "togglable": true, "component_id": 1 },
           { "label": "Service Charge", "key": "component_2", "format": "money", "alignment": "right", "togglable": true, "component_id": 2 },
@@ -217,19 +229,19 @@ The report-level `total_collected` and `receipt_count` equal the `overall` bucke
         ],
         "items": [
           { "type": "normal", "property": { "value": "Kahawa House" }, "tenant": { "value": "Acme Traders Ltd" },
-            "lease_id": { "value": 31 }, "transaction_date": { "value": "2026-07-05" }, "reference": { "value": "RCT-1001" },
+            "lease_id": { "value": 31 }, "transaction_date": { "value": "2026-07-05" }, "payment_date": { "value": "2026-07-05" }, "reference": { "value": "RCT-1001" },
             "component_1": { "value": 100000.00 }, "component_2": { "value": 25000.00 }, "component_3": { "value": 0.0 },
             "vat": { "value": 20000.00 }, "total": { "value": 145000.00 } },
           { "type": "normal", "property": { "value": "Kahawa House" }, "tenant": { "value": "Beta Stores" },
-            "lease_id": { "value": 34 }, "transaction_date": { "value": "2026-07-09" }, "reference": { "value": "RCT-1007" },
+            "lease_id": { "value": 34 }, "transaction_date": { "value": "2026-07-09" }, "payment_date": { "value": "2026-06-28" }, "reference": { "value": "RCT-1007" },
             "component_1": { "value": 0.0 }, "component_2": { "value": 0.0 }, "component_3": { "value": 5000.00 },
             "vat": { "value": 800.00 }, "total": { "value": 5800.00 } },
           { "type": "normal", "property": { "value": "Mvule Court" }, "tenant": { "value": "Jane Wanjiru" },
-            "lease_id": { "value": 52 }, "transaction_date": { "value": "2026-07-02" }, "reference": { "value": "MPESA-QH72K" },
+            "lease_id": { "value": 52 }, "transaction_date": { "value": "2026-07-02" }, "payment_date": { "value": "2026-07-02" }, "reference": { "value": "MPESA-QH72K" },
             "component_1": { "value": 60000.00 }, "component_2": { "value": 0.0 }, "component_3": { "value": 0.0 },
             "vat": { "value": 0.0 }, "total": { "value": 60000.00 } },
           { "type": "subtotal", "background_color": "secondary",
-            "property": { "value": "Total", "col_span": 5 },
+            "property": { "value": "Total", "col_span": 6 },
             "component_1": { "value": 160000.00 }, "component_2": { "value": 25000.00 }, "component_3": { "value": 5000.00 },
             "vat": { "value": 20800.00 }, "total": { "value": 210800.00 } }
         ],
@@ -243,7 +255,7 @@ The report-level `total_collected` and `receipt_count` equal the `overall` bucke
         "items": [
           /* the two Kahawa House rows, without `property` */
           { "type": "subtotal", "background_color": "secondary",
-            "tenant": { "value": "Total", "col_span": 4 },
+            "tenant": { "value": "Total", "col_span": 5 },
             "component_1": { "value": 100000.00 }, "component_2": { "value": 25000.00 }, "component_3": { "value": 5000.00 },
             "vat": { "value": 20800.00 }, "total": { "value": 150800.00 } }
         ],
@@ -264,7 +276,8 @@ The report-level `total_collected` and `receipt_count` equal the `overall` bucke
 ```
 
 The first row is one receipt that paid Rent 100,000 and Service Charge 25,000 net plus VAT 20,000,
-so it is one row totalling 145,000. No cell in this report carries a `color`.
+so it is one row totalling 145,000. The second row's receipt was paid on 28 June and allocated to the
+lease on 9 July, so it lists under July with its June `payment_date`. No cell in this report carries a `color`.
 
 ## Export
 

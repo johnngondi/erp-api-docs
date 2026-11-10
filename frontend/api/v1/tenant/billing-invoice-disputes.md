@@ -24,6 +24,15 @@ Allows tenant to dispute an invoice and open a support ticket.
 - Ticket description includes invoice info and submitted details.
 - Ticket category is resolved to billing category when available, else first category.
 - If `ticket_upload_id` is provided, upload is attached to the created ticket.
+- Only an open dispute blocks a new one (`422` keyed `invoice`, naming the ticket, with
+  `open_ticket: { "id": … }`): `disputed_at` is
+  set, or the linked ticket is not `closed`. Once staff close the ticket the invoice can be disputed
+  again, on a new ticket; the closed one stays as the first dispute's history.
+- A invoice is disputed while `disputed_at.raw` is set. `disputed_at` is always sent, with `raw: null`
+  when there is no open dispute, so read `raw`, not whether the key is there. `dispute_ticket` stays
+  after a dispute is settled and carries its `status` (`open` / `closed`), so a closed one can be shown
+  as history next to the Dispute action. `permissions.dispute` follows the invoice's status only, so the Dispute button stays while a
+  dispute is open and pressing it shows the `422`.
 
 ## Example Request
 

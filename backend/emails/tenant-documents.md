@@ -112,6 +112,39 @@ In each company with reminders on, an invoice that is
 `emailed_at` records when the invoice was first sent; `last_reminded_at` when the latest reminder
 went. Both are returned on the invoice resource.
 
+### Which leases
+
+An invoice's own `balance` can be wrong about what the tenant owes. Credit that was applied to
+another invoice, or is still unapplied, leaves the invoice showing a balance on a lease that is
+settled. So each lease is checked against its ledger before any of its invoices is reminded,
+once per run, and either all of its due invoices go or none do.
+
+- **Balance:** the lease's whole balance, as on the tenant statement: `SUM(lease_billings.total)`
+  (invoices positive, credit notes negative) less `SUM(lease_collections.total)` of confirmed
+  collections. Invoices not yet due count; only overdue invoices are reminded.
+- **Pending:** what is on its way but not yet in the ledger: the `pending` allocations of
+  `pending` receipts to the lease's invoices, plus the total of the lease's `pending` credit
+  notes. Neither writes ledger rows until it is processed. Unapplied and partly applied credit
+  notes are already in the balance.
+- **Owed** = balance − pending, to the cent.
+
+The lease is reminded only when owed is above zero **and** at least the company's minimum. It is
+also skipped when the tenant paid recently: a `pending` or `confirmed` receipt, not reversed,
+allocated to one of the lease's invoices and created (`created_at`) on or after the start of the
+day that many days ago. Any amount counts.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `invoice_reminder_minimum_arrears` | `0` | Owed below this is not reminded. In the lease currency. |
+| `invoice_reminder_recent_payment_days` | `2` | Days after a payment that no reminder goes. `0` turns this off. |
+
+Both are under Settings → Finance, read per company with
+`InvoiceReminderSettings::minimumArrearsFor()` and `recentPaymentDaysFor()`.
+
+A skipped invoice is not stamped. The step it missed goes out on the first run once the lease
+qualifies again (after the payment window, or when the arrears pass the minimum), still once and
+not once per missed step.
+
 ### Cadence
 
 `config('emails.invoice_reminder_days')` (`[1, 7, 14, 30]`) are the days past due a reminder
@@ -128,7 +161,9 @@ reminder (`facility_invoices.last_reminded_at`) was before that step. So:
 The command stamps `last_reminded_at` and sends `InvoiceReminderNotification` through
 `OutboundEmail` in one transaction per invoice. A tenant with no email address is skipped
 and not stamped. `--dry-run` prints, per company, the invoices it would remind (tenant, days
-overdue, step, balance, last reminder) without sending or stamping.
+overdue, step, balance, last reminder), then the invoices it skipped for their lease, with the
+lease's balance, pending and owed figures and the reason (`No arrears`, `Covered by pending`,
+`Below minimum`, `Paid recently`), without sending or stamping.
 
 ### The reminder
 

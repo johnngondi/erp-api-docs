@@ -27,7 +27,9 @@ sent as the day it means in Nairobi, but send `YYYY-MM-DD`.
 Supported query params:
 
 - Filters:
-  - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers)
+  - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers). Numbers only are
+    matched exactly on the id, amount, total, invoice number, CU number and LPO, as in the
+    [staff listing](../../app/property-management/searching-and-sorting.md#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
   - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_category_id]`, `filter[type]`, `filter[status]`
   - `filter[contract_id]` — bills raised against a given contract (`facility_contracts.id`)
   - Date-range filters: `filter[invoice_date]`, `filter[created_at]`, `filter[invoice_uploaded_at]`, `filter[expense_posted_at]` — see [Date-range filtering](#date-range-filtering)

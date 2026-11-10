@@ -206,7 +206,8 @@ Response: `{ "data": { "message": "Ticket assigned to Jane.", "ticket": { ... } 
   (`owner`) gets an in-app notification and an email with the resolution.
 - A ticket raised by a **dispute** settles it: the invoice, credit note or receipt stops showing as
   disputed (`disputed_at`, `dispute_details`, `disputed_by` cleared) and keeps `dispute_ticket_id`
-  pointing at the closed ticket as the record.
+  pointing at the closed ticket as the record. The document can then be disputed again: that raises
+  a new ticket, `dispute_ticket_id` moves to it, and the closed one stays in this list.
 
 Response: `{ "data": { "message": "Ticket closed.", "ticket": { ... entries ... } } }`.
 

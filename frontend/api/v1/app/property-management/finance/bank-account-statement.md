@@ -51,7 +51,9 @@ From the account's point of view a **debit is money in** and a **credit is money
 positive balance is the available cash. Each line moves the balance by `debit − credit`:
 
 - Processing a receipt **debits** (raises) the balance by the amount received.
-- Releasing a payment voucher **credits** (lowers) the balance by the amount paid out.
+- Releasing a payment voucher **credits** (lowers) the balance by the amount paid out. Reversing
+  the voucher to pending removes that line again, unless it is matched in bank reconciliation (see
+  [Reverse a released voucher](./payment-voucher.md#reverse-a-released-voucher)).
 
 - `brought_forward` (BBF) — net `debit − credit` for the account **before** the period start.
 - Each line's `balance` — the running balance up to and including that line (starting from BBF).

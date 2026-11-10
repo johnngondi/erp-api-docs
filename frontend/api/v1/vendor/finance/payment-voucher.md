@@ -22,7 +22,9 @@ Notes:
 Supported query params:
 
 - Filters:
-  - `filter[search]` (Scout-backed search; supports CSV IDs and payment advice numbers)
+  - `filter[search]` (Scout-backed search; supports CSV IDs and payment advice numbers). Numbers
+    only are matched exactly on the id, amount, payment advice number and transaction number, as in
+    the [staff listing](../../app/property-management/searching-and-sorting.md#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
   - `filter[credit_bank_account_id]`, `filter[status]`
   - `filter[created_at]`, `filter[released_at]`, `filter[paid_at]`
 - Sort:

@@ -71,6 +71,30 @@ Allocating more money from an already approved receipt later does not move `crea
 [Change Receipt Date](#change-receipt-date-backdate) does. Receipts approved before 2026-10-27 keep
 the day they were captured. See [Document dates](../document-dates.md).
 
+### The remittance holding a receipt
+
+The list, the receipt itself (`GET /receipts/{receipt}`) and the update response carry `remittance`:
+the landlord remittance this receipt was paid out in.
+
+```json
+"remittance": {
+  "id": 8,
+  "reference": "RE-008",
+  "status": { "value": "paid", "color": "success" },
+  "permissions": { "view": true }
+}
+```
+
+- `null` until the receipt is remitted. A receipt whose remittance was cancelled or rejected is back
+  to unremitted, so it is `null` again. An advance remittance holds no receipts, so it never shows here.
+- `reference` is how the remittance screens name it (`RE-008`, `RE-123`). Show it in the
+  **Remittance** column of the list and in the receipt's Payment Information card, and `-` when
+  `remittance` is `null`.
+- Link it to the remittance page (`/remittances/{id}`) only when `permissions.view` is `true`. That is
+  the remittance's own view rule: `view-facility-remittance` and an allocation to the property.
+  Otherwise show the reference as plain text.
+- Read in one query for the whole page, not one per row.
+
 ## Create Receipt
 
 `POST /api/v1/app/{company}/property-management/lease-management/receipts`
@@ -79,7 +103,7 @@ Request body:
 
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
-| `transaction_number` | Yes | string | Unique business transaction number |
+| `transaction_number` | Yes | string | The payment's reference number. Labelled "Reference number" on the receipt screens, and its validation messages say so on create and update: `The reference number field is required.`, `The reference number does not match the required format for the selected payment method.` (row 210). The field name is unchanged |
 | `receiving_account_id` | Yes | integer | Must exist in `bank_accounts.id` |
 | `transaction_date` | Yes | date (`YYYY-MM-DD`) | The payment date. Today or earlier |
 | `payment_method_id` | Yes | integer | Must exist in `payment_methods.id` |
@@ -137,17 +161,127 @@ Example response:
 |---|---|---|
 | `allocations` | An invoice is not on a lease of `facility_id` | Some of the allocated invoices do not belong to leases in the selected property. |
 | `allocations` | An invoice has no balance left (paid or already overpaid) | Invoice with invoice_id 9001 is already paid for fully |
-| `transaction_number` | Another live receipt has the same reference, amount, property and tenant | Duplicate payment: receipt #412 already records reference QJK3X7L2MP for 25,000.00 from this tenant on this property. |
+| `transaction_number` | The reference doesn't match the payment method's `transaction_number_regex`, and the caller lacks `override-payment-reference-format` (see [Overriding the reference format](#overriding-the-reference-format-and-proof-of-payment)) | The reference number does not match the required format for the selected payment method. |
 | `receipting` | Receipting has closed for the month and the caller lacks `receipt-after-deadline` (see [Monthly receipting deadline](#monthly-receipting-deadline)) | Receipting for October 2026 closed on Thu 29 Oct at 17:00. It reopens on Sun 1 Nov at 07:00. |
 
-**Duplicate payments (row 178).** A receipt is the same payment as another when the **reference
+### Duplicate payments: warning and confirmation
+
+A suspected duplicate is a **warning the user confirms**, not a refusal (PROP-284). It is checked on
+the backend on every create and on every edit that changes one of the four fields below, including
+a receipt created from a bank payment on the reconciliation screen.
+
+**The matching rule.** A receipt is the same payment as another when the **reference
 (`transaction_number`), amount, property (`facility_id`) and tenant (`paying_user_id`)** all match.
 The reference is compared without case or spaces (`qjk3 x7l2mp` is `QJK3X7L2MP`); the amount must be
 exact. Only **live** receipts count, pending or confirmed: a cancelled, rejected or reversed receipt
-no longer records the payment, so it can be entered again. Show the message on the reference field;
-it names the receipt already holding the payment. The same check runs when an edit changes one of
-the four (a pending receipt's full edit, or a confirmed receipt's reference); an edit that leaves
-them alone is never refused by it.
+no longer records the payment, so it can be entered again. An edit that leaves the four alone is
+never checked, so a receipt that already duplicated another before this rule stays editable.
+
+**1. The first request: `409`, nothing saved.** Every other check (fields, permissions, the monthly
+deadline, proof of payment, allocations) runs first; a request failing one of those gets its usual
+`422`. A duplicate is answered:
+
+```json
+409
+{
+  "message": "Possible duplicate payment: receipt RCP0412 already records reference QJK3X7L2MP for 25,000.00 from this tenant on this property.",
+  "code": "duplicate_receipt",
+  "reason": null,
+  "errors": { "transaction_number": ["Possible duplicate payment: receipt RCP0412 already records ..."] },
+  "duplicate_receipt": {
+    "id": 412,
+    "number": "RCP0412",
+    "transaction_number": "QJK3X7L2MP",
+    "amount": 25000,
+    "payment_date": "2026-11-02",
+    "status": "confirmed",
+    "tenant": { "id": 77, "name": "Achieng Atieno" },
+    "property": { "id": 61, "name": "Kahawa Side Tower" }
+  },
+  "duplicate_token": "eyJpdiI6...",
+  "duplicate_token_expires_at": "2026-11-06T10:25:00+03:00"
+}
+```
+
+Open the warning on `code: "duplicate_receipt"` (or `"duplicate_confirmation_invalid"`, below), not
+on the status alone. Show the existing receipt's number, reference, amount, payment date, tenant and
+property, with **Cancel** and **Yes, Receipt duplicate**. Cancel sends nothing; keep the form as it
+is. `duplicate_receipt` names the **newest** matching receipt.
+
+**2. The confirmed retry.** Send the same body again with two more fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `allow_duplicate` | boolean | `true` |
+| `duplicate_token` | string | `duplicate_token` from the `409`, as given |
+
+Both are needed. Either one alone is no confirmation, and the request is checked as a first one (a
+fresh `409`). The receipt is then saved through the normal flow, so it can still fail any other
+check with its usual `422`, and then nothing is saved and the token stays usable.
+
+The token:
+
+- lasts **10 minutes** from the `409` that issued it;
+- covers only the user it was issued to, this property, tenant, amount and reference, and the
+  receipt it matched. On an edit it also covers only the receipt being edited, so a token from the
+  create form does not confirm an edit, and the reverse;
+- **saves one receipt only.** The saved receipt keeps the token's hash under a unique index, and
+  identical requests from the same tenant run one after another, so a double click or a retried
+  request saves nothing more.
+
+Send the retry once, and disable the button while either request is in flight.
+
+**3. A confirmation that does not cover it: `409` again.** Same body as step 1, with
+`code: "duplicate_confirmation_invalid"`, a `reason`, the reason first in `message`, and a fresh
+`duplicate_token`:
+
+| `reason` | When | Message starts |
+|---|---|---|
+| `used` | The token already saved a receipt. `duplicate_receipt` is now the receipt it saved | That duplicate confirmation was already used. |
+| `expired` | More than 10 minutes since the `409` | That duplicate confirmation has expired. |
+| `invalid` | Altered, another user's, or for a different receipt or edit | That duplicate confirmation does not match this receipt. |
+
+Show the warning again; confirming it sends the fresh token.
+
+**Audit.** A receipt saved this way records which receipt it duplicates, who confirmed it and when:
+`duplicate_of_receipt_id`, `duplicate_confirmed_by_id`, `duplicate_confirmed_at` (and the token's
+hash). They land in the receipt's audit trail with the confirming user as the actor. Receipt
+responses show it:
+
+```json
+"duplicate_of": { "id": 412, "number": "RCP0412", "confirmed_at": "2026-11-06T07:16:02.000000Z", "confirmed_by": { "id": 5, "name": "Jane Wanjiku" } }
+```
+
+`duplicate_of` is `null` on any other receipt; `confirmed_by` comes on `GET /receipts/{receipt}`.
+
+**From reconciliation.** `POST /receipts` with `bank_payment_id` runs the same check and takes the
+same confirmation; on success the bank payment is receipted as usual and the screen returns to
+reconciliation. The automatic matcher never confirms a duplicate: it leaves the payment as a
+suggestion with the duplicate message as its reason.
+
+### Overriding the reference format and proof of payment
+
+Each payment method can set a reference pattern (`transaction_number_regex`, e.g. ten letters and
+digits for M-Pesa) and a proof of payment (`proof_of_payment_type`). A user with the
+**`override-payment-reference-format`** permission is held to neither (row 205):
+
+- **Any reference** is accepted on create and on edit, pending or confirmed.
+- **Proof of payment is optional.** They may attach one, leave it out, or remove it later, including
+  through [Proof of Payment](#proof-of-payment-1).
+- **The duplicate check still applies**, as above.
+- There is no extra field to send and nothing to confirm: holding the permission is the override.
+  The receipt records who created it, as for any receipt.
+
+**Payment methods for the form.** Load them with `?for=payment`:
+
+`GET /api/v1/settings/accounting/payment-methods?for=payment`
+
+For a holder, every method comes back with `transaction_number_regex: null`, so the form doesn't
+check the reference. Each method also carries `can_override_reference_format` (`true` for a holder,
+`false` otherwise). `proof_of_payment_type` stays as configured: when the flag is `true`, keep
+offering the proof but show it as optional, since a holder may still attach one. Without
+`?for=payment` the methods come back as configured and without the flag. The settings screen must not send `?for=payment`: it edits these methods, and
+saving the blanks back would remove the pattern for everyone.
 
 ### Overpaying an invoice
 
@@ -181,6 +315,11 @@ is not remittable until it is put on an invoice. See
 `PUT/PATCH /api/v1/app/{company}/property-management/lease-management/receipts/{receipt}`
 
 What the endpoint accepts depends on the receipt's status.
+
+An edit that changes the reference, amount, property or tenant into another receipt's is a
+suspected duplicate, with the same `409`, `allow_duplicate` and `duplicate_token` as on create (see
+[Duplicate payments](#duplicate-payments-warning-and-confirmation)). The token from an edit's `409`
+confirms only that edit.
 
 ### Editing a pending receipt
 
@@ -563,6 +702,20 @@ Request body:
 |---|---|---|---|
 | `details` | Yes | string | Dispute description |
 | `ticket_upload_id` | No | integer | Optional attachment upload id (`uploads.id`) |
+
+**Disputing again.** Only an open dispute holds the next one back: `disputed_at` is set, or the
+linked ticket (`dispute_ticket_id`) is not `closed`. Until then the endpoint answers `422` keyed
+`receipt`, "This receipt has already been disputed. See ticket#{id}", naming that ticket, with
+`open_ticket: { "id": … }` beside `errors` for a link to it. Once the ticket is closed, the receipt
+can be disputed again: a new ticket is raised and `dispute_ticket_id` points at it. The closed
+ticket stays in the tickets list with its resolution, as the history of the first dispute.
+`permissions.dispute` does not look at an open dispute, so keep the button and show the `422`
+message.
+
+The list and the receipt itself carry `dispute_ticket` (`id`, `title`, `status`) whenever one is
+linked, open or closed. The receipt is disputed while `disputed_at.raw` is set or
+`dispute_ticket.status.value` is not `closed`; otherwise a linked ticket is the settled history of
+the last dispute. `disputed_at` is always sent, as `raw: null` when nothing is open.
 
 ## Withdraw Receipt Dispute
 

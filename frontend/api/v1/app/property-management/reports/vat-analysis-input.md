@@ -59,17 +59,26 @@ The [global filters](./README.md#global-filters) plus:
 | [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
 | `tax_id` | `taxes.id` | All taxes |
 | `supplier_id` | `users.id` (the bill's `vendor_id`) | All suppliers |
+| `etr_status` | `signed` \| `not signed` | Signed and not signed |
 | `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 
 - **`tax_id`** keeps bills with **at least one line** (`facility_bill_items.tax_id`) on that tax. The
   row still shows the **whole bill's** figures, so a bill with lines on two taxes appears under either
   one with its full amounts.
+- **`etr_status`** splits on the CU invoice number. `signed` keeps bills with a
+  `facility_bills.tax_invoice_number` (the `cu_invoice_no` column); `not signed` keeps bills with
+  none, or an empty one. Omit it for both. Any other value, `failed` included, returns `422`. It is a
+  flat query param like the others, not `filter[etr_status]`.
 
 `header.filters` echoes every filter.
+
+A dropdown of **All / Signed / Not signed** maps to omitting the param, `etr_status=signed` and
+`etr_status=not%20signed`. Every bucket, subtotal and summary follows it.
 
 ```
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31&tax_id=1&supplier_id=42
+GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31&etr_status=signed
 ```
 
 ## Header
@@ -106,12 +115,15 @@ for example `sort[overview]=-vat`. The `Total` row stays last. [`columns`](./REA
 | Supplier PIN | `supplier_pin` | string | the supplier's `users.tax_pin` |
 | Supplier | `supplier` | string | the supplier's name |
 | Billed At | `invoice_billed_at` | string `Y-m-d` | when the bill was posted: `facility_bills.expense_posted_at`, or `invoice_date` for imported bills without one |
-| Invoice No. | `invoice_no` | string | `facility_bills.invoice_number` |
+| Invoice No. | `invoice_no` | string | `facility_bills.invoice_number`. Carries [`link`](./README.md#items--rows) `{ "type": "bill", "id": <bill id> }` when the user may open bills (`view-facility-bill`): click it to open the bill |
 | CU Invoice No. | `cu_invoice_no` | string | `facility_bills.tax_invoice_number` (the control unit invoice number) |
 | Description | `description` | string | the bill's line titles (`facility_bill_items.title`), comma-separated; the bill's `notes` when no line has a title. `togglable` |
 | Taxable Value (Nett) | `tax_value_nett` | money | `facility_bills.amount` (net of VAT) |
 | VAT | `vat` | money | `facility_bills.tax` |
 | Amount | `amount` | money, `grosstotal` | `facility_bills.total` |
+
+> **Open the bill from `invoice_no.link.id`, never from the value.** The value is the supplier's own
+> invoice number, and two suppliers can use the same one.
 
 Each bucket's closing row is a `Total` label with `col_span: 6` (covering the six text columns), then
 the sums of `tax_value_nett`, `vat` and `amount`. It has `type: subtotal` and
@@ -163,12 +175,14 @@ The same keys on every bucket (for that bucket's bills) and on `data.summary` (e
         "fields": [ /* the nine columns above, in order */ ],
         "items": [
           { "supplier_pin": { "value": "P051234567X" }, "supplier": { "value": "AquaFix Ltd" },
-            "invoice_billed_at": { "value": "2026-03-10" }, "invoice_no": { "value": "INV-77" },
+            "invoice_billed_at": { "value": "2026-03-10" },
+            "invoice_no": { "value": "INV-77", "link": { "type": "bill", "id": 37 } },
             "cu_invoice_no": { "value": "KRA-CU-9981" }, "description": { "value": "Pipe repair, Valve" },
             "tax_value_nett": { "value": 1000 }, "vat": { "value": 160 }, "amount": { "value": 1160 },
             "type": "normal" },
           { "supplier_pin": { "value": "P059876543Z" }, "supplier": { "value": "Guardforce" },
-            "invoice_billed_at": { "value": "2026-03-31" }, "invoice_no": { "value": "GF-2026-03" },
+            "invoice_billed_at": { "value": "2026-03-31" },
+            "invoice_no": { "value": "GF-2026-03", "link": { "type": "bill", "id": 41 } },
             "cu_invoice_no": { "value": "KRA-CU-1204" }, "description": { "value": "Security services March" },
             "tax_value_nett": { "value": 50000 }, "vat": { "value": 8000 }, "amount": { "value": 58000 },
             "type": "normal" },

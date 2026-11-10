@@ -61,11 +61,26 @@ it:
 | Column | Source |
 |---|---|
 | `certificate_number` | `facility_receipts.transaction_number` |
-| `certificate_document` | the URL of the receipt's `pop_upload_id` upload |
+| `certificate_document` | the receipt's `pop_upload_id` upload, as `{ file_name, source_url }` |
+
+`certificate_document`'s value is an object, the same shape as the
+[Property Expenses `invoice` cell](./property-expenses.md#column-notes):
+
+```jsonc
+"certificate_document": { "value": {
+  "file_name": "whv-cert-0491.pdf",
+  "source_url": "https://…/api/v1/settings/file-management/uploads/1a081fb1-c74f-4f0e-9148-614d539b1e76/preview"
+} }
+```
+
+Render it as a link: `file_name` is the text and `source_url` the target. `source_url` is the
+upload's full preview URL, the same one every other screen opens an upload with. It needs no token
+and opens the PDF or image in the browser. The column is not sortable (`sortable: false`). Excel and
+PDF exports print the file name.
 
 ### A missing certificate is the exception this report exists to surface
 
-Where a withholding receipt has **no proof-of-payment upload**:
+Where a withholding receipt has **no proof-of-payment upload**, or its upload has been deleted:
 
 - the **whole row** is tinted `danger`, and
 - `certificate_document` is **omitted entirely** from the row.
@@ -136,7 +151,7 @@ Blanks, including a `—` lease or invoice list, go last, and the subtotal row s
 | `amount_withheld` | `Amount Withheld` | `money` | The receipt amount |
 | `payment_method` | `Payment Method` | `string` | `VAT Withholding` / `Rental Withholding` |
 | `certificate_number` | `Certificate No.` | `string` | The receipt's transaction number |
-| `certificate_document` | `Certificate` | `string` | URL of the proof-of-payment upload. **Omitted when absent** |
+| `certificate_document` | `Certificate` | `string` | `{ file_name, source_url }` of the proof-of-payment upload, see [above](#the-certificate-is-the-receipts-existing-upload). `sortable: false`. **Omitted when absent** |
 
 The subtotal's label spans the six text columns (`col_span: 6`) and carries only
 `amount_withheld`.
@@ -155,7 +170,7 @@ off as the only one. That is why its `format` is `string` where the other report
 |---|---|
 | `receipt_count` | Withholding receipts listed |
 | `total_withheld` | Sum of `amount_withheld` |
-| `missing_certificates` | Rows with no proof-of-payment upload — the `danger` rows |
+| `missing_certificates` | Rows with no proof-of-payment upload, or a deleted one — the `danger` rows |
 
 ## Example — the bucket's rows
 
@@ -167,7 +182,8 @@ off as the only one. That is why its `format` is `string` where the other report
     "property": { "value": "KAHAWA HOUSE" }, "invoice_no": { "value": "9911" },
     "amount_withheld": { "value": 8816.00 }, "payment_method": { "value": "VAT Withholding" },
     "certificate_number": { "value": "WHT2026071200491" },
-    "certificate_document": { "value": "https://…/uploads/91/whv-cert-0491.pdf" } },
+    "certificate_document": { "value": { "file_name": "whv-cert-0491.pdf",
+      "source_url": "https://…/api/v1/settings/file-management/uploads/1a081fb1-c74f-4f0e-9148-614d539b1e76/preview" } } },
 
   // No proof of payment on file: whole row danger, and no certificate_document key at all.
   { "type": "normal", "background_color": "danger",

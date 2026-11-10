@@ -57,6 +57,17 @@ be removed on an edit, is in the receipts doc under **Proof of payment**.
 { "id": 3, "name": "Mpesa", "code": "MPESA", "proof_of_payment_type": "message", "status": "active" }
 ```
 
+### Payment methods on a receipt or voucher form: `?for=payment`
+
+The receipt and bulk bill payment forms load the methods with `?for=payment` (list or show). For a
+user with the `override-payment-reference-format` permission, every method then comes back with
+`transaction_number_regex: null`, because the format doesn't apply to them, and each method carries
+`can_override_reference_format` (`true` for them, `false` for everyone else). `proof_of_payment_type`
+stays as configured; for a holder the form shows it as optional.
+Without `?for=payment`, which is how this settings screen must load them, the methods come back as
+configured and without the flag. See the receipts doc under **Overriding the reference format and
+proof of payment**.
+
 ### Payment methods: `default_cancellation_fee`
 
 Each payment method row returns `default_cancellation_fee` (number|null, in currency units), and

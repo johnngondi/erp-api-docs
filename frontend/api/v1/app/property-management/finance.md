@@ -24,7 +24,9 @@ Base prefix:
 ## Notes
 
 - All list endpoints support pagination via `per_page` and `page`.
-- Search-enabled list endpoints use `filter[search]` (Scout-backed custom filters).
+- Search-enabled list endpoints use `filter[search]` (Scout-backed custom filters). On bills and
+  payment vouchers a search of numbers only is matched exactly by the database instead: see
+  [Searching by number](./searching-and-sorting.md#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
 - Sort support is documented per resource.
 
 ## Errors

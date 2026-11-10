@@ -18,6 +18,7 @@ Base route:
 - `POST /invoices/{invoice}/sign`
 - `POST /invoices/{invoice}/dispute`
 - `DELETE /invoices/{invoice}/dispute`
+- `POST /invoices/send-reminder`: email the payment reminder now, for one invoice or many. See [Send Payment Reminder](#send-payment-reminder)
 - `DELETE /invoices/{invoice}`
 - `GET /leases/{lease}/invoice-components`: the components a manual invoice on that lease can
   bill. See [Components a manual invoice can bill](#components-a-manual-invoice-can-bill)
@@ -255,8 +256,8 @@ invoice.
     `carried_from_invoice` pointer. A cancelled part is also dropped from `carried_forward[]`, so
     the source invoice stops saying "carried to" as well. The one exception is the emptied source
     above (`amount` 0, `cancelled`), which stays listed while the part it carried on is still live.
-    `has_allocated_payments` still counts cancelled rows, because they block deleting (see
-    [Delete Invoice](#delete-invoice)). The invoice PDF and the public invoice page leave cancelled
+    `has_allocated_payments` does not count cancelled rows either, and they do not block deleting
+    (see [Delete Invoice](#delete-invoice)). The invoice PDF and the public invoice page leave cancelled
     allocations out of their payment rows, and so does the tenant portal.
 - **`credit_applications[]`** list every credit note that paid part of this invoice, with the
   amount it paid here, including credit notes raised on another invoice or raised open (see
@@ -785,10 +786,10 @@ One endpoint, four outcomes, decided by the invoice.
 
 | Invoice | Outcome |
 |---|---|
-| **Payments allocated** | Refused. `permissions.delete` is `false`, so hide the action; a direct call returns **403**. The money is reallocated to another invoice first. A `cancelled` allocation counts here too, unlike in [Cancel Invoice](#cancel-invoice). The row stays as the record of money that once passed through the invoice (lease collections can still point at it), so an invoice that ever held a payment can be cancelled but not deleted. A direct call that gets past the policy is refused with **422** and `status: ["Payments were allocated to this invoice before, so it cannot be deleted. Cancel it instead."]` |
+| **Payments allocated** | Refused. `permissions.delete` is `false`, so hide the action; a direct call returns **403**. The money is reallocated to another invoice first. Only live allocations (`pending` or `confirmed`) count, as in [Cancel Invoice](#cancel-invoice): a `cancelled` one was reallocated away and is no longer part of the invoice. `has_allocated_payments` answers the same question |
 | **Issued and carrying a CU number** | **Reversed**, not deleted. Credit that paid it goes back to its credit notes first (see [Credit that paid the invoice](#credit-that-paid-the-invoice)), then a credit note for the full value is raised and signed to ETR. The invoice survives |
 | **Live and unfiled** (unpaid, partially paid) | Refused — **cancel it first**. `permissions.delete` is `false`; a direct call returns **403** with `"Cancel this invoice before deleting it."` |
-| **Cancelled, pending or rejected** | Removed, along with its tenant statement entries, lease billings and any lease deposit rows it billed |
+| **Cancelled, pending or rejected** | Removed, along with its tenant statement entries, lease billings and any lease deposit rows it billed. A reallocated (`cancelled`) allocation stays on its receipt with `invoice_id: null`, because lease collections and carried-forward allocations still point at it; its lease collections lose their `invoice_item_id` |
 
 ### Cancel before delete
 
@@ -872,9 +873,88 @@ Request body:
 | `details` | Yes | string | Dispute description |
 | `ticket_upload_id` | No | integer | Optional attachment upload id (`uploads.id`) |
 
+**Disputing again.** Only an open dispute holds the next one back: `disputed_at` is set, or the
+linked ticket (`dispute_ticket_id`) is not `closed`. Until then the endpoint answers `422` keyed
+`invoice`, "This invoice has already been disputed. See ticket#{id}", naming that ticket, with
+`open_ticket: { "id": … }` beside `errors` for a link to it. Once the ticket is closed, the invoice
+can be disputed again: a new ticket is raised and `dispute_ticket_id` points at it. The closed
+ticket stays in the tickets list with its resolution, as the history of the first dispute.
+`permissions.dispute` does not look at an open dispute, so keep the button and show the `422`
+message.
+
+The list and the invoice itself carry `dispute_ticket` (`id`, `title`, `status`) whenever one is
+linked, open or closed. The invoice is disputed while `disputed_at.raw` is set or
+`dispute_ticket.status.value` is not `closed`; otherwise a linked ticket is the settled history of
+the last dispute. `disputed_at` is always sent, as `raw: null` when nothing is open.
+
 ## Withdraw Invoice Dispute
 
 `DELETE /api/v1/app/{company}/property-management/lease-management/invoices/{invoice}/dispute`
+
+## Send Payment Reminder
+
+`POST /api/v1/app/{company}/property-management/lease-management/invoices/send-reminder`
+
+Emails the tenant the payment reminder now: the same email the automatic reminders send, with the
+invoice attached when the company has a reminder template. One endpoint for both screens: send one
+id from the invoice page's **Send reminder** action, or the selected rows from the list's bulk action.
+
+Show **Send reminder** only when `permissions.sendReminder === true` (list rows and the invoice
+page both carry it). It needs the `send-facility-invoice-reminder` permission and the property
+allocation, and is `false` when the invoice:
+
+- is not `unpaid` or `partially paid`, or has no `balance` left,
+- is not due yet (`due_at` is after today; an invoice falls due when it is raised, so this is rare),
+- is an opening-balance invoice,
+- is taxed and not ETR signed yet,
+- was already reminded today (`last_reminded_at` is today), by hand or automatically.
+
+It is sent by **email only**, and works whether or not the company has automatic reminders on.
+
+Request body:
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `invoice_ids` | Yes | integer array, 1 to 500 | Distinct invoice ids. |
+
+```json
+{ "invoice_ids": [1042, 1043] }
+```
+
+What happens:
+
+- **It sends what it can and skips the rest.** One invoice that can't be reminded doesn't stop the
+  others. Each skipped one comes back with the reason (the same reasons as the list above, plus
+  "The tenant has no email address to send it to.").
+- **Each sent invoice gets `last_reminded_at` set to now.** The automatic reminder counts it, so it
+  does not send the same step again, and a second manual send today is skipped.
+
+Success (`200`):
+
+```json
+{
+  "data": {
+    "message": "1 reminder sent.",
+    "sent_count": 1,
+    "sent_ids": [1042],
+    "skipped": [
+      { "id": 1043, "reason": "A reminder for this invoice already went out today." }
+    ]
+  }
+}
+```
+
+`message` is "Reminder sent." for one, ":count reminders sent." for several, and "No reminder was
+sent." when every invoice was skipped. Refresh the rows afterwards to pick up `last_reminded_at`.
+
+For an invoice due today the email says "is due today" instead of "N days overdue".
+
+Errors:
+
+- `422` `errors.invoice_ids`: "One or more invoices could not be found." An id doesn't exist, or
+  the invoice is on a property the user isn't allocated to. Nothing was sent.
+- `422` `errors.invoice_ids` / `errors.invoice_ids.N`: missing, empty, unknown or repeated ids.
+- `403`: the user lacks `send-facility-invoice-reminder`.
 
 ## Public Invoice Page
 

@@ -167,6 +167,24 @@ The selects load their options from the endpoints above.
 | `QUICKBOOKS_REDIRECT_URI` | Must be registered on the Intuit app. `{APP_URL}/quickbooks/callback` |
 | `QUICKBOOKS_ENVIRONMENT` | `sandbox` (default) or `production` |
 | `QUICKBOOKS_DEBUG_LOG` | `true` writes each QuickBooks request and response to `storage/logs/quickbooks` |
+| `QUICKBOOKS_DRIVER` | `api` (default) talks to QuickBooks. `log` is for local development: nothing reaches Intuit (see below) |
+
+### The `log` driver
+
+With `QUICKBOOKS_DRIVER=log`, every call (invoices, credit memos, payments, customers, voids)
+is answered on the server and written to `storage/logs/quickbooks/quickbooks.log` with its
+payload. The app behaves as if QuickBooks had accepted it:
+
+- Each created record gets a made-up id and a `LOG…` document number. The record is kept, so
+  reading it back, a sparse update or a void sees what was written.
+- Reading an invoice the driver never created answers it as fully open, so a credit note is still
+  applied to it.
+- Queries return nothing, so a landlord is always created as a new customer.
+- Every company counts as connected, whether or not it has a stored connection, and no access
+  token is read or refreshed.
+
+It never runs in tests; `phpunit.xml` pins `api`. Do not set it in production. Pair it with
+`ETR_MOCK=true` so the signing that follows QuickBooks does not reach a device either.
 
 ## Commands
 

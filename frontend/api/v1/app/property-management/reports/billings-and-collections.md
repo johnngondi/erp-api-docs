@@ -105,7 +105,7 @@ Read the order from the `bucket` keys rather than assuming an index.
 |---|---|---|---|
 | `summary_by_property` | Summary by Property | property — **unless exactly one property is selected** | `facility_id`, `name`, `balance_bf`, per-component `component_{id}_billings` (before `total_billings`), `total_billings`, `total_expected`, per-component `component_{id}_collections` (before `total_collections`), `total_collections`, `balance_cf` |
 | `overview` | Summary | lease | `lease_id`, `landlord_identifier`, `name`, `property`, `total_sqft`*, `invoice_numbers`, `balance_bf`, `total_billings`, `total_collections`, `balance_cf` |
-| `overall_b_c_by_tenant` | Billings and Collections by Tenant | lease | `lease_id`, `landlord_identifier`, `name`, `property`, `total_sqft`*, `invoice_numbers`, `balance_bf`, per-component `component_{id}_billings` (before `billings_tax`), `billings_tax`, `total_billings`, `total_expected`, per-component `component_{id}_collections` (before `collections_tax`), `collections_tax`, `total_collections`, `balance_cf` |
+| `overall_b_c_by_tenant` | Billings and Collections by Tenant | lease | `lease_id`, `landlord_identifier`, `name`, `space` (in place of `property`), `total_sqft`*, `invoice_numbers`, `balance_bf`, per-component `component_{id}_billings` (before `billings_tax`), `billings_tax`, `total_billings`, `total_expected`, per-component `component_{id}_collections` (before `collections_tax`), `collections_tax`, `total_collections`, `balance_cf` |
 | `summary_by_account` | Summary by Account | lease | overview columns **plus** per-account `account_{id}_billings` (before `total_billings`) and `account_{id}_collections` (before `total_collections`) |
 | `billings` | Billings | lease | `lease_id`, `landlord_identifier`, `name`, `property`, `total_sqft`*, `invoice_numbers`, `balance_bf`, per-component `component_{id}` (before `total_amount`), `total_amount`, `total_tax`, `gross_total`, `balance_cf` |
 | `collections` | Collections | lease | same shape as `billings`, for money received — without `invoice_numbers` |
@@ -117,13 +117,29 @@ Total row, which names no lease. When no lease in the bucket has one, the column
 [hidden as empty](./README.md#empty-columns-start-hidden) (`visible: false`, `empty: true`), and the
 user can still turn it on.
 
-Every lease bucket also carries **`property`** (label `Property`, `format: string`, fixed:
-`togglable: false`) immediately after the tenant's `name`: the name of the lease's property (`facilities.name`). On a multi-property
-run it tells apart two leases of the same tenant, and it is the second key of the default order
-(below). It is `null` on the Total row.
+Every lease bucket but `overall_b_c_by_tenant` also carries **`property`** (label `Property`,
+`format: string`, fixed: `togglable: false`) immediately after the tenant's `name`: the name of the
+lease's property (`facilities.name`). On a multi-property run it tells apart two leases of the same
+tenant, and it is the second key of the default order (below). It is `null` on the Total row.
+
+**`overall_b_c_by_tenant`** carries **`space`** (label `Space`, `format: string`, fixed:
+`togglable: false`) in that place instead: what the lease holds, read from the lettable spaces on its
+lease items (parking bays and signage excluded, deleted spaces left out, a space held under two lease
+items counted once). Each space is read by its **effective division type**: the property's facility
+type `division_type`, or — on a `both` property — the `division_type` of the space's own type
+(`facility_spaces.type_id`), with a space whose type is unset or `both` read like `unit`.
+
+| The lease's spaces are… | `space` |
+|---|---|
+| all `unit` (residential) | the space names, comma-separated, in natural name order: `"A1, A2"` |
+| all `size` (commercial) | the summed `size`, an integer: `1200` |
+| some of each (`both` property) | the `unit` names, then the `size` spaces' summed size with its unit: `"Shop 3, 450 sq ft"` |
+| none | `null` |
+
+The Total row's `space` is `null`; on a `size` property the summed area is in `total_sqft`.
 
 \* Every lease bucket also carries **`total_sqft`** (label `Total SqFt`, `format: integer`,
-`togglable: true`) immediately after `property`, **only when a property let by area is in scope**
+`togglable: true`) immediately after `property` (`space` on `overall_b_c_by_tenant`), **only when a property let by area is in scope**
 — one whose facility type has `division_type: size`. It is the summed `size` of the lettable spaces
 the lease holds (parking bays and signage excluded; a space held under two lease items counts
 once). A lease on a `size` property with no spaces is `0`; a lease on any other property is
@@ -179,7 +195,8 @@ report built, and every bucket's **Total** row stays last whatever the sort.
 | `bucket` | Default order (`header.sort.default`) |
 |---|---|
 | `summary_by_property` | property name, then property id: `["name", "facility_id"]` |
-| `overview`, `overall_b_c_by_tenant`, `summary_by_account`, `billings`, `collections` | tenant, then property, then lease: `["name", "property", "lease_id"]` |
+| `overview`, `summary_by_account`, `billings`, `collections` | tenant, then property, then lease: `["name", "property", "lease_id"]` |
+| `overall_b_c_by_tenant` | tenant: `["name"]`. It has no `property` column to sort on, but its rows are built in property, tenant, lease order and ties keep that order, so it lists like the other lease buckets |
 
 Every bucket is sortable on every column, the dynamic `component_{id}…` / `account_{id}…` columns
 included. A sort key naming a component or account that is absent from a run is dropped, not
@@ -359,8 +376,8 @@ Column order (keys) for the dynamic buckets, for reference:
   "component_{id}_collections", // ← per-component, injected before total_collections, visible: false
   "total_collections", "balance_cf" ]
 
-// the `overall_b_c_by_tenant` bucket's fields
-[ "lease_id", "landlord_identifier", "name", "property", "total_sqft", "invoice_numbers", "balance_bf",
+// the `overall_b_c_by_tenant` bucket's fields (`space` in place of `property`)
+[ "lease_id", "landlord_identifier", "name", "space", "total_sqft", "invoice_numbers", "balance_bf",
   "component_{id}_billings",    // ← per-component (net of tax), injected before billings_tax
   "billings_tax", "total_billings", "total_expected",
   "component_{id}_collections", // ← per-component (net of tax), injected before collections_tax

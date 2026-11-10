@@ -23,6 +23,32 @@ Nairobi, but send `YYYY-MM-DD`.
 - `PATCH /expenses/{expense}/mark-paid`
 - `PATCH /expenses/{expense}/cancel`
 
+## Cancelling: cancelled or reversed
+
+`PATCH /expenses/{expense}/cancel` does one of two things (since 2026-11-04):
+
+| The expense | Result |
+|---|---|
+| Unpaid, dated in the current month | Status `cancelled`. It drops out of every report and remittance. |
+| Paid, or dated in an earlier month | Status `reversed`, plus a negative **reversal entry** dated today (`notes`: `Reversal of expense #{id}`, `reverses_expense_id`: the original's id). |
+
+A `reversed` expense is **not** dropped: it keeps counting in the month it was posted, and its
+reversal offsets it in the month the reversal is dated. Reports for a past month therefore do not
+change when something in it is cancelled later. It used to be marked `cancelled`, which took it
+out of its own month while the reversal still counted in the current one, so the cancellation
+was counted twice.
+
+Cancelling a `cancelled` or `reversed` expense is refused (`422`).
+
+In remittances:
+
+- A `reversed` expense is never newly remitted. If it was not remitted before the reversal, its
+  reversal entry is not remitted either, because the two cancel out.
+- If the original was remitted (it sits on a live remittance), its reversal entry is remitted in
+  a later period as a negative expense, which credits the landlord back.
+
+The response field `reverses_expense_id` is `null` on every expense except a reversal entry.
+
 ## List Expenses
 
 `GET /api/v1/app/{company}/property-management/finance/expenses`
@@ -50,7 +76,7 @@ Every date filter also takes a range, `filter[created_between]=2026-09-01,2026-0
 
 Enum filter options:
 
-- `filter[status]`: `pending`, `unpaid`, `partially-paid`, `paid`, `cancelled` (from `ExpenseStatus` enum)
+- `filter[status]`: `pending`, `unpaid`, `partially-paid`, `paid`, `cancelled`, `reversed` (from `ExpenseStatus` enum)
 
 Sample list response (`FacilityExpenseResource`):
 

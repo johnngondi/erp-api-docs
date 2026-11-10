@@ -57,7 +57,7 @@ not exceed the bill's payable amount.
 |---|---|---|
 | Debit Bank Account | `GET /finance/bank-accounts` | Only **active** accounts of `type = system`, **or** `type = user` whose `user_group_id` equals the company's `landlord_user_group_id` setting (i.e. landlord accounts). |
 | Currency | `GET /settings/accounting/currencies` | Every amount submitted is expressed in this currency. |
-| Payment Method | `GET /settings/accounting/payment-methods` | Carries `code` and `transaction_number_regex`. |
+| Payment Method | `GET /settings/accounting/payment-methods?for=payment` | Carries `code` and `transaction_number_regex`. With `?for=payment`, the pattern is `null` for a user who may override it (see below). |
 | Transaction Number | free text | Validated client-side, see below. |
 
 ### 4. Currency conversion
@@ -72,7 +72,12 @@ Changing the currency selector should re-convert and re-prefill every row's amou
 ### 5. Client-side validation
 
 - `transaction_number` must match the selected payment method's `transaction_number_regex` when one
-  is set. Apply it as a live regex check on the input.
+  is set. Apply it as a live regex check on the input. A user with the
+  `override-payment-reference-format` permission may type any reference (row 205): loaded with
+  `?for=payment`, their methods come back with `transaction_number_regex: null` and
+  `can_override_reference_format: true`, and the backend skips the format check for them. The
+  CHEQUE digits-only rule below still applies to them: keep it as its own check on `code`, not
+  through the pattern.
 - When `payment_method.code === 'CHEQUE'`, the number must be **digits only** — the backend
   increments it once per voucher, so it has to be numeric. Required in this case.
 - Each amount input: greater than `0` and not greater than that row's converted `payable_amount`.
@@ -159,7 +164,7 @@ row within that group — map them straight back onto the offending input.
 | d | Every supplier paid through the `"others"` group must have an **active bank account** — it becomes that voucher's `credit_bank_account_id`. Error names the supplier. | `bill_groups.{g}.bills` |
 | e | Each `to_pay` must be `> 0` and within the bill's payable amount (`total − withheld − paid`) converted into `currency_id`, with **half a cent of tolerance** (see below). The bill must also still be `unpaid` / `partially-paid`. | `bill_groups.{g}.bills.{i}.to_pay`, `bill_groups.{g}.bills.{i}.id` |
 | f | If the debit account is a **landlord** (`type = user`) account, every selected bill's property must belong to that landlord (`bank_account.user_id === bill.facility.landlord_id`). Error names the offending bill and property. | `debit_bank_account_id` |
-| g | `transaction_number` must match the payment method's `transaction_number_regex`, and must be digits only for `CHEQUE`. | `transaction_number` |
+| g | `transaction_number` must match the payment method's `transaction_number_regex` (not for a holder of `override-payment-reference-format`), and must be digits only for `CHEQUE` (for everyone, since it numbers the cheques). | `transaction_number` |
 
 ### Sub-cent payable amounts
 
