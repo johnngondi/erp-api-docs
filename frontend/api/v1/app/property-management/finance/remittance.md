@@ -108,6 +108,48 @@ Sample list response (`FacilityRemittanceResource`):
 | `period_from` | Yes | date |
 | `period_to` | Yes | date |
 
+### Expenses and the management fee
+
+An expense is deducted from the landlord's remittance only when its category is one of the
+management contract's `deductible_expenses` (an empty list deducts every category). Expenses in
+any other category are not deducted, not attached to the remittance, and not listed on its advice.
+
+**The management fee is an expense like any other** (since 2026-11-04). Its category is the
+contract's `management_fee_expense_category_id`, falling back to the category of the management
+fee expense type when the contract leaves it blank. The fee is always billed, but it is deducted
+from the remittance only when that category is deductible. It used to be deducted, and attached,
+whatever its category.
+
+The preview (`GET /remittances/create`, and each row of the bulk preview) carries:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `management_fee_pretax` | number | The fee before VAT |
+| `management_fee` | number | The fee with VAT: what is billed for the period |
+| `management_fee_expense_category_id` | integer\|null | The category the fee bill and its expense are raised in |
+| `management_fee_deductible` | boolean | `true` when the fee comes off `remittable_amount` |
+| `total_expenses` | number | The other deductible expenses in the period; the fee is not in it |
+| `remittable_amount` | number | Remittable collections − the fee (only when `management_fee_deductible`) − `total_expenses` − approved advances |
+
+Show the management fee as a deduction only when `management_fee_deductible` is `true`.
+Otherwise it is still billed, but paid out of money that is not remitted (for example service charge).
+
+**The fee is posted on the last day of the remittance period** (since 2026-11-04): the bill's
+invoice date, its posting date and its expense's `transaction_at` are all `period_to`, so the fee
+reports in the period it was charged for, not the day the remittance was raised. The landlord's
+customer invoice is still dated the day it is raised. Cancelling or rejecting the remittance
+removes an unpaid fee outright, whatever month it is cancelled in; see
+[What a rejection releases](#what-a-rejection-releases).
+
+On the created remittance, `total_expenses` is the deductible expenses **plus the fee when it is
+deductible**, and `expenses` lists the fee's expense only in that case. The fee bill records the
+remittance that raised it (`billable_type`/`billable_id`), so cancelling or rejecting the remittance
+cancels the fee either way.
+
+A remittance is refused (`422` on `period_from`) while an expense older than the period is still
+unremitted. Only deductible expenses count toward that check. A non-deductible expense, including
+a non-deductible management fee, is never remitted, so it no longer blocks the next period.
+
 ## Bulk Remittance Preview
 
 `GET /api/v1/app/{company}/property-management/finance/remittances/create-bulk`
@@ -144,6 +186,8 @@ Sample response:
         "total_collections": 120000,
         "management_fee_pretax": 10000,
         "management_fee": 11600,
+        "management_fee_expense_category_id": 1,
+        "management_fee_deductible": true,
         "total_expenses": 15000,
         "remittable_amount": 93400
       }
@@ -313,7 +357,18 @@ voucher is what settles it.
 A rejection does not only set the status. The remittance lets go of everything it had claimed,
 so the next remittance for that period can pick it up:
 
-- the management-fee expense it raised is cancelled (and its bill with it);
+- the management fee it raised, whether or not it was deducted, is **removed as if it had never
+  been raised** (since 2026-11-04). The fee bill, its expense, any reversal written against it,
+  its vendor statement lines and their pending tasks are deleted, and no reversal is written. A
+  reversal only exists because the fee was remitted, and the remittance is what is being undone.
+
+  The landlord's customer invoice is cancelled whole, as when any bill on it is cancelled (see
+  [Customer Invoices → When a bill on it is cancelled](customer-invoices.md#when-a-bill-on-it-is-cancelled)):
+  it is voided in QuickBooks, or credited by a credit note when it was signed, and its other bills
+  are invoiced again. It is deleted too when it billed this fee alone and was never signed.
+
+  A fee that has been paid, or is on a live payment voucher, cannot simply be removed. It is
+  cancelled the ordinary way instead, and reversed where it has to be;
 - every receipt it covered is unlinked from it;
 - every expense it deducted is unlinked from it.
 

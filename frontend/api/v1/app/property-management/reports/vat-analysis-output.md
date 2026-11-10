@@ -68,21 +68,13 @@ If your subtotal reads 84,800, the credit note is being added rather than netted
 Do not build a separate credit-note section, and do not filter credit notes out of the register to
 "clean it up" — the register is the return.
 
-## `etr_status` is derived, not stored
+## Signed and not signed
 
-**There is no ETR column on these tables and none was added.** The status is computed per document
-from `cu_invoice_number` and `etr_error`:
+**A document is signed when it carries a `cu_invoice_number`**, and only signed documents are
+declared. The number is shown in the `cu_invoice_no` column (`null` when unsigned). There is **no
+ETR status column**: it was removed in favour of the number, so a row carries no `etr_status` key.
 
-| `cu_invoice_number` | `etr_error` | `etr_status` | `color` |
-|---|---|---|---|
-| present | any | `signed` | `success` |
-| null or empty | present | `failed` | `danger` |
-| null or empty | null or empty | `not signed` | `secondary` |
-
-It is a **status string**, not a number or money — `format: string`, centred. The raw value sits
-beside it in its own `cu_invoice_no` column, so you can show both without deriving anything on the
-frontend.
-
+Use the [`etr_status` filter](#filters) to list only the signed documents, or only the rest.
 Credit notes carry `cu_invoice_number` too and are judged the same way.
 
 ## Filters
@@ -94,13 +86,27 @@ The [global filters](./README.md#global-filters) plus one:
 | [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
 | `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `tax_id` | `taxes.id` | All taxes |
+| `etr_status` | `signed` \| `not signed` | Signed and not signed |
 | `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
 `tax_id` narrows to **documents carrying at least one line on that tax**; the row still shows the
 whole document, not just the matching line. Same behaviour as Input VAT Analysis.
 
+`etr_status` splits on the CU invoice number:
+
+| Dropdown | Query | Keeps |
+|---|---|---|
+| All | *(omit the param)* | every document |
+| Signed | `etr_status=signed` | documents with a `cu_invoice_number`: the ones to declare |
+| Not signed | `etr_status=not%20signed` | documents without one, or with an empty one, **including those whose signing failed** |
+
+Any other value, `failed` included, returns `422`. It is a flat query param like the others, not
+`filter[etr_status]`. The subtotal and `summary` follow it, and `header.filters.etr_status` echoes
+it (`null` when omitted).
+
 ```
 GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&tax_id=1
+GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&etr_status=signed
 ```
 
 ### Blocks, wings and floors
@@ -138,11 +144,10 @@ exported.
 | `tenant` | `Tenant` | `string` | |
 | `lease_id` | `Lease` | `id` | The lease the document was raised on |
 | `landlord_identifier` | `Landlord ID` | `string` | What the landlord calls the tenant in their own system (`leases.landlord_identifier`) on that lease; `null` when it has none. `togglable: true`; [hidden as empty](./README.md#empty-columns-start-hidden) when no row has one |
-| `invoice_no` | `Invoice No.` | `id` | The document's id |
-| `cu_invoice_no` | `CU Invoice No.` | `string` | Raw value, `null` when unsigned |
+| `invoice_no` | `Invoice No.` | `id` | The document's id. Carries [`link`](./README.md#items--rows): `{ "type": "invoice" }` or `{ "type": "credit_note" }` with the id, when the user may open that kind of document (`view-facility-invoice` / `view-facility-credit-note`). Click it to open the document |
+| `cu_invoice_no` | `CU Invoice No.` | `string` | The CU invoice number, `null` when unsigned. Replaces the old `etr_status` column |
 | `pin_no` | `PIN No.` | `string` | The tenant's `users.tax_pin` |
 | `description` | `Desc.` | `string` | `togglable: true` |
-| `etr_status` | `ETR Status` | `string` | Derived — see above |
 | `taxable_value` | `Taxable Value` | `money` | **Negative** for credit notes |
 | `vat` | `VAT` | `money` | **Negative** for credit notes |
 | `total` | `Total` | `money` | `type: subtotal` |
@@ -150,8 +155,12 @@ exported.
 > **`invoice_no` is the document's id**, not a formatted document number. `facility_invoices` has no
 > `invoice_number` column — `cu_invoice_number` is the only number it carries, and that has its own
 > column here.
+>
+> **Invoices and credit notes share this column but not their numbering**, so invoice 34 and
+> credit note 34 can both appear. Open the document from `invoice_no.link`, whose `type` says which
+> one it is, never from the value alone.
 
-The subtotal's label spans the nine text columns (`col_span: 9`) and carries only the three money
+The subtotal's label spans the eight text columns (`col_span: 8`) and carries only the three money
 sums.
 
 ## Summary
@@ -169,27 +178,24 @@ sums.
 "items": [
   { "type": "normal", "invoice_date": { "value": "01 Jul, 2026" }, "tenant": { "value": "Acme Traders Ltd" },
     "lease_id": { "value": 412 }, "landlord_identifier": { "value": "VAT-88" },
-    "invoice_no": { "value": 9911 }, "cu_invoice_no": { "value": "0100042118000009911" },
+    "invoice_no": { "value": 9911, "link": { "type": "invoice", "id": 9911 } }, "cu_invoice_no": { "value": "0100042118000009911" },
     "pin_no": { "value": "P051112223A" }, "description": { "value": "Rent & SC — July 2026" },
-    "etr_status": { "value": "signed", "color": "success" },
     "taxable_value": { "value": 380000.00 }, "vat": { "value": 60800.00 }, "total": { "value": 440800.00 } },
 
   { "type": "normal", "invoice_date": { "value": "03 Jul, 2026" }, "tenant": { "value": "Njiru Hardware" },
     "lease_id": { "value": 388 }, "landlord_identifier": { "value": null },
-    "invoice_no": { "value": 9912 }, "cu_invoice_no": { "value": null },
+    "invoice_no": { "value": 9912, "link": { "type": "invoice", "id": 9912 } }, "cu_invoice_no": { "value": null },
     "pin_no": { "value": "P054445556B" }, "description": { "value": "Rent — July 2026" },
-    "etr_status": { "value": "not signed", "color": "secondary" },
     "taxable_value": { "value": 150000.00 }, "vat": { "value": 24000.00 }, "total": { "value": 174000.00 } },
 
   { "type": "normal", "invoice_date": { "value": "10 Jul, 2026" }, "tenant": { "value": "Acme Traders Ltd" },
     "lease_id": { "value": 412 }, "landlord_identifier": { "value": "VAT-88" },
-    "invoice_no": { "value": 34 }, "cu_invoice_no": { "value": "0100042118000000034" },
+    "invoice_no": { "value": 34, "link": { "type": "credit_note", "id": 34 } }, "cu_invoice_no": { "value": "0100042118000000034" },
     "pin_no": { "value": "P051112223A" }, "description": { "value": "Credit note — SC adjustment" },
-    "etr_status": { "value": "signed", "color": "success" },
     "taxable_value": { "value": -50000.00 }, "vat": { "value": -8000.00 }, "total": { "value": -58000.00 } },
 
   { "type": "subtotal", "background_color": "secondary",
-    "invoice_date": { "value": "3 documents", "col_span": 9 },
+    "invoice_date": { "value": "3 documents", "col_span": 8 },
     "taxable_value": { "value": 480000.00 }, "vat": { "value": 76800.00 }, "total": { "value": 556800.00 } }
 ]
 ```

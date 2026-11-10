@@ -16,6 +16,7 @@ Base route:
 - `DELETE /payment-vouchers/{paymentVoucher}`
 - `PATCH /payment-vouchers/{paymentVoucher}/cancel`
 - `PATCH /payment-vouchers/{paymentVoucher}/release`
+- `PATCH /payment-vouchers/{paymentVoucher}/reverse` — back to `pending` after release (see [Reverse a released voucher](#reverse-a-released-voucher))
 - `PUT /payment-vouchers/{paymentVoucher}/pay`
 
 ## List Payment Vouchers
@@ -109,6 +110,14 @@ Sample list response (`FacilityPaymentVoucherResource`). `public_url` is the vou
 | `payable_id` | Yes | integer | Expense/Remittance id depending on `payable_as` |
 | `amount` | Yes | number | Must not exceed payable balance/remittable amount |
 
+### Payment method and reference
+
+Load the payment methods for the voucher form with `GET /api/v1/settings/accounting/payment-methods?for=payment`.
+The voucher's `transaction_number` is checked against the method's `transaction_number_regex` on the
+form only. For a user with the `override-payment-reference-format` permission, `?for=payment`
+returns `transaction_number_regex: null` and `can_override_reference_format: true`, so the form
+takes any reference (row 205). See the settings doc under **Payment methods on a receipt or voucher form**.
+
 ## Edit a payment voucher
 
 `PUT /api/v1/app/{company}/property-management/finance/payment-vouchers/{paymentVoucher}`
@@ -153,9 +162,62 @@ The voucher's own items are offered only while the query names the voucher's own
 - `permissions.update` is `true` only on a `pending` voucher the user may edit.
 - `permissions.delete` is `true` only on a `pending` or `cancelled` voucher, matching what
   `DELETE` accepts.
+- `permissions.reverse` is `true` only on a released (`paid`) voucher, for a user who may create
+  vouchers. Show a "Reverse to pending" action when it is set.
 - A voucher prints in every status, `pending` included, so show the print action on every row. A
   `cancelled` one prints under a CANCELLED watermark. The payee's public page still hides pending
   vouchers with a `404`.
+
+## Reverse a released voucher
+
+`PATCH /payment-vouchers/{paymentVoucher}/reverse` — no body.
+
+Puts a released voucher back to `pending`, undoing what releasing it recorded:
+
+| Released voucher | After reversing |
+|---|---|
+| `status: paid`, `releasing_user`, `released_at`, `paid_at` set | `status: pending`; the three are cleared |
+| A cashbook credit on the paying (debit) bank account | Removed from the [bank account statement](./bank-account-statement.md) |
+| Vendor statement debits for the bills it paid | Removed |
+| A liability bill: each source vendor's withholding settlement | Removed |
+
+What stays:
+
+- **The bills and remittances it pays keep the amount.** That is applied when the voucher is raised,
+  not when it is released, so a pending voucher holds it as before release. To give it back, cancel
+  the voucher after reversing it (`PATCH …/cancel`, which only accepts a pending voucher).
+- **The payment advice is not sent again**, neither now nor when the voucher is released again:
+  the payee already has it.
+- The payment details (`payment_advice_number`, the advice upload) stay on the voucher.
+
+Once pending again, the voucher can be edited, released again, cancelled or deleted like any other
+pending voucher. The audit trail records who reversed it.
+
+**Who:** anyone with `create-facility-payment-voucher`, the same right that raises a voucher. No
+reason is asked for.
+
+Responses:
+
+- `200` — `{ "message": "Payment voucher reversed to pending.", "payment_voucher": { … } }`, the voucher
+  as on `GET`, now `pending`.
+- `403` — the user may not create vouchers, or the voucher is not released: `"Only a released
+  payment voucher can be reversed."`
+- `422` on `status` — its cashbook entry is matched in bank reconciliation: `"This payment voucher is
+  matched in bank reconciliation. Unmatch its cashbook entry before reversing it."` An entry that
+  reconciliation only marked as ignored does not block it, and is removed.
+
+## Cancel a pending voucher
+
+`PATCH /payment-vouchers/{paymentVoucher}/cancel` (pending vouchers only).
+
+Gives back what the voucher held. Each bill it paid gets its paid amount reduced and its status
+recomputed, and so does the bill's expense. Each **remittance** it paid goes back to `unpaid`.
+
+A remittance's `remittable_amount` is **not** touched. Raising the voucher never reduced it, so
+there is nothing to add back. Until 2026-11-04 cancelling added the voucher line's amount to it, so
+a cancelled voucher doubled what its remittances said was owed (for example remittance #8123 went
+from 162,435.00 to 324,870.00). `php artisan remittances:repair-voucher-inflation` reports the remittances
+this inflated, and corrects them with `--apply`.
 
 ## Pay payload (`PaymentAdviceData`)
 

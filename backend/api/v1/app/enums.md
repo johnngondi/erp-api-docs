@@ -51,6 +51,11 @@ Class: `App\Enums\BillStatus`
 | `partially-paid` | `info` |
 | `paid` | `success` |
 | `cancelled` | `secondary` |
+| `reversed` | `secondary` |
+
+`reversed` (since 2026-11-04): the bill was cancelled by a negative reversal bill rather than
+dropped. It still counts in its own period, and the reversal offsets it in the period it was
+raised. It cannot be cancelled, paid, invoiced or backdated again.
 
 ## BookingStatus
 
@@ -99,6 +104,11 @@ Class: `App\Enums\ExpenseStatus`
 | `partially-paid` | `primary` |
 | `paid` | `success` |
 | `cancelled` | `danger` |
+| `reversed` | `secondary` |
+
+`reversed` (since 2026-11-04): the expense was cancelled by a negative reversal entry rather than
+dropped. It still counts in its own period, and the reversal offsets it in the period it was
+raised. It cannot be cancelled again.
 
 ## InvoiceStatus
 

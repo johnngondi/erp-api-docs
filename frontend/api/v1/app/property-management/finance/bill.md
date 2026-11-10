@@ -31,6 +31,28 @@ Nairobi, but send `YYYY-MM-DD`.
 - `POST /bills/{bill}/customer-invoice`: generate its customer invoice. See [Customer invoice](#customer-invoice)
 - `POST /bills/bulk-settlement` — see [Bulk bills payment](bulk-bills-payment.md)
 
+## Cancelling: cancelled or reversed
+
+`PATCH /bills/{bill}/cancel` does one of two things to the bill (since 2026-11-04):
+
+| The bill | Result |
+|---|---|
+| Pending, or unpaid and its expense not remitted | Status `cancelled`. |
+| Paid, partly paid, or its expense remitted | Status `reversed`, plus a negative **reversal bill** (`notes`: `Cancelled FacilityBill#{id}`). |
+
+A `reversed` bill is **not** dropped: it keeps counting in the period it was posted (for example
+Input VAT and withholding, which count posted bills), and the reversal bill offsets it in the
+period it was raised. It used to be marked `cancelled`, which took it out of its own period while
+the reversal still counted, so the cancellation was counted twice.
+
+The bill's expense follows its own rule (see
+[Expenses → Cancelling](expense.md#cancelling-cancelled-or-reversed)): it is `reversed`, with a
+reversal entry, when it was paid or posted in an earlier month, and `cancelled` otherwise.
+
+A `reversed` bill is treated like a cancelled one everywhere else: it cannot be cancelled again,
+paid, backdated, have an invoice uploaded, or be invoiced to a landlord (`422`, the same
+messages as for a cancelled bill).
+
 ## List Bills
 
 `GET /api/v1/app/{company}/property-management/finance/bills`
@@ -183,7 +205,7 @@ party being checked.
 Enum filter options:
 
 - `filter[type]`: `lpo`, `contract`, `liability`, `other` (from `FacilityBillData`)
-- `filter[status]`: `pending`, `unpaid`, `partially-paid`, `paid`, `cancelled` (from `BillStatus` enum)
+- `filter[status]`: `pending`, `unpaid`, `partially-paid`, `paid`, `cancelled`, `reversed` (from `BillStatus` enum)
 
 ### Date-range filtering
 
@@ -837,6 +859,9 @@ override is always honoured, even when the bills agree.
 - One item per merged bill: `title` from that bill's first item (falling back to `Bill#{id}`),
   `notes` = the merged bill's notes, `amount`/`tax`/`total` copied across, and `billable` pointing at
   the merged bill.
+- `company_id` = the merged bills' company, or the property's company when none of them records one.
+  It is copied from the bills rather than taken from the route, because the vendor portal route has
+  no `{company}` segment.
 - `notes`: the client's `notes` if supplied; otherwise the shared note when every merged bill has the
   same one, else `Merged {n} bills: {note}; {note}; …`.
 - `withholding_tax_ids` = the union of the merged bills' withholding taxes, recalculated against the

@@ -1126,6 +1126,7 @@ Every **cell** (each field-keyed value) is an object. Only `value` is guaranteed
 { "value": 4800, "color": "danger" }   // fully specified
 { "value": 4800 }                      // no special colour, single column
 { "value": "Income Received", "col_span": 5 }  // spans 5 columns
+{ "value": "INV-77", "link": { "type": "bill", "id": 37 } }  // opens bill 37
 ```
 
 - `value` — the raw value; format it by the field's `format`. A `money` value may be a number or a
@@ -1135,6 +1136,23 @@ Every **cell** (each field-keyed value) is an object. Only `value` is guaranteed
 - `col_span` — a positive integer > 1; the cell occupies that many columns and the row **omits** the
   next `col_span − 1` field keys. **Optional — omitted when `1`** (the default). Used for full-width
   banner rows (e.g. a section header spanning the whole table).
+- `link` — the record the cell opens, as `{ type, id }`. **Optional — omitted when the cell opens
+  nothing, or when the user may not open that kind of record.** Render the value as a link to that
+  record's page, and as plain text when `link` is absent. The backend names the record, and the
+  frontend maps `type` to its own page:
+
+  | `type` | Opens | Its API | Sent only with |
+  |---|---|---|---|
+  | `bill` | the supplier bill | `GET …/property-management/finance/bills/{id}` | `view-facility-bill` |
+  | `invoice` | the lease invoice | `GET …/property-management/lease-management/invoices/{id}` | `view-facility-invoice` |
+  | `credit_note` | the lease credit note | `GET …/property-management/lease-management/credit-notes/{id}` | `view-facility-credit-note` |
+
+  The backend decides: a link is present only when the user holds that type's view permission, so
+  the frontend needs no permission check of its own. A report's rows are already limited to the
+  user's properties, which is the rest of what the record's page checks. Excel and PDF exports
+  print the value and ignore `link`. Used today by
+  [Input VAT Analysis](./vat-analysis-input.md) and [Output VAT Analysis](./vat-analysis-output.md),
+  on `invoice_no`.
 
 > **Payload convention:** absent `color` / `background_color` ⇒ `none`; absent `col_span` ⇒ `1`. The
 > backend drops these keys when they hold their default to keep the response small — never assume a

@@ -673,6 +673,15 @@ An LPO comes into being in one of two ways:
 Both kinds carry their own `title`, `facility`, `type`, `expenseType` and `expenseSubType`, so lists, filters,
 property scoping, bills and the printed LPO treat them the same way.
 
+#### Tax on a workflow purchase LPO
+
+Each line of an LPO raised from a `purchase` request takes the purchase item's `tax_id`, and only
+when the supplier has `has_vat`; a supplier without VAT gets the 0% tax on every line. A supplier
+flagged **`force_vat`** charges VAT even on exempt goods: a line whose purchase item's tax rate is
+`0` takes the company's default tax (the `default_tax` setting) instead, and its `tax` is worked
+out at that rate. The line's `tax_id` carries through to the bill raised when the LPO is
+delivered. `force_vat` does nothing for a supplier without `has_vat`, and work LPOs are unchanged.
+
 ### List query support
 
 `GET /api/v1/app/{company}/property-management/procurement/lpos`
@@ -720,7 +729,7 @@ Request body (`CreateDirectLpoData`):
 | `delivery_at` | Yes | string/date | When the work or goods are due |
 | `notes` | No | string | - |
 | `assigned_technician_id` | No | integer | Must exist in `users.id` |
-| `withholding_tax_ids` | No | array of integer | Each must exist in `withholding_taxes.id`, no duplicates. The taxes withheld on the bill generated when the LPO is delivered. When omitted or empty, the bill withholds the property landlord's `withholds` taxes |
+| `withholding_tax_ids` | No | array of integer | Each must exist in `withholding_taxes.id`, no duplicates. Stored on the LPO only. The bill generated when the LPO is delivered does **not** use it: it withholds the LPO's expense type's `withholds` (see [Review submitted LPO document](#review-submitted-lpo-document)) |
 | `winning_bid_upload_id` | Yes | integer | Must exist in `uploads.id`. The supplier's winning quotation |
 | `comparables` | No | array of integer | Each must exist in `uploads.id` and differ from `winning_bid_upload_id`. The other quotations the winning bid was compared against |
 | `items` | Yes | array | At least one item |
@@ -1063,7 +1072,7 @@ Loads `currency`, `documentUpload`, `facility`, `expenseType`, `expenseSubType`,
 | `type` | `work`, `purchase` |
 | `title` | Every LPO: a direct LPO's as entered; a workflow LPO's is copied from its procurement request |
 | `notes`, `amount`, `discount_amount`, `amount_after_discount`, `tax`, `total`, `expense_category_id` | - |
-| `withholding_tax_ids` | The withholding taxes passed to the bill (array of ids). Direct LPOs: as entered; workflow LPOs: the property landlord's `withholds` when the LPO was raised. `null` when there are none |
+| `withholding_tax_ids` | The withholding taxes stored on the LPO (array of ids). Direct LPOs: as entered; workflow LPOs: the property landlord's `withholds` when the LPO was raised. `null` when there are none. The LPO's bill does not use them: it withholds the expense type's `withholds` |
 | `delivery_at`, `delivered_at`, `created` | `raw`, `formatted`, `diff` |
 | `status` | `{ value, color }` — `pending`, `lpo`, `delivered`, `cancelled`, `rejected` |
 | `document_number`, `documentUpload` | The supplier's jobcard / delivery note, set when they submit it |
@@ -1124,9 +1133,12 @@ Request body (`CloseLpoData`; `document_number` and `document_upload_id` are tak
 The bill takes its property and expense type / sub-type from the LPO itself, so direct and workflow LPOs
 bill the same way.
 
-The bill withholds the LPO's `withholding_tax_ids` - as entered on a direct LPO, or the landlord's `withholds`
-stamped on a workflow LPO when it was raised - when it has any; otherwise the property landlord's
-`withholds` taxes, as before.
+The bill's withholdings come from the **expense type**: the `withholds` of the LPO's expense type,
+which a workflow LPO takes from its procurement request. The LPO's own `withholding_tax_ids` are
+ignored. As on every bill, only the taxes the property's landlord may withhold (the landlord's
+`withholds`) are kept, a withholding-exempt supplier is withheld nothing, and each tax's
+`withhold_when` decides whether it applies to a bill with or without tax. An expense type with no
+`withholds` gives a bill with no withholdings.
 
 Success response:
 

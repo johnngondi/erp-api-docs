@@ -257,7 +257,9 @@ throws. `login()`'s `redirect` is the target's path, not an absolute URL. The ve
 - `documents`: document model to definition.
 - `invoice_reminder_days` (`[1, 7, 14, 30]`) and `invoice_reminder_repeat_days` (`30`): the
   reminder cadence, while the company setting `invoice_reminders_enabled` is `yes`
-  (`InvoiceReminderSettings::enabledFor($companyId)`; default `no`).
+  (`InvoiceReminderSettings::enabledFor($companyId)`; default `no`). Which leases qualify
+  (minimum arrears, pending documents, recent payments) is per company, in
+  [tenant-documents.md](emails/tenant-documents.md#which-leases).
 - `previews`: key to `App\Support\Mail\Previews\EmailPreview`.
 
 ## Seeing it
@@ -274,7 +276,8 @@ throws. `login()`'s `redirect` is the target's path, not an absolute URL. The ve
 - Run the migrations: `companies.light_logo_path`, the stamps (`users.welcome_emailed_at`,
   `leases.tenant_notified_at`, `emailed_at` on the six document tables,
   `facility_invoices.last_reminded_at`), `user_password_reset_codes`, and the
-  `invoice_reminders_enabled` setting backfill.
+  `invoice_reminders_enabled` setting backfill, and the `invoice_reminder_minimum_arrears` /
+  `invoice_reminder_recent_payment_days` setting backfill.
 - Run a real queue worker (`QUEUE_CONNECTION=database`) that serves the `otp` and
   `notifications` queues: `php artisan queue:work --queue=otp,notifications,default`. On `sync`,
   a document email renders its PDF inside the request, which can take seconds.

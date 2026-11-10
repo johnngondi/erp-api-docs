@@ -176,8 +176,9 @@ name.
   only for the response subject (not a list row, not nested) or with
   `?with_approval_steps=1`. Every approvable resource uses it instead of calling
   `getApprovalSteps()` per row.
-- `FacilityInvoice::hasAllocatedPayments()` reads `has_allocated_payments` when the query
-  added `withExists('payments as has_allocated_payments')` (invoice index and show do);
+- `FacilityInvoice::hasAllocatedPayments()` (live allocations only) reads
+  `has_allocated_payments` when the query added
+  `withExists(FacilityInvoice::allocatedPaymentsExists())` (invoice index and show do);
   both `FacilityInvoiceResource` and `FacilityInvoicePolicy::delete` use it.
 - `LeaseResource` emits the five lease figures inside another list's rows only when
   `Lease::withTotals()` preloaded them (`Lease::hasPreloadedTotals()`).

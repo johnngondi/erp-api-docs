@@ -21,8 +21,9 @@ GET /.../resource?filter[search]=...&filter[status]=...&sort=-created_at&per_pag
 `filter[search]` is answered by the search engine **and** by a direct ID match, not one or the
 other. A numeric term matches any record whose ID it is, on top of whatever the engine returns.
 
-This applies to invoices, leases, credit notes, bills, receipts, procurement requests, LPOs,
-payment vouchers and remittances.
+This applies to leases, procurement requests, LPOs and remittances. Bills, invoices, credit
+notes, receipts and payment vouchers answer a number search exactly instead: see
+[Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
 
 Two consequences worth knowing:
 
@@ -37,6 +38,38 @@ nothing that used to be found stops being found.
 > This is a floor for IDs, not a cover for a broken index. A text search against an unreachable
 > engine still correctly returns nothing rather than silently falling back to a slower, different
 > search — a broken index should look broken.
+
+## Searching by number: bills, invoices, credit notes, receipts and vouchers
+
+On these five listings, a `filter[search]` made **only of digits** is answered exactly, by the
+database. The search engine is not asked. Each number returns every record that matches it in any
+of these ways:
+
+| Listing | A number matches |
+|---|---|
+| Bills (`/finance/bills`) | the id · `amount` (before tax) · `total` · `invoice_number` · `tax_invoice_number` (CU number) · bills raised from the LPO with that id or document number |
+| Invoices (`/lease-management/invoices`) | the id · `amount` (before tax) · `total` · `cu_invoice_number` · `cu_reference_number` |
+| Credit notes (`/lease-management/credit-notes`) | the id · `amount` (before tax) · `total` · `cu_invoice_number` · `cu_reference_number` |
+| Receipts (`/lease-management/receipts`) | the id · `amount` · `transaction_number` |
+| Payment vouchers (`/finance/payment-vouchers`) | the id · `amount` · `payment_advice_number` · `transaction_number` |
+
+- **Exact, not "contains".** `50000` finds a bill worth 50,000.00 and the bill numbered `50000`,
+  never one worth 500,001 or numbered `INV-50000`. Amounts are matched as whole numbers. Document
+  numbers are compared as typed, so a leading zero counts.
+- **Everything that matches, together.** The record with that id comes back *with* the records
+  worth that amount, not instead of them.
+- **A comma still separates values.** `50000,75000` matches each number the same way. So type
+  `50000`, not `50,000`, for fifty thousand: `50,000` searches for 50 and for 0.
+- **Anything else is a text search**, unchanged: `INV-50000`, `acme`, `50000.50`, or a number mixed
+  with words.
+- The listing's other filters still apply, so `filter[facility_id]` narrows a number search as usual.
+- The same rule applies on the tenant, vendor and landlord portals' versions of these listings.
+
+```http
+GET /finance/bills?filter[search]=50000
+GET /lease-management/receipts?filter[search]=1205
+GET /lease-management/invoices?filter[search]=50000,75000
+```
 
 ## Invoice (`/lease-management/invoices`)
 
@@ -68,13 +101,15 @@ GET /lease-management/invoices?filter[status]=partially%20paid
 
 `search` has special behavior:
 
-1. Comma-separated numeric list (no spaces required): treats each value as exact invoice reference.
-Input format: `number,number,number`
+1. Numbers only, one or comma-separated: an exact match on the id, amount, total, CU invoice
+number or CU reference number. See [Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
+Input format: `number` or `number,number,number`
 
 Example:
 
 ```http
 GET /lease-management/invoices?filter[search]=1,2,3
+GET /lease-management/invoices?filter[search]=15000
 ```
 
 2. Comma-separated CU invoice codes (letters + digits), exact match.
@@ -86,14 +121,13 @@ Example:
 GET /lease-management/invoices?filter[search]=INV100,INV200
 ```
 
-3. Any single value (text, number, phrase) uses normal text search.
+3. Any other single value (text, phrase, text with numbers) uses normal text search.
 Input format: any string
 
 Examples:
 
 ```http
 GET /lease-management/invoices?filter[search]=Collins
-GET /lease-management/invoices?filter[search]=15000
 ```
 
 ### Supported sorts
@@ -154,13 +188,15 @@ GET /lease-management/credit-notes?filter[status]=cancelled
 
 `search` has special behavior:
 
-1. Comma-separated numeric list (no spaces required): treats each value as exact credit note reference.
-Input format: `number,number,number`
+1. Numbers only, one or comma-separated: an exact match on the id, amount, total, CU invoice
+number or CU reference number. See [Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
+Input format: `number` or `number,number,number`
 
 Example:
 
 ```http
 GET /lease-management/credit-notes?filter[search]=1,2,3
+GET /lease-management/credit-notes?filter[search]=15000
 ```
 
 2. Comma-separated code list (letters + digits), exact match.
@@ -176,14 +212,13 @@ Example:
 GET /lease-management/credit-notes?filter[search]=INV100,REF200
 ```
 
-3. Any single value (text, number, phrase) uses normal text search.
+3. Any other single value (text, phrase, text with numbers) uses normal text search.
 Input format: any string
 
 Examples:
 
 ```http
 GET /lease-management/credit-notes?filter[search]=Collins
-GET /lease-management/credit-notes?filter[search]=15000
 ```
 
 ### Supported sorts
@@ -246,17 +281,15 @@ GET /lease-management/receipts?filter[status]=cancelled
 
 `search` has special behavior:
 
-1. Comma-separated numeric list (no spaces required): exact match by receipt references.
-Input format: `number,number,number`
-
-This applies to:
-- receipt IDs
-- transaction numbers
+1. Numbers only, one or comma-separated: an exact match on the id, amount or transaction number.
+See [Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
+Input format: `number` or `number,number,number`
 
 Example:
 
 ```http
 GET /lease-management/receipts?filter[search]=1,2,3
+GET /lease-management/receipts?filter[search]=15000
 ```
 
 2. Comma-separated transaction code list (letters + digits), exact match.
@@ -268,7 +301,7 @@ Example:
 GET /lease-management/receipts?filter[search]=TRX100,TRX200
 ```
 
-3. Any single value (text/number/phrase) uses normal text search.
+3. Any other single value (text, phrase, text with numbers) uses normal text search.
 Input format: any string
 
 Search covers:
@@ -282,7 +315,6 @@ Examples:
 
 ```http
 GET /lease-management/receipts?filter[search]=Collins
-GET /lease-management/receipts?filter[search]=15000
 ```
 
 ### Supported sorts

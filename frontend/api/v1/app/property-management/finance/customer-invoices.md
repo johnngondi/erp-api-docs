@@ -22,8 +22,9 @@ Its life:
 4. **Signed** on the company's ETR device. The CU number becomes the bills' `tax_invoice_number` and is
    written back onto the QuickBooks invoice.
 
-Until it is sent, invoices of the same customer can be **merged**. It can be **cancelled** until it is
-signed, and **deleted** once cancelled.
+Until it is sent, invoices of the same customer can be **merged**. It can be **cancelled** at any
+stage; a signed one is cancelled by a [credit note](#credit-note). It can be **deleted** once
+cancelled, unless it has a credit note.
 
 ## Endpoints
 
@@ -34,6 +35,8 @@ signed, and **deleted** once cancelled.
 - `POST /customer-invoices/{customerInvoice}/send-to-quickbooks`
 - `POST /customer-invoices/{customerInvoice}/sign`
 - `PATCH /customer-invoices/{customerInvoice}/cancel`
+- `POST /customer-invoices/{customerInvoice}/credit-note/send-to-quickbooks` (retry, see [Credit note](#credit-note))
+- `POST /customer-invoices/{customerInvoice}/credit-note/sign` (retry, see [Credit note](#credit-note))
 - `DELETE /customer-invoices/{customerInvoice}`
 - `GET /customer-invoices/{customerInvoice}/export?format=pdf`
 - `POST /bills/{bill}/customer-invoice` (generate, see [Bills](bill.md#customer-invoice))
@@ -64,7 +67,7 @@ is per row; enable the bulk **Merge** action when every selected row has it.
 | `unverified` | `secondary` | Generated, waiting for the responsible staff |
 | `verified` | `info` | Verified, ready to send to QuickBooks |
 | `sent` | `primary` | In QuickBooks, with its QuickBooks number; ready to sign |
-| `signed` | `success` | Signed on the ETR device; final |
+| `signed` | `success` | Signed on the ETR device; cancelling it raises a [credit note](#credit-note) |
 | `cancelled` | `danger` | Cancelled; its bills are left without a customer invoice |
 
 A send in progress keeps `verified` and shows `quickbooks.queued_at`; a failed one keeps `verified` and
@@ -252,14 +255,90 @@ with the device's reason.
 |---|---|---|---|
 | `reason` | No | string | Up to 500 characters |
 
-Allowed while `unverified`, `verified` or `sent`. An invoice already in QuickBooks is **voided** there
-first; if QuickBooks refuses, nothing is cancelled (`422` on `quickbooks`). Its bills get back the
-invoice number they had before QuickBooks, and are left **without a customer invoice**: one can be
-generated from each bill again.
+Allowed at any stage but `cancelled`.
+
+- **Not signed:** an invoice already in QuickBooks is **voided** there first. If QuickBooks
+  refuses, nothing is cancelled (`422` on `quickbooks`).
+- **Signed** (since 2026-11-04): a signed fiscal invoice cannot be voided, so a
+  [credit note](#credit-note) for the whole invoice is raised instead. It used to be refused
+  (`403` `A signed customer invoice cannot be cancelled.`).
+
+Either way the invoice becomes `cancelled`. Its bills get back the invoice number they had before
+QuickBooks, and are left **without a customer invoice**: one can be generated from each bill again.
 
 Response message: `Customer invoice cancelled. Its bills are now without a customer invoice; generate one from each bill again.`
 
-`403` `A signed customer invoice cannot be cancelled.` (a signed fiscal invoice needs a credit note).
+### When a bill on it is cancelled
+
+Cancelling a bill (`PATCH /bills/{bill}/cancel`, or a remittance withdrawing its management fee)
+cancels the **whole** customer invoice the bill is on, exactly as above (credit note included when
+signed). Then, in the same step, the invoice's **other live bills are invoiced again**: each one
+gets its own new `unverified` customer invoice, exactly as generating it from the bill would. They
+are **not merged** automatically. Merge them by hand ([Merge](#merge)) if they should go out
+together, for example with the invoice of a fee raised again for the same landlord. Each goes
+through the usual verify → QuickBooks → sign flow. A bill that cannot be invoiced (for example its
+property has no landlord any more) is left out and logged.
+
+## Credit note
+
+Raised automatically when a **signed** customer invoice is cancelled. It credits the whole invoice
+and is dated the day it is raised. It then goes through these steps on its own, queued:
+
+1. **Sent to QuickBooks** as a Credit Memo, with the same lines and tax codes as the invoice. That
+   gives it its QuickBooks number.
+2. **Signed** on the company's ETR device as a credit note, carrying the invoice's CU number as its
+   related invoice number.
+3. **Finished in QuickBooks:** its CU number is written to the credit memo's CU custom field. The
+   credit memo is then **applied to the invoice** (a zero-amount payment linking the two), up to the
+   invoice's open balance in QuickBooks, so the invoice closes. When the invoice has nothing open
+   (already paid), the credit stays on the customer's account and `quickbooks.applied_amount` is `0`.
+
+It appears on the invoice detail as `credit_note`, `null` when there is none:
+
+```json
+"credit_note": {
+  "id": 12,
+  "credit_date": "2026-11-04",
+  "reason": "Bill cancelled",
+  "amount": 281430.06,
+  "tax": 45028.81,
+  "total": 326458.87,
+  "quickbooks": {
+    "credit_memo_id": "29190",
+    "doc_number": "CN-1043",
+    "sent_at": { "raw": "2026-11-04T16:20:01.000000Z", "formatted": "04 Nov, 2026", "diff": "1 minute ago" },
+    "cu_synced_at": { "raw": "2026-11-04T16:20:09.000000Z", "formatted": "04 Nov, 2026", "diff": "1 minute ago" },
+    "applied_amount": 326458.87,
+    "applied_at": { "raw": "2026-11-04T16:20:10.000000Z", "formatted": "04 Nov, 2026", "diff": "1 minute ago" },
+    "error": null
+  },
+  "cu_invoice_number": "0100123450000001234",
+  "cu_serial_number": "KRAMW01234",
+  "cu_invoice_verify_url": "https://itax.kra.go.ke/...",
+  "etr_signed_at": { "raw": "2026-11-04T16:20:05.000000Z", "formatted": "04 Nov, 2026", "diff": "1 minute ago" },
+  "etr_error": null,
+  "etr_status": { "value": "signed", "color": "success" },
+  "created_at": { "raw": "2026-11-04T16:19:58.000000Z", "formatted": "04 Nov, 2026", "diff": "1 minute ago" },
+  "permissions": { "send_to_quickbooks": false, "sign": false }
+}
+```
+
+`quickbooks.credit_memo_id` and `doc_number` are `null` until the credit memo is created.
+
+A step that fails records its reason (`quickbooks.error` or `etr_error`) and the credit note waits.
+Retry from the invoice:
+
+| Endpoint | Retries | Allowed when |
+|---|---|---|
+| `POST /customer-invoices/{customerInvoice}/credit-note/send-to-quickbooks` | Whichever QuickBooks step is outstanding: creating the credit memo, or writing its CU number and applying it | the user holds `send-customer-invoice-to-quickbooks` and a QuickBooks step is outstanding |
+| `POST /customer-invoices/{customerInvoice}/credit-note/sign` | The ETR signature | the user holds `sign-customer-invoice`, the credit memo is in QuickBooks and the credit note is not signed |
+
+Both answer like their invoice counterparts: the refreshed `customer_invoice` with its `credit_note`,
+`422` on `quickbooks` or `etr` with the reason, `403` when the step is not outstanding. Their
+`permissions` flags on the credit note say when to offer them.
+
+A cancelled invoice with a credit note cannot be deleted (`403` `A customer invoice with a credit
+note cannot be deleted.`).
 
 ## Delete
 
