@@ -522,6 +522,46 @@ Response:
 }
 ```
 
+#### Repair: quotes shelved before they were restored
+
+Until 29 October 2026 a resubmission did not restore shelved quotes: they stayed `shelved` for
+good, and after a second rebase their suppliers were not even carried over. The console command
+`php artisan procurement:restore-shelved-quotes [request ids...] [--notify] [--dry-run]` applies
+the restore rule to those requests now. It looks at work requests after a rebase
+(`quote_round` above 1) that still have a shelved quote from an earlier round. The ids, when given,
+narrow the run to those requests.
+
+On each request, the candidate is each supplier's latest shelved quote. It is left alone, and listed
+under "Skipped" with the reason, when:
+
+- the supplier has a live quote on the request (they quoted again);
+- the system shelved it rather than a rebase: "Job Cancelled" (removed from an emergency, see
+  [Repair: emergencies sent to other suppliers](#repair-emergencies-sent-to-other-suppliers)) or
+  "Replaced by a newer quote";
+- the request is locked to one supplier and this is someone else;
+- the supplier declined the request, or is no longer active.
+
+What happens to the rest depends on where the request stands, in one transaction per request:
+
+| Request | Result | What the command does |
+|---|---|---|
+| Waiting for quotes or in quotes review, procurement step current | `restored` | Each quote is restored into the current round as a resubmission does (`status=bid`, `round` = current round, `restored_at`, `shelved` and `is_computer_recommended` cleared). The supplier's invitation is re-opened for the round, carried over, unless it already is |
+| The same, held for a quote shortfall, and the restored quotes make up the minimum (or bring the locked supplier's quote) | `opened` | Restores as above, then opens the quotes as the deadline would have: the system recommends one and the request and step move to `quotes-review` |
+| Rebased and waiting for resubmission (`request`, procurement step `pending`) | `staged` | The quotes stay shelved, and their `round` becomes the previous round, so approving the step restores them and carries their suppliers over |
+| Past the procurement step (a later step is current) | `past-procurement` | Nothing: the chain has moved on. Listed so the officer can look at it |
+| Nothing left to restore | `unchanged` | Nothing |
+
+In quotes review, the system's pick stays where it was: a restored quote does not take it over, but
+the step may choose it (with a comment, as for any quote other than the system's pick). A round with
+no system pick yet (no live quote when it opened) gets one from the restored quotes. A request still
+held for a shortfall keeps its hold when the restored quotes are not enough, and its task shows the
+new count.
+
+Suppliers are not told by default. With `--notify`, a supplier whose invitation was re-opened gets
+`RfqReopenedNotification`, but only while the request still takes quotes (waiting for quotes, no
+shortfall, deadline ahead). The run prints one row per request (restored quotes, skipped quotes,
+result) and changes nothing with `--dry-run`. Running it again changes nothing.
+
 ### Quote shortfall: request more quotes / evaluate anyway
 
 At the deadline (`procurement:quotes-review`, daily at 08:00) a work request waiting for quotes with
