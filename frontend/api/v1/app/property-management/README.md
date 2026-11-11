@@ -22,6 +22,8 @@ Base prefix:
   - `docs/frontend/app/property-management/procurement.md`
 - FRC sanctions list (quick action)
   - `docs/frontend/app/property-management/frc-sanctions.md`
+- Adhoc ETR signing (quick action)
+  - `docs/frontend/app/property-management/finance/adhoc-etr-signing.md`
 - Finance
   - `docs/frontend/app/property-management/finance.md`
   - `docs/frontend/app/property-management/finance/bill.md`
