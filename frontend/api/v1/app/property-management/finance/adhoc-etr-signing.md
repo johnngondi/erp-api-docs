@@ -65,12 +65,13 @@ Money is sent to the device at two decimals. Credit note figures are positive.
     "invoice_number": "CN-000318",
     "cu_invoice_number": "0040712340000219",
     "cu_serial_number": "KRAMW004071234",
-    "cu_verify_url": "https://itax.kra.go.ke/KCSE/verify?x=1"
+    "cu_verify_url": "https://itax.kra.go.ke/KCSE/verify?x=1",
+    "currency": "KES"
   }
 }
 ```
 
-`cu_serial_number` and `cu_verify_url` are left out when the device does not return them.
+`cu_serial_number` and `cu_verify_url` are left out when the device does not return them. `cu_verify_url` is what the QR code encodes. `currency` is the landlord property's reporting currency, or the system default for the company device, and is left out when neither is set.
 
 ### Errors
 
@@ -86,4 +87,4 @@ The call waits for the device, up to about 45 seconds when the device is busy. U
 timeout, and do not resend automatically: a device that signed but whose answer was lost has
 already recorded the document.
 
-The current-month rule on facility invoices does not apply here.
+The current-month rule on facility invoices does not apply here. The dialog only warns the user when the date is in an earlier month.
