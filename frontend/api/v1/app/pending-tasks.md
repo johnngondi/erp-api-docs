@@ -193,6 +193,63 @@ Direct tasks raised today:
 
 This mirrors the alert contract documented in `docs/frontend/api/v1/app/alerts.md`.
 
+## Morning digest (SMS, WhatsApp, email)
+
+Every morning each staff member with open tasks gets one message listing them by kind of record,
+by **SMS, WhatsApp and email**, plus an in-app copy in their notifications. Nothing to call: the
+scheduler sends it (`pending-tasks:send-daily-digest`, hourly at :35, firing for a company when the
+hour set by `PENDING_TASKS_DIGEST_HOUR` (default `7`) arrives in that company's timezone).
+
+```
+Good morning Jane, you have 17 pending tasks in ERP:
+Receipts Approval: 5
+LPOs Approval: 5
+Procurement Requests: 5
+Lease Applications: 2
+Open: https://erp.example.com/app/property-management/pending-tasks
+```
+
+- **Who.** Active staff users with at least one open task in the company's **App (Staff) portal**
+  (`user_group_id` of `app`, or `null`). Tenants, suppliers and landlords are not sent it. A user
+  in two companies gets one digest per company.
+- **Categories.** The same grouping as [`resource-types`](#kinds-of-record-among-my-tasks): an
+  approval task counts under the record being approved and is labelled `<Records> Approval`; a
+  direct task under its own record. Labels drop the `Facility` prefix and spell the acronyms:
+  `FacilityInvoice` → `Invoices`, `FacilityProcurementLpo` → `LPOs`, `Loo` → `LOOs`,
+  `FacilityProcurementRequest` → `Procurement Requests`, `CustomerInvoice` → `Customer Invoices`,
+  `Facility` → `Properties`. Largest count first.
+- **Once a day.** A `pending_task_digests` row (user, company, local date) is written before the
+  send, so a scheduler retry or a second worker never sends a second digest the same day.
+- **Channels.** SMS and WhatsApp need a phone number, email an address; each is skipped for a
+  user without one. WhatsApp only delivers free-form text within 24 hours of the user writing to
+  the business, so SMS is the channel to rely on.
+- `PENDING_TASKS_DIGEST_ENABLED=false` stops it everywhere.
+- By hand: `php artisan pending-tasks:send-daily-digest --company=3 --now` sends one company's
+  digests at once, whatever the hour. The once-a-day guard still applies.
+
+The in-app copy (`type` `App\Notifications\PendingTasksDigestNotification`) carries:
+
+```json
+{
+  "title": "Your pending tasks",
+  "message": "You have 17 pending tasks: Receipts Approval: 5, LPOs Approval: 5, Procurement Requests: 5, Lease Applications: 2.",
+  "total": 17,
+  "categories": [
+    { "label": "Receipts Approval", "resource_type": "FacilityReceipt", "approval": true, "count": 5 },
+    { "label": "LPOs Approval", "resource_type": "FacilityProcurementLpo", "approval": true, "count": 5 },
+    { "label": "Procurement Requests", "resource_type": "FacilityProcurementRequest", "approval": false, "count": 5 },
+    { "label": "Lease Applications", "resource_type": "LeaseApplication", "approval": false, "count": 2 }
+  ],
+  "resource_type": null,
+  "resource_id": null,
+  "resource_url": null
+}
+```
+
+`resource_type` on a category is the bare model name, so it can be sent back as
+`filter[resource_type]` to open the list on that kind (approval and direct tasks of the same kind
+share it). `resource_url` is `null`: the digest is about many records; link to the pending tasks page.
+
 ## Kinds of record among my tasks
 
 `GET /api/v1/app/{company}/pending-tasks/resource-types`

@@ -127,7 +127,9 @@ Email is on by exception.
 Marked today: `TemporaryPinNotification`, `LooSentNotification`, `TestMessagingNotification`,
 `LpoIssuedNotification`, `QuoteSubmissionReminderNotification`,
 `BillInvoiceRejectedNotification`, `DocumentIssuedNotification`,
-`LeaseApplicationReturnedNotification`, and the new email types below.
+`LeaseApplicationReturnedNotification`, `PendingTasksDigestNotification` (each staff member's
+morning list of pending tasks; preview at `/_mail/pending-tasks-digest`), and the new email types
+below.
 
 ## Sending
 

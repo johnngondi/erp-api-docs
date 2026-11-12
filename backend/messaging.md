@@ -52,8 +52,9 @@ SMS and WhatsApp are on by exception, like email (see [emails.md](emails.md#whic
 
 Text is allowed only for one-time codes, a document sent to a tenant or a supplier, an RFQ sent to a
 supplier, reminders to a supplier, a lease application returned to its reviewer, the link to
-apply for a lease sent to a prospective tenant, and submitted meter readings sent to the
-receivables staff who bill from them. Today that is:
+apply for a lease sent to a prospective tenant, submitted meter readings sent to the
+receivables staff who bill from them, and each staff member's morning digest of pending tasks.
+Today that is:
 
 | Purpose | Notification (under `App\Notifications`) | Channels |
 | --- | --- | --- |
@@ -63,6 +64,7 @@ receivables staff who bill from them. Today that is:
 | An approved lease application sent back to its reviewer (product decision, 7 October 2026) | `PropertyManagement\LeaseApplicationReturnedNotification` | database, mail, SMS |
 | The link to register and apply, sent to a prospective tenant (product decision, 8 October 2026) | `PropertyManagement\LeaseApplicantInvitationNotification` (on demand) | mail, SMS, WhatsApp |
 | Meter readings submitted for billing, to the company's receivables staff (`default_account_receivables_staff` setting; product decision, 9 October 2026) | `PropertyManagement\UtilityMeterReadingsReadyForBillingNotification` | database, SMS |
+| Each staff member's morning digest of open pending tasks, counted by kind (`pending-tasks:send-daily-digest`; product decision, 12 November 2026). See [Pending tasks → Morning digest](../frontend/api/v1/app/pending-tasks.md#morning-digest-sms-whatsapp-email) | `PendingTasksDigestNotification` | database, mail, SMS, WhatsApp |
 | Provider check | `Messaging\TestMessagingNotification` (`messaging:test`) | the channel asked for |
 
 Everything else (approvals, changes requested, workflow steps, document changes, comments,
