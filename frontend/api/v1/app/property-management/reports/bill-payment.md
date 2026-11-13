@@ -95,9 +95,12 @@ are left out of an export when the user has hidden them.
 
 ## Columns
 
-The first nine columns are **shared with [Bill Submission](./bill-submission.md)**, with identical
-definitions: `invoice_no`, `expense_type`, `supplier`, `property`, `billed_date`, `amount`, `tax`,
-`total`, `status` (the bill's own `facility_bills.status`, with its status colour). Then:
+The first nine columns are **shared with [Bill Submission](./bill-submission.md)**: the same keys,
+order and formats — `invoice_no`, `expense_type`, `supplier`, `property`, `billed_date`, `amount`,
+`tax`, `total`, `status` (the bill's own `facility_bills.status`, with its status colour). Here
+`expense_type` is labelled **Expense Type** and `billed_date` is the **Billed Date**
+(`facility_bills.invoice_date`, falling back to `created_at`); Bill Submission labels those two
+"Service" and "Expense Posted Date" and fills the latter with `expense_posted_at`. Then:
 
 | Column | `key` | `format` | Notes |
 |---|---|---|---|

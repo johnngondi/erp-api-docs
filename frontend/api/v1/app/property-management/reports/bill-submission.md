@@ -7,8 +7,8 @@ Base route:
 `/api/v1/app/{company}/property-management/reports`
 
 The Bill Submission report lists **every supplier bill submitted in the period**, one row per bill,
-so you can see what suppliers have billed and which bills are still waiting. It is **read-only** and
-computed on the fly.
+so you can see what suppliers have billed, when each bill was posted to expenses and which bills are
+still waiting. It is **read-only** and computed on the fly.
 
 > **Read [the shared reports contract](./README.md) first.** This page documents what is specific to
 > this report. The response envelope, the bucket keys, the field keys, the per-cell `{ value, color }`
@@ -29,7 +29,11 @@ The view and export permissions are **independent**, and neither is shared with
 ## What is listed
 
 - **A bill is "submitted" when it was captured**: `facility_bills.created_at` falls in
-  `period_from`–`period_to`. The invoice date is shown (`billed_date`) but does not decide the period.
+  `period_from`–`period_to` (the **Bill Created Date** range). The invoice date is never read.
+- **`posted_from` / `posted_to` narrow by Bill Posted Date**: when either is sent, only bills whose
+  `facility_bills.expense_posted_at` falls in that range are listed. A bill that has not been posted to
+  expenses has no posted date, so it drops out as soon as a posted range is given. Omit both to list
+  posted and unposted bills alike.
 - Every bill type and every status is listed unless `bill_status` narrows it.
 - **Status is `facility_bills.status` itself** — `pending`, `unpaid`, `partially-paid`, `paid` or
   `cancelled`. It is never derived from the approval workflow.
@@ -41,15 +45,18 @@ The [global filters](./README.md#global-filters) plus:
 
 | Param | Type | Meaning when omitted |
 |---|---|---|
-| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status`, period | see the shared contract | all / current month |
-| `bill_status` | `pending` \| `unpaid` \| `partially-paid` \| `paid` \| `cancelled` | Any status |
+| [global filters](./README.md#global-filters) — `landlord_ids`, `facility_ids`, `facility_type_id`, `properties_status` | see the shared contract | all |
+| `period_from` / `period_to` | date `Y-m-d` — **Bill Created Date**: the day the bill was captured (`facility_bills.created_at`) | Current month |
+| `posted_from` / `posted_to` | date `Y-m-d` — **Bill Posted Date**: the day the bill was posted to expenses (`facility_bills.expense_posted_at`). Either end may be sent alone. | Any posted date, posted or not |
+| `bill_status` | `pending` \| `unpaid` \| `partially-paid` \| `paid` \| `cancelled` \| `reversed` \| `payable` — `payable` is a shorthand for `unpaid` and `partially-paid` together (the bills still owed), never a stored status | Any status |
 | `supplier_id` | `users.id` (the bill's `vendor_id`) | All suppliers |
 | `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 
-`header.filters` echoes every filter.
+`header.filters` echoes every filter, `posted_from` and `posted_to` included. `header.period` is the
+Bill Created Date range only.
 
 ```
-GET …/reports/suppliers/expenditure-reports/bill-submission?period_from=2026-01-01&period_to=2026-06-30&bill_status=pending
+GET …/reports/suppliers/expenditure-reports/bill-submission?period_from=2026-01-01&period_to=2026-06-30&posted_from=2026-03-01&posted_to=2026-03-31&bill_status=pending
 ```
 
 ## Header
@@ -64,23 +71,26 @@ GET …/reports/suppliers/expenditure-reports/bill-submission?period_from=2026-0
 One bucket, `overview` (`header.label`: `Bills Submitted`): one row per bill, then a closing
 `grosstotal` row.
 
-By default the rows are ordered by supplier, then property, then billed date
+By default the rows are ordered by supplier, then property, then expense posted date
 (`header.sort.default` `["supplier", "property", "billed_date"]`). Ties keep the report's own order,
 oldest submission first. Re-sort
 with [`sort[overview]`](./README.md#sorting-rows--sort), for example `sort[overview]=billed_date` for
-the oldest submissions first. The closing row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
+the earliest postings first. The closing row stays last. [`columns`](./README.md#choosing-columns--columns) picks the columns shown and exported.
 
 ## Columns
 
-These nine columns are **shared with [Bill Payment](./bill-payment.md)**, with identical definitions.
+These nine columns are **shared with [Bill Payment](./bill-payment.md)**: same keys, same order, same
+formats. Two of them read differently here — `expense_type` is labelled **Service**, and
+`billed_date` is labelled **Expense Posted Date** and carries the date the bill was posted to expenses
+rather than its invoice date. Keys are unchanged, so saved column and sort preferences carry over.
 
 | Column | `key` | `format` | Source |
 |---|---|---|---|
 | Invoice No. | `invoice_no` | string | `facility_bills.invoice_number` |
-| Expense Type | `expense_type` | string | the bill's expense type name |
+| Service | `expense_type` | string | the bill's expense type name |
 | Supplier | `supplier` | string | the bill's vendor name |
 | Property | `property` | string | the bill's property name |
-| Billed Date | `billed_date` | string `Y-m-d` | `facility_bills.invoice_date` (falls back to `created_at`) |
+| Expense Posted Date | `billed_date` | string `Y-m-d` | `facility_bills.expense_posted_at`; `null` while the bill has not been posted to expenses |
 | Amount | `amount` | money | `facility_bills.amount` |
 | Tax | `tax` | money | `facility_bills.tax` |
 | Total | `total` | money | `facility_bills.total` |
@@ -119,22 +129,23 @@ A bill in any other status is never tinted, however old it is.
       "currency": { "code": "KES", "name": "Kenya Shilling" },
       "period": { "from": "2026-01-01", "to": "2026-06-30" },
       "filters": { "landlord_id": null, "facility_id": null, "facility_type_id": null, "properties_status": null,
-                   "period_from": "2026-01-01", "period_to": "2026-06-30", "bill_status": null, "supplier_id": null },
+                   "period_from": "2026-01-01", "period_to": "2026-06-30", "bill_status": null, "supplier_id": null,
+                   "posted_from": null, "posted_to": null },
       "generated_at": "2026-06-30T12:00:00+03:00"
     },
     "report": [
       {
         "bucket": "overview",
         "header": { "label": "Bills Submitted" },
-        "fields": [ /* the nine columns above, in order */ ],
+        "fields": [ /* the nine columns above, in order; expense_type labelled "Service", billed_date "Expense Posted Date" */ ],
         "items": [
           { "invoice_no": { "value": "INV-0142" }, "expense_type": { "value": "Plumbing" }, "supplier": { "value": "AquaFix Ltd" },
-            "property": { "value": "ACK Gardens" }, "billed_date": { "value": "2026-01-28" },
+            "property": { "value": "ACK Gardens" }, "billed_date": { "value": null },
             "amount": { "value": 1000 }, "tax": { "value": 160 }, "total": { "value": 1160 },
             "status": { "value": "pending", "color": "warning" },
             "type": "normal", "background_color": "warning" },
           { "invoice_no": { "value": "INV-0187" }, "expense_type": { "value": "Security" }, "supplier": { "value": "Guardforce" },
-            "property": { "value": "ACK Gardens" }, "billed_date": { "value": "2026-05-30" },
+            "property": { "value": "ACK Gardens" }, "billed_date": { "value": "2026-06-02" },
             "amount": { "value": 5000 }, "tax": { "value": 800 }, "total": { "value": 5800 },
             "status": { "value": "unpaid", "color": "danger" },
             "type": "normal" },
