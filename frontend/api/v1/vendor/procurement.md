@@ -377,7 +377,9 @@ not been placed).
 
 Query params:
 
-- `filter[search]`
+- `filter[search]` — numbers match the LPO id, document number and **final total** only (never the
+  amount before discount or VAT); `11600` and `KES 11,600.00` are read as money (a comma separates values). See
+  [Searching by money](../app/property-management/searching-and-sorting.md#searching-by-money-the-final-total-only).
 - `filter[facility_id]`, `filter[is_direct]` (`1`/`0`), `filter[type]` (`work`, `purchase`)
 - `filter[expense_category_id]`, `filter[status]`, `filter[delivered_at]`, `filter[rating]`
 - `filter[amount]`, `filter[total]`, `filter[created_at]`
@@ -406,6 +408,9 @@ Response item shape (`ProcurementLpoResource`):
 - `expenseCategory`
 - `currency`
 - `assignedTechnician`
+- `reviewer` — the staff member who reviews your jobcard / delivery note and closes the LPO: whoever
+  raised the LPO (a direct LPO) or its procurement request. `{ id, name, email, phone, profile_photo_url }`;
+  `null` when the ERP has no record of who raised it
 - `document_number`
 - `documentUpload`
 - `rating`
@@ -424,6 +429,7 @@ Includes loaded by controller:
 - `documentUpload`
 - `facility`
 - `procurementRequest` (`null` for a direct LPO)
+- `reviewer`
 - `items.purchaseItem`
 - `items.stockKeepingUnit`
 - `items.taxType`
@@ -462,7 +468,7 @@ Submit behavior:
 
 - Backend always sets `delivered_at` to current time.
 - Backend computes overall `rating` as average of quality/speed/communication.
-- Your "Upload jobcard" task is cleared, and the LPO's creator (the staff user who raised it, or who
+- Your "Upload jobcard" task is cleared, and the LPO's `reviewer` (the staff user who raised it, or who
   raised its procurement request) gets a "Review document and close LPO" task. Submitting again
   replaces that task, so the creator never holds two.
 

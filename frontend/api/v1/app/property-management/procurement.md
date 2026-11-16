@@ -741,6 +741,9 @@ delivered. `force_vat` does nothing for a supplier without `has_vat`, and work L
 Only LPOs on properties the user is allocated to are listed. `filter[facility_id]` reads the LPO's own
 property, so direct LPOs are included.
 
+Each row carries `reviewer`, the staff user who reviews the supplier's jobcard (see
+[Response fields](#response-fields)).
+
 Example:
 
 `GET /api/v1/app/12/property-management/procurement/lpos?filter[is_direct]=1&filter[type]=work&sort=-created_at`
@@ -1097,7 +1100,7 @@ is left as it is.
 `GET /api/v1/app/{company}/property-management/procurement/lpos/{lpo}`
 
 Loads `currency`, `documentUpload`, `facility`, `expenseType`, `expenseSubType`, `expenseCategory`, `vendor`,
-`assignedTechnician`, `winningBidUpload`, `comparables`, `procurementRequest` (null for a direct LPO) and
+`assignedTechnician`, `reviewer`, `winningBidUpload`, `comparables`, `procurementRequest` (null for a direct LPO) and
 `items` with `purchaseItem`, `stockKeepingUnit` and `taxType`.
 
 ### Response fields
@@ -1116,6 +1119,7 @@ Loads `currency`, `documentUpload`, `facility`, `expenseType`, `expenseSubType`,
 | `delivery_at`, `delivered_at`, `created` | `raw`, `formatted`, `diff` |
 | `status` | `{ value, color }` — `pending`, `lpo`, `delivered`, `cancelled`, `rejected` |
 | `document_number`, `documentUpload` | The supplier's jobcard / delivery note, set when they submit it |
+| `reviewer` | Who reviews the jobcard / delivery note and closes the LPO: the staff user who raised the LPO (a direct LPO), or who raised its procurement request (a workflow LPO). The same person gets the "Review document and close LPO" task. `{ id, name, email, phone, profile_photo_url }`; `null` when neither is recorded. On the list, show, create and edit responses |
 | `work_advice`, `quality_rating`, `speed_rating`, `communication_rating`, `rating`, `comments` | Set on review |
 | `facility` | The property |
 | `expenseType`, `expenseSubType`, `expenseCategory`, `currency`, `vendor`, `assignedTechnician` | When loaded |
