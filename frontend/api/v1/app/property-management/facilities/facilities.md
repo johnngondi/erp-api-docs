@@ -436,6 +436,7 @@ Create/update payload example:
   "city_id": 74,
   "physical_address": "Kilimani",
   "coordinates": null,
+  "lr_number": "L.R. NO. 209/4521", // optional, max 255; null or "" clears it
   "paybill_number": "888999", // optional, max 20; null or "" clears it
   "paybill_account_number": "WESTLANDS", // optional, max 50; null or "" clears it
   "auto_generate_utility_meters": true, // deprecated: accepted but ignored, meters are never generated for new spaces (they belong to leases, see utility-meters.md)
@@ -551,6 +552,13 @@ details like this:
 
 On the create/edit property page both fields sit on the Basic Details step.
 
+`lr_number` is the property's land reference (title) number, free text such as `L.R. NO. 209/4521`.
+It is optional on create and update. Like the other optional fields here, leaving it out of an
+update clears it, so send the stored value back to keep it. It
+prints on documents through the `property.lr_number` template field. On the create/edit property
+page it sits on the Location step, under the address. LR numbers held in EPMAS can be copied in
+with `facilities:pull-epmas-lr-numbers` (see `backend/facility-lr-numbers-from-epmas.md`).
+
 Backend-required baseline fields in DTO:
 - `facility_type_id`
 - `space_unit_id`
@@ -596,6 +604,7 @@ Facility response example:
   ],
   "physical_address": "Westlands, Nairobi",
   "coordinates": "-1.2641,36.8106",
+  "lr_number": "L.R. NO. 209/4521",
   "paybill_number": "888999",
   "paybill_account_number": "WESTLANDS",
   "space_unit": "SqFt",
