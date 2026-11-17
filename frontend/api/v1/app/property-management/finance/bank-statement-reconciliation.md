@@ -59,11 +59,15 @@ Supports **PDF** (read natively) and **spreadsheets** (`xlsx`, `xls`, `csv`,
 
 Request body (`multipart/form-data`):
 - `file` (file, required) — `pdf`, `xlsx`, `xls`, `csv`, `ods`. Max 10 MB.
+- `format` (string, optional) — `extract` (default) reads the file with Claude;
+  `template` reads a spreadsheet in the fixed statement template directly, with no
+  AI call (see §1b). With `template` the file must be `xlsx`, `xls`, `csv` or `ods`.
 
 Response:
 ```json
 {
   "data": {
+    "job_id": "3b2a1c0d-9e8f-4a5b-8c7d-6e5f4a3b2c1d",
     "message": "Bank statement extracted successfully",
     "statement_token": "9f1c2b6e-1a2b-4c3d-9e8f-0a1b2c3d4e5f",
     "reconciliation": {
@@ -117,6 +121,9 @@ Field reference (`result`):
 - `feedback` — user-facing message; `null` when legible.
 
 Top-level:
+- `job_id` — the response is also cached as a `done` extraction job under this id, so
+  the poll endpoint in §1a returns it again (valid ~1 hour). The client keeps it to
+  resume a reconciliation without uploading again.
 - `statement_token` — pass this to the **match** step (valid ~1 hour, bound to this account).
 - `reconciliation.matches_account` — `true` when the statement's account number
   matches the target account (compared ignoring spaces and case).
@@ -156,6 +163,96 @@ The job status is scoped to the account, so a job id polled against a different
 account returns `404 Not Found`. The status entry lives ~1 hour (≥ the
 `statement_token` TTL), so a `done` job stays pollable while its token is valid.
 Recommended client cadence: poll every ~3s, give up after ~8 minutes.
+
+### 1b. Template import (no AI)
+
+`POST .../{account}/reconciliations/extract` with `format=template`.
+
+A spreadsheet already laid out in the statement template is read row by row on the
+server, so there is no AI call and no extraction step to wait on. It returns in
+seconds even for large statements. Use it for exports the user has put into the
+template; use the AI extract (§1, §1a) for PDFs and bank-formatted files.
+
+Request body (`multipart/form-data`):
+- `file` (file, required) — `xlsx`, `xls`, `csv`, `ods`. Max 10 MB. Only the first sheet is read.
+- `format` (string, required here) — `template`.
+
+Template layout (first sheet):
+
+| Row | Contents |
+|---|---|
+| 1 | Column headings |
+| 2 | Opening Balance: the words `Opening Balance` (or `Brought Forward`) in any text cell, usually `description`; the amount in `balance` |
+| 3 … N | One transaction per row |
+| Last | Closing Balance: the words `Closing Balance` (or `Carried Forward`) in any text cell, usually `description`; the amount in `balance` |
+
+Blank rows are skipped anywhere. The two balance rows keep their sign, so an
+overdrawn balance stays negative. The running `balance` on transaction rows is
+not read.
+
+Columns. Headings are matched without regard to case, spaces, `_`, `-` or `.`, so
+`Value Date`, `value_date`, `ValueDate` and `VALUE-DATE` are all `valuedate`. Column
+order does not matter.
+
+| Column | Required | Accepted headings | Value |
+|---|---|---|---|
+| `ref` | yes | `Ref`, `Reference`, `Refference`, `Ref No`, `Reference No`, `Transaction Reference` | text |
+| `valuedate` | yes | `Value Date` | date, required on every transaction |
+| `paymentdate` | yes | `Payment Date`, `Posting Date`, `Post Date` | date, may be empty |
+| `description` | yes | `Description`, `Details`, `Narration`, `Narrative`, `Particulars` | text |
+| `moneyin` | yes | `Money In`, `Credit`, `Credits`, `Deposit`, `Deposits` | amount, may be empty |
+| `moneyout` | yes | `Money Out`, `Debit`, `Debits`, `Withdrawal`, `Withdrawals` | amount, may be empty |
+| `balance` | yes | `Balance`, `Running Balance` | amount |
+| `transactionfee` | no | `Transaction Fee`, `Is Transaction Fee`, `Bank Charge` | flag |
+| `interest` | no | `Interest`, `Interest Earning`, `Interest Earned`, `Is Interest Earning` | flag |
+| `bounce` | no | `Bounce`, `Bounced`, `Is Bounce` | flag |
+| `bouncedcharge` | no | `Bounced Charge`, `Bounce Charge`, `Is Bounced Charge` | flag |
+| `interaccounttransfer` | no | `Inter Account Transfer`, `Own Account Transfer`, `Is Inter Account Transfer` | flag |
+
+- **Dates** — a spreadsheet date cell, or text in `YYYY-MM-DD`, `DD/MM/YYYY`,
+  `DD-MM-YYYY`, `DD.MM.YYYY`, `DD/MM/YY` or `DD Mon YYYY` (e.g. `05 May 2025`).
+  Slashed dates are read day first.
+- **Amounts** — numbers; thousands separators, spaces and a leading currency code are
+  ignored. A negative or bracketed `(500.00)` amount is taken as its absolute value,
+  because the column already says which way the money moved. `0` and blank both
+  mean "no amount".
+- **Flags** — `1`, `yes`, `y`, `true`, `x` are true; anything else, or a missing
+  column, is false. They map to `is_transaction_fee`, `is_interest_earning`,
+  `is_bounce`, `is_bounced_charge` and `is_inter_account_transfer`, which the AI
+  would otherwise set.
+
+Derived fields in `result`:
+- `account_summary.opening_balance` / `closing_balance` — from the two balance rows.
+- `account_summary.statement_period.from` / `.to` — the earliest and latest
+  transaction `valuedate`.
+- `account_summary.account_number` / `account_name` — `null`; the template has no
+  account header.
+- `reconciliation.matches_account` — always `true`: a template upload belongs to
+  the account it is uploaded on. `statement_account_number` is `null`.
+
+Success response: same shape as §1, with `message` set to
+`"Bank statement imported successfully"`.
+
+`422 Unprocessable Entity` when the sheet is not in the template; the message names
+the problem and, for a bad cell, its spreadsheet row:
+```json
+{
+  "message": "Row 7: the value date \"31/13/2025\" is not a valid date.",
+  "errors": { "file": ["Row 7: the value date \"31/13/2025\" is not a valid date."] }
+}
+```
+Other `file` messages:
+- `The file could not be read as a spreadsheet.`
+- `The statement template is empty.`
+- `The statement template is missing the column(s): valuedate, balance.`
+- `The first row after the headings must be the Opening Balance row.`
+- `The last row must be the Closing Balance row.`
+- `Row 5: a transaction needs a money in or a money out amount.`
+- `Row 5: a transaction cannot have both a money in and a money out amount.`
+- `Row 5: the money in amount "abc" is not a number.`
+- `The statement has no transactions between the Opening and Closing Balance rows.`
+- `Row 2: the Opening Balance row needs an amount in the balance column.`
+- `Row 9: the value date is missing.`
 
 ### Not-legible response
 `200 OK` with empty data and an explanation:
