@@ -10,6 +10,8 @@ Base route:
 
 - `GET /leases` (list)
 - `POST /leases` (create)
+- `POST /leases/activation`: create an activation lease with its first invoice. See
+  [Activation leases](#activation-leases)
 - `GET /leases/{lease}` (show)
 - `PUT/PATCH /leases/{lease}` (update)
 - `DELETE /leases/{lease}` (delete)
@@ -35,6 +37,7 @@ Supported query params:
     property with it
   - `filter[user_id]`
   - `filter[status]`
+  - `filter[lease_type]` — **exact**: `standard` or `activation`
   - `filter[landlord_identifier]` — **exact**. `filter[search]` matches it too
   - `filter[created_at]`
   - `filter[start_at]`
@@ -177,6 +180,117 @@ created `active` with no chain.
 
 **Nothing changes until a template exists.** With no active template for `Lease`, leases are
 created `active` exactly as before, so this can be deployed ahead of the configuration.
+
+## Activation leases
+
+An activation lease is a short brand activation station, usually in a parking area. It has **no
+spaces, no term and no recurring billing**. Its charges are invoices raised by hand, and it has
+invoices, credit notes, receipts and a statement like any other lease. It is started from the
+Leases page ("Create Activation Lease") by anyone with `create-lease`.
+
+Every lease has a `lease_type`:
+
+| `lease_type.value` | Meaning |
+|---|---|
+| `standard` | A lease of spaces on a term, billed on its cycle. Every lease created through `POST /leases` |
+| `activation` | No spaces, term or billing cycle. Created through `POST /leases/activation` only |
+
+On an activation lease:
+
+- `status` is `active` straight away. There is no lease approval; its invoices still go through
+  invoice approval like any invoice raised by hand.
+- `start_at` is the day it was created, and `end_at`, `next_due_at` and `billing_cycle` are `null`.
+- **It ends when it is terminated** (`PATCH /leases/{lease}/terminate`, `terminate-lease`): status
+  `terminated`, `terminated_at` set. Nothing ends it on its own. A terminated lease still takes
+  invoices, credit notes and receipts, as any terminated lease does.
+- **Money on the lease page:** `total_billed` (everything billed to date), `total_collected`
+  (everything collected) and `current_arrears` (the difference) come back on `GET /leases/{lease}`
+  and on the list rows, for every lease type. The line-by-line history is the tenant statement.
+- `description` says what and where it is (e.g. "Activation station, basement parking B2").
+- No letting fee, no deposits, no escalations. It is never billed by the billing cycle and never
+  appears on the Unbilled Leases report.
+- `lease_items` holds one item with `facility_space` `null`: the lines its invoices bill, all at a
+  cost of 0. It is bookkeeping, not something to show; hide spaces and items for this type.
+
+### Create Activation Lease
+
+`POST /api/v1/app/{company}/property-management/lease-management/leases/activation`
+
+Creates the lease and its first invoice in one request. Needs `create-lease` and
+`create-facility-invoice`.
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `user_id` | Yes, unless `user` is sent | integer | The tenant (`users.id`) |
+| `user` | No | object | A tenant added inline, exactly as on Create Lease: `name`, `email`, `phone` (required), `has_vat`, `id_tax_pin` (required when `has_vat` is true). The new id is used as `user_id` |
+| `facility_id` | Yes | integer | The property |
+| `description` | No | string, up to 2000 | Printed as the first invoice's notes; `"Activation lease"` when empty |
+| `currency_id` | No | integer | Defaults to the property's reporting currency |
+| `due_at` | No | date (`YYYY-MM-DD`) | The first invoice's due date; today when omitted |
+| `items` | Yes, at least one | array | The first invoice's lines |
+| `items[].lease_component_id` | Yes | integer | Any active component, Rent, Service Charge and Deposit included (the same list as `GET /leases/{lease}/invoice-components`) |
+| `items[].amount` | Yes | number, > 0 | Excluding tax |
+| `items[].tax_id` | Yes | integer | |
+| `items[].notes` | No | string, up to 255 | Printed on the line; the component's name when empty |
+
+**Refused with a 422**, each under its own key with "An activation lease has no spaces, term or
+billing cycle.": `spaces`, `lease_items`, `facility_space_id`, `start_at`, `end_at`,
+`period_in_years`, `period_in_months`, `billing_cycle`, `next_due_at`.
+
+Example request:
+
+```json
+{
+  "user_id": 77,
+  "facility_id": 14,
+  "description": "Activation station, basement parking B2",
+  "items": [
+    { "lease_component_id": 1, "amount": 85000, "tax_id": 1, "notes": "November 2026" },
+    { "lease_component_id": 2, "amount": 12500, "tax_id": 1, "notes": "November 2026" },
+    { "lease_component_id": 11, "amount": 170000, "tax_id": 3, "notes": "2 months' rent" }
+  ]
+}
+```
+
+Example response (abridged):
+
+```json
+{
+  "message": "Activation lease created successfully",
+  "lease": {
+    "id": 412,
+    "user": { "id": 77, "name": "Wanjiru Kamau" },
+    "facility": { "id": 14, "name": "ACK Gardens" },
+    "lease_type": { "value": "activation", "color": "info" },
+    "description": "Activation station, basement parking B2",
+    "billing_cycle": null,
+    "status": { "value": "active", "color": "success" },
+    "start_at": { "raw": "2026-11-11", "formatted": "11 Nov, 2026" },
+    "end_at": { "raw": null, "formatted": null },
+    "next_due_at": { "raw": null, "formatted": null }
+  },
+  "invoice": {
+    "id": 9031,
+    "lease_id": 412,
+    "notes": "Activation station, basement parking B2",
+    "invoice_items": [ "...one per line..." ]
+  }
+}
+```
+
+### After it is created
+
+- **More invoices:** the normal Create Invoice screen (`POST /invoices` with
+  `items[].lease_component_id`). Any active component can be billed on an activation lease; see
+  [Invoices](invoices.md#components-a-manual-invoice-can-bill).
+- **Credit notes, receipts, statement:** as on any lease.
+- **Refused on an activation lease** (422): adding a space or lease item (`POST
+  /leases/{lease}/items`, error on `facility_space_id`), adding or pricing a lease item component
+  (error on `lease_component_id`), a deposit (`POST /leases/{lease}/deposits`) or an escalation
+  (`POST /leases/{lease}/escalations`), both with the error on `lease_id`, and the lease form
+  (`PUT/PATCH /leases/{lease}`, error on `lease_type`).
+- **Billing and Collections** lists it only for a period it billed, collected or owes in. See
+  [Billings and Collections](../reports/billings-and-collections.md).
 
 ## Update Lease
 

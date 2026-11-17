@@ -73,16 +73,31 @@ Supported query params:
   **document number**, not its id, since that is what appears on the document. Comma-separated, as
   the search box is. An unknown number returns nothing rather than everything.
 
-**Searching by number.** `filter[search]` takes a comma-separated list, and with more than one
-value it matches a bill id, an **invoice number** or a **CU invoice number** — the same box covers
-all three, so a pasted column of numbers works whichever of them the user copied:
+**Searching by number.** `filter[search]` takes a comma-separated list. Numbers match a bill id,
+an **invoice number**, a **CU invoice number**, the LPO the bill was raised from, or the bill's
+**final total** — the same box covers all of them, so a pasted column of numbers works whichever
+the user copied:
 
 ```
 filter[search]=56124,56123
 filter[search]=20482,20469
 ```
 
-A single value goes to the search engine, which also reads the notes and the supplier.
+**Searching by money: the final total only.** A money search never matches the amount before VAT,
+the VAT, the amount paid or the balance. For a bill of 10,000.00 + 1,600.00 VAT = 11,600.00:
+
+```
+filter[search]=11600            finds it (total)
+filter[search]=KES 11,600.00    finds it (currency and decimals ignored)
+filter[search]=10000            does not find it (amount before VAT)
+filter[search]=1600             does not find it (VAT)
+filter[search]=11,600           the list 11 and 600, not the amount: type amounts without commas
+```
+
+Accepted formats, the comma rule and the sign rule are in
+[Searching by money](../searching-and-sorting.md#searching-by-money-the-final-total-only).
+Any other value (text, or text with numbers) goes to the search engine, which also reads the notes
+and the supplier.
 
 **Ids, `status` and `type` match exactly.** They were partial until 2026-09-29, so
 `filter[status]=paid` also returned `unpaid` and `partially-paid`, and `filter[facility_id]=6`
@@ -100,7 +115,39 @@ Every date filter also takes a range, `filter[created_between]=2026-09-01,2026-0
     the bills someone needs to look at
   - `filter[invoice_verification_status]` — `verified`, `not_verified` or `rejected`, the manual
     check, one or several comma-separated. See [Verify invoice](#verify-invoice)
+  - `filter[upload_status]` — `uploaded` or `not-uploaded`. See [Upload status](#upload-status)
   - Date-range filters: `filter[invoice_date]`, `filter[created_at]`, `filter[invoice_uploaded_at]`, `filter[expense_posted_at]` — see [Date-range filtering](#date-range-filtering)
+
+### Upload status
+
+`filter[upload_status]` narrows the list by whether the supplier's invoice file is attached, the
+same thing the row shows:
+
+| Value | Returns |
+| --- | --- |
+| `uploaded` | bills with their invoice file (`invoice_upload` is not null) |
+| `not-uploaded` | bills with no file, including bills whose file was deleted since (`invoice_upload` is null) |
+| left out, or empty | all bills |
+
+It follows the **file**, not `invoice_uploaded_at`: a bill can carry an upload date without a file,
+or a file without a date, and the filter agrees with the row in both cases. It combines with
+`filter[search]`, sorting, paging and every other filter, and the pagination links keep it.
+
+Any other value, including `not_uploaded`, a capitalised value or both values together, returns
+422:
+
+```json
+{
+  "message": "Upload status must be uploaded or not-uploaded.",
+  "errors": {"filter.upload_status": ["Upload status must be uploaded or not-uploaded."]}
+}
+```
+
+```text
+GET {{pmUrl}}/finance/bills?filter[upload_status]=uploaded
+GET {{pmUrl}}/finance/bills?filter[upload_status]=not-uploaded&filter[facility_id]=61
+GET {{pmUrl}}/finance/bills?filter[upload_status]=not_uploaded        -> 422
+```
 
 ### Invoice and CU validation
 

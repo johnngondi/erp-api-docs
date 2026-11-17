@@ -46,13 +46,17 @@ GET /tenant/billing/invoices?filter[status]=partially%20paid
 
 `search` has special behavior:
 
-1. Comma-separated numeric list (no spaces required): treats each value as exact invoice reference.
-Input format: `number,number,number`
+1. Numbers only, one or comma-separated: an exact match on the invoice id, CU numbers or the
+**final total** (never the amount before VAT or the VAT). An amount written as money
+(`KES 11,600.00`, `11600.00`) matches the total alone; a comma otherwise separates values. See
+[Searching by money](../app/property-management/searching-and-sorting.md#searching-by-money-the-final-total-only).
+Input format: `number`, `number,number,number` or an amount
 
 Example:
 
 ```http
 GET /tenant/billing/invoices?filter[search]=1,2,3
+GET /tenant/billing/invoices?filter[search]=11600
 ```
 
 2. Comma-separated CU invoice codes (letters + digits), exact match.
@@ -64,14 +68,13 @@ Example:
 GET /tenant/billing/invoices?filter[search]=INV100,INV200
 ```
 
-3. Any single value (text, number, phrase) uses normal text search.
+3. Any other value (text, phrase, text with numbers) uses normal text search.
 Input format: any string
 
 Examples:
 
 ```http
 GET /tenant/billing/invoices?filter[search]=Collins
-GET /tenant/billing/invoices?filter[search]=15000
 ```
 
 ### Supported sorts
@@ -132,13 +135,17 @@ GET /tenant/billing/credit-notes?filter[status]=cancelled
 
 `search` has special behavior:
 
-1. Comma-separated numeric list (no spaces required): treats each value as exact credit note reference.
-Input format: `number,number,number`
+1. Numbers only, one or comma-separated: an exact match on the credit note id, CU numbers or the
+**final total** (never the amount before VAT or the VAT). An amount written as money
+(`KES 11,600.00`, `11600.00`) matches the total alone; a comma otherwise separates values. See
+[Searching by money](../app/property-management/searching-and-sorting.md#searching-by-money-the-final-total-only).
+Input format: `number`, `number,number,number` or an amount
 
 Example:
 
 ```http
 GET /tenant/billing/credit-notes?filter[search]=1,2,3
+GET /tenant/billing/credit-notes?filter[search]=11600
 ```
 
 2. Comma-separated code list (letters + digits), exact match.
@@ -154,14 +161,13 @@ Example:
 GET /tenant/billing/credit-notes?filter[search]=INV100,REF200
 ```
 
-3. Any single value (text, number, phrase) uses normal text search.
+3. Any other value (text, phrase, text with numbers) uses normal text search.
 Input format: any string
 
 Examples:
 
 ```http
 GET /tenant/billing/credit-notes?filter[search]=Collins
-GET /tenant/billing/credit-notes?filter[search]=15000
 ```
 
 ### Supported sorts

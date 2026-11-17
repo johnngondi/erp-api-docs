@@ -72,7 +72,7 @@ Sample list response (`FacilityPaymentVoucherResource`). `public_url` is the vou
         "diff": "2 days ago"
       },
       "status": { "value": "released", "color": "info" },
-      "payable_user": { "id": 7, "name": "Acme Vendor" },
+      "payable_user": { "id": 7, "name": "Acme Vendor", "phone": null, "email": "accounts@acme.example.com" },
       "credit_bank_account": { "id": 13, "account_name": "Operations Account" },
       "currency": { "id": 1, "code": "KES" },
       "items": [
@@ -90,6 +90,23 @@ Sample list response (`FacilityPaymentVoucherResource`). `public_url` is the vou
       }
     }
   ]
+}
+```
+
+### Payee contact
+
+`payable_user` is the payee: the user the voucher pays (supplier, landlord, tenant). On the list and
+on `GET /payment-vouchers/{paymentVoucher}` it always carries **`phone`** and **`email`**, read from
+that user. Each is `null` when the payee has none; show "-". Elsewhere a user's missing fields are
+left out of the response, but on a voucher these two are always present.
+
+```json
+"payable_user": {
+  "id": 289,
+  "name": "Sparkle Cleaning Services Ltd",
+  "email": "accounts@sparkle.example.com",
+  "phone": null,
+  "profile_photo_url": "https://ui-avatars.com/api/?name=S+C+S+L&color=7F9CF5&background=EBF4FF"
 }
 ```
 

@@ -1093,7 +1093,7 @@ Render your table columns from this array, **in order**. Each field:
 |---|---|---|
 | `label` | string | Column header text. |
 | `key` | string | Matches the property holding the cell in each `items` row. Stable machine id (derived from the entity id, not its name). |
-| `format` | `string` \| `id` \| `integer` \| `money` | Drives value formatting. See [Formats](#formats). |
+| `format` | `string` \| `id` \| `integer` \| `money` \| `number` | Drives value formatting. See [Formats](#formats). |
 | `type` | `normal` \| `subtotal` \| `grosstotal` | Visual role of the column. See [Field & row type](#field--row-type). Default `normal`. |
 | `weight` | Tailwind font weight | e.g. `font-normal`, `font-medium`, `font-bold`. Default `font-normal`. |
 | `background_color` | color enum | Tints the **whole column**. See [Colors](#colors). Default `none`. |
@@ -1185,6 +1185,7 @@ Three placements share **one color palette**, so a dev learns the meanings once:
 | `id` | An identifier — a database id or a document number. **Print it exactly as given.** Left-align. |
 | `integer` | A whole number you can count or sum. Group the thousands. |
 | `money` | Decimal amount in **currency units** (not cents), formatted with the `header` currency. Right-align. |
+| `number` | A decimal that is not money — hours, rates. Two decimal places, grouped thousands, **no currency**. Right-align. Used by Workflow Performance's turnaround columns. |
 
 **`id` and `integer` are both whole numbers and must not be rendered alike.** `integer` counts
 things — 1,234 units — and reads better grouped. `id` names one thing, and grouping it produces

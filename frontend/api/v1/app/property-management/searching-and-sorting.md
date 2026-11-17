@@ -21,9 +21,9 @@ GET /.../resource?filter[search]=...&filter[status]=...&sort=-created_at&per_pag
 `filter[search]` is answered by the search engine **and** by a direct ID match, not one or the
 other. A numeric term matches any record whose ID it is, on top of whatever the engine returns.
 
-This applies to leases, procurement requests, LPOs and remittances. Bills, invoices, credit
-notes, receipts and payment vouchers answer a number search exactly instead: see
-[Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
+This applies to leases, procurement requests and remittances. Bills, invoices, credit notes,
+expenses, LPOs, procurement bids, receipts and payment vouchers answer a number search exactly
+instead: see [Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
 
 Two consequences worth knowing:
 
@@ -41,27 +41,27 @@ nothing that used to be found stops being found.
 
 ## Searching by number: bills, invoices, credit notes, receipts and vouchers
 
-On these five listings, a `filter[search]` made **only of digits** is answered exactly, by the
+On these listings, a `filter[search]` made **only of digits** is answered exactly, by the
 database. The search engine is not asked. Each number returns every record that matches it in any
 of these ways:
 
 | Listing | A number matches |
 |---|---|
-| Bills (`/finance/bills`) | the id · `amount` (before tax) · `total` · `invoice_number` · `tax_invoice_number` (CU number) · bills raised from the LPO with that id or document number |
-| Invoices (`/lease-management/invoices`) | the id · `amount` (before tax) · `total` · `cu_invoice_number` · `cu_reference_number` |
-| Credit notes (`/lease-management/credit-notes`) | the id · `amount` (before tax) · `total` · `cu_invoice_number` · `cu_reference_number` |
+| Bills (`/finance/bills`) | the id · `total` · `invoice_number` · `tax_invoice_number` (CU number) · bills raised from the LPO with that id or document number |
+| Expenses (`/finance/expenses`) | the id · `total` · `invoice_number` · `tax_invoice_number` |
+| Invoices (`/lease-management/invoices`) | the id · `total` · `cu_invoice_number` · `cu_reference_number` |
+| Credit notes (`/lease-management/credit-notes`) | the id · `total` · `cu_invoice_number` · `cu_reference_number` |
+| LPOs (`/procurement/lpos`) | the id · `total` · `document_number` |
+| Procurement bids (`/procurement/requests/{procurementRequest}/bids`) | the id · `total` |
 | Receipts (`/lease-management/receipts`) | the id · `amount` · `transaction_number` |
 | Payment vouchers (`/finance/payment-vouchers`) | the id · `amount` · `payment_advice_number` · `transaction_number` |
 
-- **Exact, not "contains".** `50000` finds a bill worth 50,000.00 and the bill numbered `50000`,
-  never one worth 500,001 or numbered `INV-50000`. Amounts are matched as whole numbers. Document
-  numbers are compared as typed, so a leading zero counts.
+- **Exact, not "contains".** `50000` finds a bill whose total is 50,000.00 and the bill numbered
+  `50000`, never one worth 500,001 or numbered `INV-50000`. Document numbers are compared as typed,
+  so a leading zero counts.
 - **Everything that matches, together.** The record with that id comes back *with* the records
   worth that amount, not instead of them.
-- **A comma still separates values.** `50000,75000` matches each number the same way. So type
-  `50000`, not `50,000`, for fifty thousand: `50,000` searches for 50 and for 0.
-- **Anything else is a text search**, unchanged: `INV-50000`, `acme`, `50000.50`, or a number mixed
-  with words.
+- **A comma still separates values.** `50000,75000` matches each number the same way.
 - The listing's other filters still apply, so `filter[facility_id]` narrows a number search as usual.
 - The same rule applies on the tenant, vendor and landlord portals' versions of these listings.
 
@@ -69,6 +69,65 @@ of these ways:
 GET /finance/bills?filter[search]=50000
 GET /lease-management/receipts?filter[search]=1205
 GET /lease-management/invoices?filter[search]=50000,75000
+```
+
+## Searching by money: the final total only
+
+Bills, expenses, invoices, credit notes, LPOs and procurement bids carry an amount before VAT, the
+VAT, and the final total. A money search matches **the final total only**. The amount before VAT,
+the VAT (`tax`), the amount paid and the balance are never matched. Receipts and payment vouchers
+carry no VAT: their `amount` is their total.
+
+Take a bill of KES 10,000.00 before VAT, KES 1,600.00 VAT, KES 11,600.00 total:
+
+| `filter[search]` | Finds the bill? | Why |
+|---|---|---|
+| `11600` | Yes | the total |
+| `KES 11,600.00` | Yes | currency and decimals are ignored |
+| `10000` | No | the amount before VAT is not searched |
+| `1600` | No | the VAT is not searched |
+| `11,600` | No (by amount) | a comma separates values: this is the list 11 and 600 |
+
+**Type amounts without commas.** A comma in the search box separates values, because that is how
+a list of ids is searched: `11,600` is the list 11 and 600, each matched as a plain number (the
+record with that id, that document number, or that total). It is never eleven thousand six hundred.
+
+**Formats read as money.** A plain number (`11600`) matches the record with that id or document
+number, or the total. Written with a currency code or symbol (`KES`, `KSh`, `Ksh.`, `Shs`, `USD`,
+`$`, `€`, `£` and the other codes in use), decimals (up to five places), a minus sign or a trailing
+`/=`, the term can only be an amount: there, spaces and thousands commas are ignored. These all
+search for 11,600.00:
+
+```
+11600   11600.00   11,600.00   KES 11600   KES 11,600   KSh11600   Ksh. 11,600/=   11600 KES   11 600
+```
+
+- **Compared as shown.** The total is compared rounded to two decimal places, and without its
+  sign: a credit note stored as -11,600.00 is found by `11600` (and by `-11,600`).
+- **Written as money, it is only an amount.** `KES 11,600` or `11600.00` matches the total alone,
+  never an id or a document number.
+- **A list is several plain numbers.** `12,15,19` matches each number the way `12` alone would:
+  ids, document numbers or totals.
+- **Anything else is a text search**, unchanged: `INV-11600`, `acme`, or a number mixed with
+  words (`acme 11600`). Names, references, suppliers, tenants and properties are searched as
+  before.
+- These listings have no export, so there is no export to keep in step.
+
+Affected endpoints (staff app, under `/api/v1/app/{company}/property-management`, plus the portals):
+
+| Listing | Endpoint |
+|---|---|
+| Bills | `GET /finance/bills` · vendor `GET /api/v1/vendor/finance/bills` |
+| Expenses | `GET /finance/expenses` · landlord `GET /api/v1/landlord/facilities/{facility}/expenses` |
+| Invoices | `GET /lease-management/invoices` · tenant `GET /api/v1/tenant/billing/invoices` |
+| Credit notes | `GET /lease-management/credit-notes` · tenant `GET /api/v1/tenant/billing/credit-notes` |
+| LPOs | `GET /procurement/lpos` · vendor `GET /api/v1/vendor/procurement/lpos` |
+| Procurement bids | `GET /procurement/requests/{procurementRequest}/bids` · vendor `GET /api/v1/vendor/procurement/rfq/quotes` |
+
+```http
+GET /finance/bills?filter[search]=11600
+GET /finance/expenses?filter[search]=KES%2011%2C600.00
+GET /lease-management/credit-notes?filter[search]=11600
 ```
 
 ## Invoice (`/lease-management/invoices`)
@@ -101,9 +160,12 @@ GET /lease-management/invoices?filter[status]=partially%20paid
 
 `search` has special behavior:
 
-1. Numbers only, one or comma-separated: an exact match on the id, amount, total, CU invoice
-number or CU reference number. See [Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
-Input format: `number` or `number,number,number`
+1. Numbers only, one or comma-separated: an exact match on the id, the final total, the CU invoice
+number or the CU reference number (never the amount before VAT or the VAT). See
+[Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
+An amount written as money (`KES 11,600`, `11600.00`) matches the total alone: see
+[Searching by money](#searching-by-money-the-final-total-only).
+Input format: `number`, `number,number,number` or an amount
 
 Example:
 
@@ -188,9 +250,12 @@ GET /lease-management/credit-notes?filter[status]=cancelled
 
 `search` has special behavior:
 
-1. Numbers only, one or comma-separated: an exact match on the id, amount, total, CU invoice
-number or CU reference number. See [Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
-Input format: `number` or `number,number,number`
+1. Numbers only, one or comma-separated: an exact match on the id, the final total, the CU invoice
+number or the CU reference number (never the amount before VAT or the VAT). See
+[Searching by number](#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
+An amount written as money (`KES 11,600`, `11600.00`) matches the total alone: see
+[Searching by money](#searching-by-money-the-final-total-only).
+Input format: `number`, `number,number,number` or an amount
 
 Example:
 
@@ -838,13 +903,16 @@ GET /procurement/requests/10/bids?filter[status]=selected
 
 `search` has special behavior:
 
-1. Comma-separated numeric list (no spaces required): exact match by bid IDs.
-Input format: `number,number,number`
+1. Numbers only, one or comma-separated: an exact match on the bid id or the final total (never
+the amount before discount or VAT). An amount written as money (`KES 11,600`, `11600.00`) matches
+the total alone. See [Searching by money](#searching-by-money-the-final-total-only).
+Input format: `number`, `number,number,number` or an amount
 
 Example:
 
 ```http
 GET /procurement/requests/10/bids?filter[search]=1,2,3
+GET /procurement/requests/10/bids?filter[search]=11600
 ```
 
 2. Any other single value (text/number/phrase) uses normal text search.
@@ -852,8 +920,6 @@ Input format: any string
 
 Search covers:
 - bid ID
-- amount
-- total
 - notes
 - status
 - delivery date
@@ -928,13 +994,17 @@ GET /procurement/lpos?filter[status]=delivered
 
 `search` has special behavior:
 
-1. Comma-separated numeric list (no spaces required): exact match by LPO IDs.
-Input format: `number,number,number`
+1. Numbers only, one or comma-separated: an exact match on the LPO id, the document number or the
+final total (never the amount before discount or VAT). An amount written as money
+(`KES 11,600`, `11600.00`) matches the total alone. See
+[Searching by money](#searching-by-money-the-final-total-only).
+Input format: `number`, `number,number,number` or an amount
 
 Example:
 
 ```http
 GET /procurement/lpos?filter[search]=1,2,3
+GET /procurement/lpos?filter[search]=KES%2011%2C600
 ```
 
 2. Any other single value (text/number/phrase) uses normal text search.
@@ -944,8 +1014,6 @@ Search covers:
 - LPO ID
 - document number
 - notes
-- amount
-- total
 - status
 - delivery date
 - delivered date

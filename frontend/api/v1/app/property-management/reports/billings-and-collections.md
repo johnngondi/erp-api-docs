@@ -92,6 +92,17 @@ Rules, `422`s and the add-up guarantee:
 [Splitting by block / wing / floor](./README.md#splitting-by-block--wing--floor). The pickers
 are filled from [`GET …/reports/filter-options/structure`](./README.md#picking-blocks-wings-and-floors).
 
+### Activation leases
+
+An activation lease (`lease_type` `activation`: no spaces, billed only by invoices raised by hand;
+see [Activation leases](../lease-management/leases.md#activation-leases)) is a row **only for a
+period it moved in**: it was billed something in the period, collected something in it, or closes
+the period with a balance (owing or in credit). When all three are zero it is left out of every
+bucket, of `summary.lease_count` and every total, and of the export, so the tables, totals and file
+always agree. A standard lease is listed as before, zero row or not.
+
+It has no space, so it is out of every block / wing / floor run, like any lease with no space.
+
 ---
 
 ## The buckets

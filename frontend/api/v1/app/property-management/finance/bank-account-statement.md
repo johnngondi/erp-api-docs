@@ -8,7 +8,7 @@ Base route:
 
 A bank account statement is the running cashbook of a single bank account: the money received into
 it and the money paid out of it. It is **read-only** and assembled on the fly from the transaction
-lines recorded as receipts and payment vouchers are processed (see
+lines recorded as receipts and payment vouchers are processed and bank transfers are made (see
 [How lines are recorded](#how-statement-lines-are-recorded)).
 
 ## Endpoints
@@ -228,14 +228,17 @@ a cashbook is single-currency because the account is.
 
 ## How statement lines are recorded
 
-Lines are written automatically as part of the receipt/voucher lifecycle — there is no endpoint to
-create them directly. Recording is **idempotent**: a receipt or voucher that has already produced a
+Lines are written automatically as part of the receipt/voucher lifecycle and by
+[bank transfers](bank-transfers.md) — there is no endpoint to create a line directly. Recording is **idempotent**: a receipt or voucher that has already produced a
 line is skipped, so re-processing never double-posts.
 
 | Event | Line | Account | Source (`transaction`) | `facility` / `payee` | Notes format |
 |---|---|---|---|---|---|
 | Receipt processed | debit = receipt amount | the receipt's `receiving_account_id` | the `FacilityReceipt` | the receipt's property and paying user | `Receipt#{id} - {transaction_date} - {paying user} - {property}` |
 | Payment voucher released | credit = voucher amount | the voucher's `debit_bank_account_id` | the `FacilityPaymentVoucher` | the voucher's payable user, and the property of the items it settles | `PV#{id} - {payable_as} - {receiving user}` |
+| Bank transfer recorded | credit = transfer amount | the transfer's From account | the `BankTransfer` | none | `Transfer {reference} to {account}` |
+| Bank transfer recorded | debit = transfer amount | the transfer's To account | the `BankTransfer` | none | `Transfer {reference} from {account}` |
+| Bank transfer reversed | debit / credit, the opposite of the two above | From / To | the same `BankTransfer` | none | `Reversal of transfer {reference} to / from {account}` (`refference_number` `{reference}-REV`) |
 
 `refference_number` carries the source `transaction_number`, and `transaction_at` is set when the
 receipt is processed / the voucher is released (paid). A receipt with no receiving account, or a
@@ -244,6 +247,9 @@ voucher with no debit bank account, produces no line.
 A voucher has no property of its own — it is settling items, and both payable types (bills and
 remittances) carry one. The line is attributed to a property only when **every** item on the
 voucher points at that same property; a voucher spread across properties gets `facility: null`.
+
+A transfer's two lines share its `reference` and its `transaction` (`{"type": "BankTransfer", "id": …}`),
+so either side leads to the other. See [Bank transfers](bank-transfers.md).
 
 Lines booked straight to the cashbook from a bank statement (bank charges, interest — see
 [Bank statement reconciliation](bank-statement-reconciliation.md)) have no source document, so

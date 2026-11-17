@@ -28,8 +28,11 @@ Supported query params:
 
 - Filters:
   - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers). Numbers only are
-    matched exactly on the id, amount, total, invoice number, CU number and LPO, as in the
+    matched exactly on the id, final total, invoice number, CU number and LPO, as in the
     [staff listing](../../app/property-management/searching-and-sorting.md#searching-by-number-bills-invoices-credit-notes-receipts-and-vouchers).
+    A money search (`11600`, `KES 11,600.00`; a comma separates values, so type amounts without one) matches the final total only, never the amount
+    before VAT or the VAT: see
+    [Searching by money](../../app/property-management/searching-and-sorting.md#searching-by-money-the-final-total-only).
   - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_category_id]`, `filter[type]`, `filter[status]`
   - `filter[contract_id]` — bills raised against a given contract (`facility_contracts.id`)
   - Date-range filters: `filter[invoice_date]`, `filter[created_at]`, `filter[invoice_uploaded_at]`, `filter[expense_posted_at]` — see [Date-range filtering](#date-range-filtering)

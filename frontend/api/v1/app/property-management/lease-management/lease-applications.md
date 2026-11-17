@@ -748,6 +748,7 @@ Every update re-runs the guarantor's FRC name check, whatever changed.
 |---|---|---|
 | `id` | integer | |
 | `name` | string | |
+| `source` | string \| null | `combined_scan` when the applicant's combined scan created the card (from an ID in the scan that isn't the applicant's, or the application form's guarantors section; phone and email copied from the form when it gives them); `null` when typed in. See [the combined scan](lease-application-links.md#guarantors-found-in-the-scan) |
 | `email_address` | string \| null | |
 | `phone_number` | string | |
 | `registration_type` | string \| null | `national_id`, `business_license` or `passport` |
@@ -767,6 +768,7 @@ Every update re-runs the guarantor's FRC name check, whatever changed.
 {
   "id": 7,
   "name": "Jane Guarantor",
+  "source": null,
   "email_address": "jane@acme.test",
   "phone_number": "+254700000000",
   "registration_type": "national_id",

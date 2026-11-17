@@ -87,6 +87,7 @@ The [global filters](./README.md#global-filters) plus one:
 | `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 | `tax_id` | `taxes.id` | All taxes |
 | `etr_status` | `signed` \| `not signed` | Signed and not signed |
+| `tax_status` | `taxable` \| `exempt` | Taxable and exempt |
 | `facility_block_ids` / `facility_wing_ids` / `facility_floor_ids` | lists of `facility_blocks.id` / `facility_wings.id` / `facility_floors.id` | The whole property — only with exactly one property selected; see [below](#blocks-wings-and-floors) |
 
 `tax_id` narrows to **documents carrying at least one line on that tax**; the row still shows the
@@ -104,8 +105,24 @@ Any other value, `failed` included, returns `422`. It is a flat query param like
 `filter[etr_status]`. The subtotal and `summary` follow it, and `header.filters.etr_status` echoes
 it (`null` when omitted).
 
+`tax_status` splits on the **document's overall tax**, read from the amount and never from a tax's
+name or rate:
+
+| Dropdown | Query | Keeps |
+|---|---|---|
+| All | *(omit the param)* | every document |
+| Taxable | `tax_status=taxable` | documents whose VAT is not zero, positive or negative |
+| Exempt | `tax_status=exempt` | documents whose VAT is zero, whichever 0% tax they use. Zero-rated counts as Exempt |
+
+A document is in one group only, with its full amounts, so Taxable plus Exempt always equals All. An
+invoice with a 16% line and a 0% line is Taxable as a whole. The amount is compared at the two
+decimals the report shows. Credit notes follow the same rule. Any other value returns `422`. It is a
+flat query param like `etr_status`. The buckets, subtotal, `summary` and exports follow it, and
+`header.filters.tax_status` echoes it (`null` when omitted).
+
 ```
 GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&tax_id=1
+GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&tax_status=taxable
 GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&etr_status=signed
 ```
 

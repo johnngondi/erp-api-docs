@@ -51,6 +51,15 @@ Base prefix:
   - `docs/frontend/app/property-management/lease-management/lease-opening-balances.md`
   - `docs/frontend/app/property-management/lease-management/charges-imports.md`
 
+## Rules that span pages
+
+- **ETR signing is current-month only.** An invoice is signed on the ETR only in the month of its
+  approval date (`created_at`, which Backdate moves), read in the company's timezone
+  (`companies.timezone`, default `Africa/Nairobi`). Out of the month, `POST .../invoices/{invoice}/sign`
+  answers `422` with `code: "etr_period_closed"`, and every invoice carries `etr_signing` for the
+  Sign button. To sign a missed invoice, change its date to this month first. Credit notes and
+  customer invoices are not affected. See `lease-management/invoices.md`, "Current month only".
+
 Apply shared auth, tenancy, and error handling guidance from:
 
 - `docs/frontend/app/README.md`

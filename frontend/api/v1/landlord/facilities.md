@@ -43,7 +43,9 @@ Base route:
 
 ### Filters
 
-- `filter[search]`
+- `filter[search]` — numbers match the id, invoice numbers and the **final total** only (never
+  the amount before VAT, the VAT, paid or balance); `11600` and `KES 11,600.00` are read as money (a comma separates values).
+  See [Searching by money](../app/property-management/searching-and-sorting.md#searching-by-money-the-final-total-only).
 - `filter[expense_type_id]`
 - `filter[vendor_id]`
 - `filter[status]`

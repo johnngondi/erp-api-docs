@@ -393,6 +393,12 @@ The 422 is keyed to the item:
 A lease with no spaces at all answers 422 on `lease_id`, since there is nothing to bill against. An
 inactive catalogue component answers 422 on its item.
 
+An **activation lease** (`lease_type` `activation`, see [Activation leases](leases.md#activation-leases))
+is the exception to the whole table: it has no spaces and no billing cycle, so **any active
+component** can be invoiced on it, Rent, Service Charge, Parking, Signage and Deposit included. Its
+lines sit on one lease item with no space, at a cost of `0`, and `invoice-components` returns every
+component with `selectable: true` and `facility_space: null`.
+
 ### Which leases can be invoiced
 
 A manual invoice can be raised on an `active`, `suspended` or `terminated` lease. A `pending` or
@@ -727,6 +733,41 @@ When to show the action: `permissions.sign` on the invoice resource is `true`. I
 - the invoice is `pending` (awaiting approval), `cancelled` or `rejected`
 - the invoice is already signed (`cu_invoice_number` is set)
 
+### Current month only
+
+An invoice can be ETR signed **only in the month it is dated**. Previous-month and future-month
+invoices are refused, even through a direct API call.
+
+- **The date** is the invoice's approval date, `created_at`: the date the list and the PDF show.
+  Changing the invoice date ([Backdate](#change-invoice-date-backdate)) moves it, so a backdated
+  invoice is judged by its new date.
+- **The month** is read in the company's timezone (`companies.timezone`, `Africa/Nairobi` when it is
+  not set). An invoice approved at 23:30 on 31 October in Nairobi is an October invoice.
+- **Missed the month end?** Change the invoice date to a day in the current month (Backdate takes
+  any date up to today), then sign. There is no grace period.
+- **Not affected:** credit notes and customer invoices keep their own signing rules.
+
+Every invoice (list rows and the view) carries `etr_signing`:
+
+```json
+"etr_signing": {
+  "in_period": false,
+  "period": "2026-10",
+  "current_period": "2026-11",
+  "message": "Only current-month invoices can be ETR signed. Change the invoice date to this month, then sign it."
+}
+```
+
+`permissions.sign` still answers permission, status and already-signed, and is unchanged by the
+month. Show the Sign button when `permissions.sign` is `true`, and **grey it out with `message`**
+when `etr_signing.in_period` is `false`.
+
+**Bulk sign** (the list loops over the selection; there is no bulk endpoint): send only the rows
+with `etr_signing.in_period: true`, and report the others as skipped with their `period`. If no
+row is in the month, send nothing and show `message`. A request for an out-of-month invoice that
+does reach the API is refused with `code: "etr_period_closed"` (below), so it can be counted as
+skipped rather than failed.
+
 Signing runs as a queued job. On a synchronous queue (the default locally) the request returns after the device answers; on a real queue it returns straight away and the CU fields fill in once the job runs. Refetch the invoice (or poll `GET /invoices/{invoice}`) until `etr_signed_at` or `etr_error` is set.
 
 Success response (`200`):
@@ -757,6 +798,7 @@ Errors:
 | Status | When | Body |
 |---|---|---|
 | `403` | `permissions.sign` is `false` | standard forbidden response |
+| `422` | The invoice is not dated in the current month (`etr_signing.in_period` is `false`). Checked after the `403` rules | `{ "message": "...", "code": "etr_period_closed", "errors": { "invoice": ["<message>"] }, "etr_signing": {...} }` |
 | `422` | The device refused the invoice, could not be reached, or the invoice cannot be signed as it stands | `{ "message": "...", "errors": { "etr": ["<reason>"] } }` |
 
 Typical `errors.etr` reasons:
@@ -777,6 +819,18 @@ ETR fields on the invoice resource:
 | `cu_invoice_verify_url` | string\|null | KRA verification URL (render as a QR code) |
 | `etr_signed_at` | object\|null | `{ raw, formatted, diff }` when the system signed it |
 | `etr_error` | string\|null | Reason the last signing attempt failed |
+| `etr_signing` | object | `{ in_period, period, current_period, message }`. See [Current month only](#current-month-only) |
+
+Out-of-month refusal (`422`):
+
+```json
+{
+  "message": "Only current-month invoices can be ETR signed. Change the invoice date to this month, then sign it.",
+  "code": "etr_period_closed",
+  "errors": { "invoice": ["Only current-month invoices can be ETR signed. Change the invoice date to this month, then sign it."] },
+  "etr_signing": { "in_period": false, "period": "2026-10", "current_period": "2026-11", "message": "Only current-month invoices can be ETR signed. Change the invoice date to this month, then sign it." }
+}
+```
 
 ## Delete Invoice
 

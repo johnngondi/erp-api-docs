@@ -56,7 +56,13 @@ The response field `reverses_expense_id` is `null` on every expense except a rev
 Supported query params:
 
 - Filters:
-  - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers)
+  - `filter[search]` (Scout-backed search; supports CSV IDs and invoice numbers). Numbers are
+    matched exactly on the id, invoice number, tax invoice number and **final total**. A money search
+    matches the total only, never the amount before VAT, the VAT, the paid amount or the balance:
+    for 10,000.00 + 1,600.00 VAT = 11,600.00, `11600` and `KES 11,600.00` find the expense while
+    `10000` and `1600` do not. A comma separates values (`11,600` is the list 11 and 600), so
+    type amounts without commas. See
+    [Searching by money](../searching-and-sorting.md#searching-by-money-the-final-total-only).
   - `filter[facility_id]`, `filter[vendor_id]`, `filter[expense_type_id]`, `filter[expense_category_id]`, `filter[status]`
 
 **Ids, `status` and `type` match exactly.** They were partial until 2026-09-29, so

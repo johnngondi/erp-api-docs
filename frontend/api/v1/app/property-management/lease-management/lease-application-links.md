@@ -200,7 +200,7 @@ re-render from any reply. The first `GET` marks the link as opened.
     ],
     "combined_document": null,
     "guarantor_documents": [ { "type": "id", "label": "National ID or passport", "required": true, "hint": "Both sides", "uploaded": null } ],
-    "guarantors": [ { "id": 51, "full_name": "Peter Otieno", "id_number": "12345678", "phone": "+254700111222", "documents": [ { "type": "id", "label": "…", "required": true, "hint": "…", "uploaded": null } ] } ],
+    "guarantors": [ { "id": 51, "full_name": "Peter Otieno", "id_number": "12345678", "phone": "+254700111222", "source": null, "documents": [ { "type": "id", "label": "…", "required": true, "hint": "…", "uploaded": null } ] } ],
     "declaration_accepted_at": null,
     "missing": ["Upload the CR12 (company directors & shareholding).", "Add at least one guarantor."]
   }
@@ -297,6 +297,9 @@ After a combined PDF is uploaded, it's split into its documents in the backgroun
    verified as usual.
 3. Pages that match nothing asked for (an application form, a page the model couldn't place) go
    into one `other` document, so nothing is lost. **The combined file stays saved.**
+4. Every guarantor the scan brings who has no card yet gets one: anyone other than the applicant
+   whose ID is in it, and anyone the application form's guarantors section lists (see
+   [Guarantors found in the scan](#guarantors-found-in-the-scan)).
 
 Progress is on the page (and on the staff application) as `combined_scan`:
 
@@ -304,12 +307,16 @@ Progress is on the page (and on the staff application) as `combined_scan`:
 "combined_scan": {
   "status": "done",
   "error": null,
-  "pages": 5,
+  "pages": 6,
   "documents": [
     { "type": "id", "label": "National ID or passport", "guarantor": null, "pages": [1], "page_range": "page 1" },
     { "type": "tax_pin", "label": "KRA PIN certificate", "guarantor": null, "pages": [2], "page_range": "page 2" },
     { "type": "id", "label": "National ID or passport", "guarantor": 1, "pages": [4], "page_range": "page 4" },
-    { "type": "other", "label": "Other pages", "guarantor": null, "pages": [5], "page_range": "page 5" }
+    { "type": "id", "label": "National ID or passport", "guarantor": 2, "pages": [5], "page_range": "page 5" },
+    { "type": "other", "label": "Other pages", "guarantor": null, "pages": [3, 6], "page_range": "pages 3, 6" }
+  ],
+  "added_guarantors": [
+    { "guarantor": 2, "name": "Chausiku Wanjiru" }
   ]
 }
 ```
@@ -321,9 +328,40 @@ Progress is on the page (and on the staff application) as `combined_scan`:
 | `failed` | `error` says why: unreadable, more than **100 pages**, or the reader was unavailable | The error; staff will sort the scan by hand, and the applicant can still submit |
 
 `null` until a combined scan is uploaded. A new combined scan re-runs the split and takes back what
-the earlier one filed, but not a slot someone has since replaced with their own file. Add the
-guarantor cards (name, ID, phone) **before** uploading the combined scan, so their documents can be
-matched to them.
+the earlier one filed, but not a slot someone has since replaced with their own file.
+
+### Guarantors found in the scan
+
+The applicant doesn't have to add guarantor cards before uploading. The split creates a card for
+every guarantor the scan brings who has none yet, and files their documents into it. A guarantor is:
+
+- **Anyone other than the applicant whose national ID or passport is in the scan.** For an
+  individual, the ID in their own name is theirs and every other person's is a guarantor's. For a
+  company, the first director's or contact person's ID fills "ID of signing director", and every
+  other person's ID is a guarantor's, other directors included. Their KRA PIN and other documents in
+  their name go to them too. A spouse's or relative's ID therefore makes a card as well: the
+  applicant or staff delete it if it isn't a guarantor.
+- **Anyone a guarantors section of the application form (or a guarantor form) lists**, even when
+  their documents aren't in the scan. The card then has no documents yet.
+
+On the card:
+
+- `full_name` and `id_number` come from the guarantor's own documents or the form (a name printed in
+  capitals comes back as "Chausiku Wanjiru"). `phone` (and the staff side's `email_address`) are
+  copied when the form gives them, and are empty otherwise: ask for the phone only when it's empty.
+- **`source: "combined_scan"`** (null on a card somebody typed in). `combined_scan.added_guarantors`
+  lists the cards this scan created, `guarantor` being the card's position as in `documents`. Show
+  e.g. "Added from your scan: check the details", with Delete within easy reach.
+- A guarantor who already has a card is matched to it by ID number or name, never added twice. One
+  person on both the form and an ID is one card. At most 5 cards per scan.
+
+A new combined scan removes the cards the previous scan created **as long as nobody has touched
+them** (no edit to the name, ID number, phone or email, no document uploaded by hand), then works
+them out again. A card the applicant or staff have edited stays, and the new scan matches it like
+any other card.
+
+Cards added by hand **after** the upload are not matched to pages already in `other`. Upload the
+scan again (before submitting) to re-run the split.
 
 ## Notifications
 

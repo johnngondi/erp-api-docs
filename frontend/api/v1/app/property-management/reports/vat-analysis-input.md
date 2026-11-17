@@ -60,6 +60,7 @@ The [global filters](./README.md#global-filters) plus:
 | `tax_id` | `taxes.id` | All taxes |
 | `supplier_id` | `users.id` (the bill's `vendor_id`) | All suppliers |
 | `etr_status` | `signed` \| `not signed` | Signed and not signed |
+| `tax_status` | `taxable` \| `exempt` | Taxable and exempt |
 | `buckets` | list of this report's bucket ids | Every bucket — see [Selecting buckets](./README.md#selecting-buckets--buckets) |
 
 - **`tax_id`** keeps bills with **at least one line** (`facility_bill_items.tax_id`) on that tax. The
@@ -69,16 +70,25 @@ The [global filters](./README.md#global-filters) plus:
   `facility_bills.tax_invoice_number` (the `cu_invoice_no` column); `not signed` keeps bills with
   none, or an empty one. Omit it for both. Any other value, `failed` included, returns `422`. It is a
   flat query param like the others, not `filter[etr_status]`.
+- **`tax_status`** splits on the **bill's overall tax**, read from the amount and never from a tax's
+  name or rate. `taxable` keeps bills whose VAT is not zero, positive or negative; `exempt` keeps
+  bills whose VAT is zero, whichever 0% tax they use, zero-rated included. Omit it for both. A bill is
+  in one group only, with its full amounts, so Taxable plus Exempt always equals All. The amount is
+  compared at the two decimals the report shows. Any other value returns `422`.
 
 `header.filters` echoes every filter.
 
 A dropdown of **All / Signed / Not signed** maps to omitting the param, `etr_status=signed` and
 `etr_status=not%20signed`. Every bucket, subtotal and summary follows it.
 
+A dropdown of **All / Taxable / Exempt** maps to omitting the param, `tax_status=taxable` and
+`tax_status=exempt`. Every bucket, subtotal, summary and export follows it.
+
 ```
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31&tax_id=1&supplier_id=42
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31&etr_status=signed
+GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31&tax_status=exempt
 ```
 
 ## Header
@@ -165,7 +175,7 @@ The same keys on every bucket (for that bucket's bills) and on `data.summary` (e
       "currency": { "code": "KES", "name": "Kenya Shilling" },
       "period": { "from": "2026-03-01", "to": "2026-03-31" },
       "filters": { "landlord_id": null, "facility_id": null, "facility_type_id": null, "properties_status": null,
-                   "period_from": "2026-03-01", "period_to": "2026-03-31", "tax_id": null, "supplier_id": null },
+                   "period_from": "2026-03-01", "period_to": "2026-03-31", "tax_id": null, "supplier_id": null, "etr_status": null, "tax_status": null },
       "generated_at": "2026-04-05T09:00:00+03:00"
     },
     "report": [

@@ -4,6 +4,8 @@
 
 `GET /api/v1/app/{company}/access-management/reports/system/workflow-performance/export?format=excel|pdf`
 
+`GET /api/v1/app/{company}/access-management/reports/system/workflow-performance/approvable-types` — options for the `approvable_type` filter
+
 Use `view-workflow-performance-report` for the page and `export-workflow-performance-report` independently for downloads. Both permissions are seeded under Access Management. Company membership and permission checks apply before querying; both approval sources are explicitly restricted to the route company. Add this page beneath Access Management → System Reports. It is not registered in `config/reports.php` or the Property Management discovery endpoint.
 
 Unlike Audit Trail, this endpoint uses the standard `data.header`, `data.report` (array), `data.summary` envelope, with one `overview` bucket. There is no pagination. The header includes period, filters and generation timestamp, but no property or currency. Exports use the same filters and complete result.
@@ -16,18 +18,45 @@ All parameters are flat, not `filter[...]`.
 | --- | --- | --- |
 | `period_from` | Inclusive first-step prompt date, `Y-m-d` | Start of current month |
 | `period_to` | Inclusive first-step prompt date, `Y-m-d` | End of current month |
-| `landlord_id` | Property owner ID | All |
-| `facility_id` | Property ID belonging to this company | All |
+| `landlord_ids` | Property owner IDs: `landlord_ids[]=1&landlord_ids[]=2`, comma-separated (`1,2`) or a single value, as Property Management reports send them | All |
+| `facility_ids` | Property IDs belonging to this company, in the same three forms | All |
+| `landlord_id`, `facility_id` | Single-value forms, still accepted and merged into the lists | All |
 | `facility_type_id` | Property type ID | All |
 | `properties_status` | Property status from the shared `Status` enum | All |
 | `mechanism` | `approvable` or `procurement` | Both |
 | `approval_template_id` | Generic template belonging to this company | All |
-| `approvable_type` | Fully qualified class from `config/approvals.php`, e.g. `App\Models\Loo` | All |
+| `approvable_type` | Fully qualified class from `config/approvals.php`, e.g. `App\Models\Loo`. Options: [`/approvable-types`](#approvable-type-options) | All |
 | `format` | Export only: `excel` or `pdf` | Required for export |
 
 Setting either `approval_template_id` or `approvable_type` excludes procurement rows. Combining either with `mechanism=procurement` produces an empty report. Unsupported formats, invalid/reversed dates, foreign templates and unsupported mechanisms return 422. All six standard filters are supported, following the ticket rather than the attached Markdown’s narrower filter list. Property filters intersect and apply to the associated property’s current owner, type and status. Invalid IDs/statuses return 422; foreign-company property IDs also return 422. With property filters active, approvals without a surviving linked property are excluded; without those filters their company-scoped history remains included. Date boundaries use the application's timezone.
 
+The lists use the same validation as single values: a property from another company, or anything that is not a whole number, returns 422 keyed to the item (`facility_ids.1`, `landlord_ids.0`). An empty list means all. The header's `filters` echoes the merged lists.
+
+### Approvable type options
+
+`GET …/workflow-performance/approvable-types` (same `view-workflow-performance-report` permission) lists every document type that can go through an approval chain, sorted by label. Send `value` unchanged as `approvable_type`.
+
+```json
+{"data": [
+  {"value": "App\\Models\\FacilityContract", "label": "Contract"},
+  {"value": "App\\Models\\FacilityCreditNote", "label": "Credit Note"},
+  {"value": "App\\Models\\TenantExitNotice", "label": "Exit Notice"},
+  {"value": "App\\Models\\FacilityInvoice", "label": "Invoice"},
+  {"value": "App\\Models\\Lease", "label": "Lease"},
+  {"value": "App\\Models\\Loo", "label": "LOO"},
+  {"value": "App\\Models\\FacilityProcurementLpo", "label": "LPO"},
+  {"value": "App\\Models\\FacilityReceipt", "label": "Receipt"},
+  {"value": "App\\Models\\FacilityRemittance", "label": "Remittance"}
+]}
+```
+
 Example:
+
+```http
+GET {{appUrl}}/access-management/reports/system/workflow-performance?period_from=2026-09-01&period_to=2026-09-30&facility_ids[]=61&facility_ids[]=62
+Accept: application/json
+Authorization: Bearer {{authToken}}
+```
 
 ```http
 GET {{appUrl}}/access-management/reports/system/workflow-performance?period_from=2026-09-01&period_to=2026-09-30&mechanism=approvable
@@ -76,7 +105,7 @@ Every row and total satisfies `started = completed + rejected + pending`. The su
 
 `data.report[0]` always contains `bucket`, `header`, `fields`, `items`, and `summary`. Its bucket is `overview`. Columns are `workflow`, `mechanism`, `started`, `completed`, `rejected`, `pending`, `avg_turnaround_hours`, `longest_turnaround_hours`, `slowest_step`.
 
-All row cells follow `{ "value": ... }`. Normal rows use `type=normal`; the final total row uses `type=subtotal`, `background_color=secondary`, and a Total cell spanning workflow/mechanism. Field presentation is returned by the backend; `mechanism` has `togglable=true`. Hour columns use the shared decimal format `money` but represent hours, with no currency symbol. Empty results still return all column definitions and a zero-count subtotal, with null duration metrics.
+All row cells follow `{ "value": ... }`. Normal rows use `type=normal`; the final total row uses `type=subtotal`, `background_color=secondary`, and a Total cell spanning workflow/mechanism. Field presentation is returned by the backend; `mechanism` has `togglable=true`. Hour columns use format `number`: a decimal shown with two places and **no currency** (`126.46`), never `money`. Excel holds them as numbers formatted `#,##0.00`; the bucket title carries no currency because the report has no money columns. **LOO approvals are generic approval chains**, so their `mechanism` is `approvable`; tell them apart by the workflow (template) name or by filtering `approvable_type=App\Models\Loo`. Empty results still return all column definitions and a zero-count subtotal, with null duration metrics.
 
 ## Deployment and verification
 
