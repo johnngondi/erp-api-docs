@@ -92,7 +92,7 @@ Body fields:
 | `tax_id` | Yes | integer | The utility's tax for this run: a 0% tax for an untaxed utility such as water, the VAT for electricity. Above 0% it is charged only to **VAT-able** leases (the lease's own `tax_id` is above 0%); see [VAT-able and non-VAT leases](#vat-able-and-non-vat-leases). Must exist in `taxes.id` |
 | `total_bill_amount` | Cond. | number | **Total monthly bill charged** (tax-inclusive) — the sum of the current period's charges, NOT the amount payable/balance due after credits or arrears. Required unless `charge_rate` is supplied; drives the derived rate |
 | `bill_consumption` | Cond. | number | Total metered consumption on the provider bill. Required for the `utility provider rate` and `defined` methods |
-| `bill_tax_amount` | No | number | Tax portion of the provider bill. Used **only** for the provider bill (see [Process Utility Billing](#process-utility-billing)); it never changes the tenant rate, which backs the tax out as `total_bill_amount / (1 + tax value)` |
+| `bill_tax_amount` | No | number | Tax portion of the provider bill, carried to the provider bill (see [Process Utility Billing](#process-utility-billing)). When the selected tax is above 0% it also sets the tenant net rate for the `utility provider rate` and `defined` methods: `(total_bill_amount − bill_tax_amount) / bill_consumption`. When it is omitted those methods fall back to `total_bill_amount / (1 + tax value)`. `distribute to tenants` and 0% runs never use it |
 | `charge_rate` | No | number | **Optional flat override**, read as the **net** rate. When supplied, the distribution method is ignored and no indirect consumption is computed. Above 0%, VAT-able leases pay it plus the tax and non-VAT leases pay `charge_rate × (1 + v)` with no tax; under a 0% tax every lease pays it as given |
 
 ### How the tenant rate is derived
@@ -113,12 +113,13 @@ A lease with no tax, or a 0% tax, is **non-VAT**.
   - a **VAT-able** lease is priced on the bill **net of tax** and taxed at the **selected**
     tax (not the lease's own rate), so its charge plus tax rebuilds its gross share. Rows
     carry the selected `tax_id` and `is_taxable = true`;
-  - a **non-VAT** lease is priced on the **gross** bill (tax included in the rate) and gets
-    no invoice tax. Rows carry `tax_id = null` and `is_taxable = false`.
+  - a **non-VAT** lease pays the **gross** rate, `net × (1 + v)` (the selected tax inside the
+    rate), and gets no invoice tax. Rows carry `tax_id = null` and `is_taxable = false`.
 
-Both kinds of tenant pay the same per unit in the end. With `T = 11,600`, `Cb = 1,000`
-and 16%: the net rate is 10.00 and the gross 11.60. A VAT-able tenant on 100
-units pays 1,000 + 160 tax = 1,160; a non-VAT tenant on 100 units pays 1,160 with no tax.
+Both kinds of tenant pay the same per unit. With `T = 11,600`, `X = 1,400`, `Cb = 1,000`
+and 16% under `utility provider rate`: the net rate is `(11,600 − 1,400) / 1,000 = 10.20` and
+the gross `10.20 × 1.16 = 11.832`. A VAT-able tenant on 100 units pays 1,020 + 163.20 tax =
+1,183.20; a non-VAT tenant on 100 units pays 1,183.20 with no tax.
 
 The two main methods differ in **what the bill is divided by**:
 
@@ -128,19 +129,19 @@ The two main methods differ in **what the bill is divided by**:
 - **`distribute to tenants`** — the **whole** bill is spread over what tenants actually
   used, so the denominator is **tenant** consumption. Nothing is left over.
 
-With `T = total_bill_amount`, `Cb = bill_consumption`,
+With `T = total_bill_amount`, `X = bill_tax_amount`, `Cb = bill_consumption`,
 `Ct = Σ(billable tenant consumption)`, `v = the selected tax's value` (a fraction, `0.16` = 16%):
 
 - `taxed = v > 0`
-- `net = T / (1 + v)`
-- `D` = the method's denominator: `Cb` for `utility provider rate` and `defined`, `Ct` for
-  `distribute to tenants`
+- `billNet = T − X` when `bill_tax_amount` is supplied, else `T / (1 + v)`: the bill excluding
+  its own tax, used by the methods priced on the provider's per-unit price
+- `spreadNet = T / (1 + v)`: used by `distribute to tenants`
 
 | Method | Net rate (VAT-able leases; every lease under 0%) | Gross rate (non-VAT leases when taxed) |
 |---|---|---|
-| `utility provider rate` | `(taxed ? net : T) / Cb` | `T / Cb` |
-| `distribute to tenants` | `(taxed ? net : T) / Ct` | `T / Ct` |
-| `defined` | `(taxed ? net : T) / Cb`, seeds an editable per-lease rate | `T / Cb`, seeds the same |
+| `utility provider rate` | `(taxed ? billNet : T) / Cb` | `net × (1 + v)` |
+| `distribute to tenants` | `(taxed ? spreadNet : T) / Ct` | `T / Ct` (= `net × (1 + v)`) |
+| `defined` | `(taxed ? billNet : T) / Cb`, seeds an editable per-lease rate | `net × (1 + v)`, seeds the same |
 | flat `charge_rate` override | the override | `override × (1 + v)` (the override when untaxed) |
 
 Each priced row then carries:
@@ -153,19 +154,23 @@ Each priced row then carries:
 
 The indirect figures use the row's own rate and tax the same way.
 
-The net **divides by `(1 + v)`**, it does not multiply by `(1 − v)`. The provider
+The fallback **divides by `(1 + v)`**, it does not multiply by `(1 − v)`. The provider
 bill total is tax-inclusive, so the tax-exclusive figure is `T / (1 + v)`; re-adding `v` on the
 invoice then rebuilds the gross exactly. Under `distribute to tenants` this makes
 `Σ(amount + tax) = T`, give or take per-row rounding. (Multiplying by `(1 − v)` would yield
 `(1 − v)(1 + v) = 1 − v²` of the bill — a silent shortfall of `v²`, 2.56% at `v = 0.16`.)
 
-`bill_tax_amount` is **not** used for the tenant rate. A provider bill's tax is rarely exactly
-`v` of the rest (levies carry no VAT), and the invoice tax is always `amount × v`. Pricing on
-`T − X` would make a VAT-able tenant pay `(T − X)(1 + v) / D` per unit instead of `T / D`, so
-the tenants would no longer pay back the bill. On a Kenya Power bill of 703,053.12 with
-88,680 of tax spread over 12,228.7 tenant units, VAT-able tenants would have paid 58.28 per
-unit against the non-VAT tenants' 57.49, and the run would have collected 8,443 more than the
-bill.
+Under `utility provider rate` and `defined`, the net rate is the provider's own price per unit
+excluding the bill's tax, `(T − X) / Cb`, and every tenant then pays the **selected** tax on
+top: VAT-able leases as an invoice tax line, non-VAT leases inside their rate. A bill's tax is
+rarely exactly `v` of the rest (levies carry no VAT), so the tenants' all-in price per unit,
+`(T − X)(1 + v) / Cb`, can differ from the provider's gross `T / Cb`.
+
+`distribute to tenants` **never** uses `bill_tax_amount`. That method exists to collect the
+whole bill back from the tenants, and pricing on `T − X` would break it: on a Kenya Power bill
+of 703,053.12 with 88,680 of tax spread over 12,228.7 tenant units, VAT-able tenants would have
+paid 58.28 per unit against the non-VAT tenants' 57.49, and the run would have collected 8,443
+more than the bill.
 
 The response returns the net rate as `resolved_charge_rate` (what VAT-able leases are
 charged, and every lease under a 0% tax) and the gross rate as **`resolved_gross_charge_rate`**
@@ -183,8 +188,9 @@ and independent of the distribution method. Display it beside `resolved_charge_r
 user can see what the tenants are charged versus what the provider charged. It is `null`
 when `total_bill_amount` or `bill_consumption` was not supplied (e.g. a flat `charge_rate`
 override). When the selected tax is above 0%, `resolved_charge_rate` is derived net of tax
-(e.g. `T / (1 + v) / Cb`), so it is legitimately lower than `bill_rate`; under
-`utility provider rate` `resolved_gross_charge_rate` equals `bill_rate`.
+(e.g. `(T − X) / Cb`), so it is legitimately lower than `bill_rate`. Under
+`utility provider rate`, `resolved_gross_charge_rate` equals `bill_rate` only when `X` is
+exactly `v / (1 + v)` of `T` (or `bill_tax_amount` was not supplied).
 
 ### Tenant vs. bill consumption
 
