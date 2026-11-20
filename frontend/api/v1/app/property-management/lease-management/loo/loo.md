@@ -901,12 +901,19 @@ The lawyer records the fee note: what the legal work costs and the file it comes
 the setting names — no permission of its own. Read `permissions.recordLegalFeeNote` (who you
 are) together with `can_record_legal_fee_note` (the offer's state).
 
-**When.** While the offer has legal fees (`has_lawyer`) and is `draft`, `pending_approval` or
-`approved`. An approved offer has not gone to the tenant yet, so the lawyer may still add the
-fee note to it; recording it does not reopen the approval chain. It may be recorded **again**
+**When.** While the offer has legal fees (`has_lawyer`), is `draft`, `pending_approval`,
+`approved`, `sent` or `accepted`, and no lease has been raised from it (`promoted_lease_id` is
+null: set by promotion, or by applying a renewal). The lawyer's fee note often arrives after the
+offer has gone to the tenant, so a sent or accepted offer still takes it. Recording it never
+changes the offer's status and does not reopen the approval chain. It may be recorded **again**
 in that window; the note is recorded whole, so a fee left out is cleared rather than kept from
-the previous note. Once the offer is sent (or accepted, declined, withdrawn...) it is a `403`:
-the delivered document is fixed.
+the previous note. It is a `403` once a lease has been raised from the offer (the lease bills
+`legal_fee_total`, so the figures are fixed), and on a `rejected`, `declined`, `expired` or
+`withdrawn` offer. `can_record_legal_fee_note` follows the same rule.
+
+[Submit to lawyer](#submit-to-lawyer) is narrower: it is still refused once the offer is sent.
+Only an offer already handed to a lawyer, or open to an Internal Counsel holder, takes the fee
+note after sending.
 
 This is the only way the fee figures are written: the offer's `PATCH` refuses them. It stamps
 `legal_fee_recorder_id`/`legal_fee_updated_at`,
