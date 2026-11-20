@@ -11,11 +11,9 @@ lifecycle see [README.md](./README.md).
 > conversation and the full workflow surface — generation, editing, spaces, export,
 > send, signature and promotion — are all built. See [Endpoints](#endpoints).
 >
-> One thing is deliberately **not** built: promoting a `renewal` or `addendum`.
-> That path amends the lease it was prepared from, and exactly what it amends was
-> never scoped, so the endpoint refuses it by name rather than guessing. Nothing
-> above the action assumes the source is an application — see
-> [Renewals and addenda](#renewals-and-addenda).
+> Promoting a `renewal` **applies it to the lease it renews** (the same lease, back through
+> approval, with its deposit put right) — see [Renewals and addenda](#renewals-and-addenda).
+> Promoting an `addendum` is still **not** built: the endpoint refuses it by name.
 
 ## Granted spaces
 
@@ -610,7 +608,8 @@ signature.
 | `signatory_name` | signature | Who actually signed, where that differs |
 | `signature_upload_id` | signature | The signed copy, on an acceptance only |
 | `decline_reason` | signature | On a decline only |
-| `promoted_lease_id`, `promoted_at` | promotion | What the offer became |
+| `promoted_lease_id`, `promoted_at` | promotion | What the offer became; on a renewal, the lease it was applied to |
+| `renewal_deposit` | renewal (detail; before raising a preview) | Deposit held, required, the difference and the surplus receipt — see [Renewals and addenda](#renewals-and-addenda) |
 | `can_promote` | promotion | Whether this offer can be onboarded right now — drives the button |
 | `can_withdraw` | withdrawal | Whether this offer can be taken back right now — drives the button |
 | `withdrawn_at`, `withdrawal_reason`, `withdrawn_by` | withdrawal | Set when an offer is withdrawn |
@@ -1228,7 +1227,8 @@ goes through** — legal fees never hold a lease up. A failure raising the invoi
 rolled back on its own, without failing the lease's approval.
 
 **Read `can_promote` to decide whether to offer the button.** It is the same rule the endpoint
-enforces — sent or accepted, right type, not already promoted. Do **not** use
+enforces — sent or accepted, a `new lease` or a `renewal` whose lease still exists, not already
+promoted. On a renewal the button applies the renewal to the lease (below). Do **not** use
 `permissions.promote` for this: that checks the caller's permission only, so it is `true` on a
 draft and on an offer already turned into a lease.
 
@@ -1265,17 +1265,123 @@ did.
 
 #### Renewals and addenda
 
-`POST loos/{loo}/promote` refuses a `renewal` or an `addendum` with a validation
-error naming the type. A renewal amends the lease it was prepared from rather
-than creating one beside it, and exactly what it amends — the term, the pricing,
-the escalations, whether existing items are replaced or extended — was never
-scoped. A guess would have produced a second live lease over the same spaces,
-which is precisely what the polymorphic preparation model exists to prevent.
+`POST loos/{loo}/promote` on a **`renewal`** applies the signed offer to **the lease it renews**.
+No second lease is raised: the same lease carries on, with its invoices, payments and statement,
+and only its terms change. Same body as above, all optional (`start_at` overrides the renewal's
+start, `billing_cycle` its cycle).
 
-Everything above that point is preparation-agnostic: the route is `{loo}`, the
-controller does not know the source, and the action branches on
-`type->preparesFromApplication()`. Wiring the update path in later is a branch
-inside one method with nothing above it to restructure.
+| What | What happens to the lease |
+|---|---|
+| Term | `start_at` = the renewal's start: the payload's, else the offer's `start_date`, else the renewal application's `proposed_start_date`, else the day after the lease ends. The term is the offer's, then the application's, then the lease's own; `end_at` is worked out from them. `next_due_at` is left where billing has reached |
+| Units and rates | Each unit and charge on the offer is written onto the lease at the offer's price (`cost_per_space_unit` → `cost_per_sqft`, `amount` → `cost_per_month`). A unit or charge new on the offer is added; a unit new on the offer must not be let under another lease |
+| Escalations | An offer drafted from a renewal application brings its own schedule: the lease's open escalations stop the day before the renewal starts and the application's are added. An offer drafted from the lease keeps the lease's escalations |
+| Status | Back to `pending`, and through the **lease approval chain** again (the same template as a new lease). While pending the lease is not billed. With a bypass role, an empty chain or no lease template it is `active` at once |
+
+**Refused** with a `422` keyed `loo` when the offer has not been sent, has already been applied
+(`This renewal has already been applied to the lease.` — so a double click or a retry changes
+nothing), grants no spaces, its lease is not `active`, or the offer **leaves out a unit or charge
+the lease still has**. Giving up a unit is an exit notice:
+
+```json
+{
+  "message": "The offer leaves out Shop A2, which the lease still has. Add it to the offer, or give it up with an exit notice first.",
+  "errors": { "loo": ["The offer leaves out Shop A2, which the lease still has. Add it to the offer, or give it up with an exit notice first."] }
+}
+```
+
+**The deposit.** The offer's deposits (`rent_security_deposit` + `service_charge_security_deposit`
++ `utility_security_deposit`) are compared with the deposit the lease holds
+(`total_deposit_amount`) when the renewal is applied:
+
+| Required against held | What happens |
+|---|---|
+| Equal | Nothing: no invoice, receipt or deposit row |
+| Required higher (top-up) | The difference is taken as deposits while the lease is pending, and **billed when the lease is approved**, on one deposit invoice, as on a new lease |
+| Held higher (surplus) | Once the lease is approved **and the renewal has started**, the surplus becomes **one receipt** (below). Approved before the start date: the daily `leases:settle-renewal-deposits` run creates it on the start date |
+
+The surplus receipt:
+
+- `transaction_number` `DEP-RENEWAL-{loo id}`, payment method **Deposit Transfer**
+  (`DEPOSIT_TRANSFER`), **no receiving account**: the money is already in the bank, so the receipt
+  has **no cashbook line**. It is confirmed at once, with no approval of its own, and emailed to the
+  tenant like any confirmed receipt. `receiving_user` is the user whose action created it
+  (applying the renewal, or approving the lease), or, when the daily run creates it, the staff
+  member who generated the renewal offer.
+- **Always fully allocated**, never left as unallocated credit, split across each invoice's
+  charges by the property's usual allocation rule. The collections it makes are counted for the
+  management fee like any other payment:
+  1. The lease's unpaid invoices, **oldest first**, never more than each owes.
+  2. Whatever the arrears do not take goes on the lease's **next invoice, raised at once** for it:
+     the same invoice the daily billing would raise on the lease's next due date (same period,
+     items and notes, emailed to the tenant), so that period is not billed a second time.
+  3. When the rest is **more than that invoice**, the excess still goes on it: the invoice is
+     overpaid (negative `balance`) and the excess pays each later invoice as it is raised, as any
+     overpayment does.
+
+  ```
+  Surplus 2,000; arrears 400; the next invoice (December rent) 30,000
+  → receipt allocated 2,000: 400 to the arrears, 1,600 to December, which then owes 28,400
+  ```
+- **No next invoice to raise**, because nothing auto-billed on the lease is priced or it is
+  already billed to its end, or the tenant's credit already pays that invoice: **no receipt is
+  made yet**. The deposit stays as it is and `surplus_receipt` stays null. The daily
+  `leases:settle-renewal-deposits` run tries again, and moves the surplus once there is an invoice
+  to put it on.
+- There is no cash refund.
+- The deposit held drops by the surplus: a negative deposit row, already billed, with
+  `transferred_to_receipt_id` set. That row cannot be edited or deleted (`422` keyed
+  `lease_deposit`).
+- **Cancelling the receipt** works like any other receipt: the invoices it paid are owed again,
+  and its collections go. The surplus also goes back on the deposit (the negative deposit row is
+  removed), so nothing is lost. The offer keeps `surplus_receipt` pointing at the cancelled
+  receipt, and the daily run does not move the surplus again.
+- **Deleting the receipt** does the same, and also clears `surplus_receipt`. It is then as if the
+  surplus had never been moved, so the next daily run moves it again, once.
+
+A renewal offer carries `renewal_deposit`, before and after it is raised:
+
+```json
+"renewal_deposit": {
+  "applied": true,
+  "held": 32000, "required": 30000, "difference": -2000, "top_up": 0, "surplus": 2000,
+  "approved_at": "2026-11-12T09:21:23.000000Z",
+  "surplus_receipt": {
+    "id": 103, "transaction_number": "DEP-RENEWAL-6", "amount": 2000, "allocated": 2000, "unallocated": 0,
+    "allocations": [{ "invoice_id": 139, "amount": 400 }, { "invoice_id": 152, "amount": 1600 }]
+  }
+}
+```
+
+`approved_at` is null while the lease is pending, and `surplus_receipt` is null until the receipt
+exists (always null for a top-up or no difference).
+
+- **Before it is raised** (`applied: false`): a preview of the same comparison as the offer and
+  the lease stand now. `held` is the renewed lease's unrefunded deposits (the
+  `renewed_lease.total_deposit_amount` figure), `required` is `rent_security_deposit` +
+  `service_charge_security_deposit` + `utility_security_deposit`, and `approved_at` and
+  `surplus_receipt` are null. The figures move when the offer's deposits or the lease's deposits
+  change. `surplus` above 0 is the credit the tenant will get; `top_up` above 0 is what they will
+  pay. Only on the offer's detail response (where `renewed_lease` is); offer lists give null.
+- **Once raised** (`applied: true`): the figures recorded when the renewal was applied. They no
+  longer move.
+- A `new lease` or `addendum` offer always has `renewal_deposit: null`.
+
+```json
+"renewal_deposit": {
+  "applied": false, "held": 75000, "required": 60000, "difference": -15000,
+  "top_up": 0, "surplus": 15000, "approved_at": null, "surplus_receipt": null
+}
+```
+
+**Rejected in the chain:** the lease goes back to exactly what it was before the renewal —
+`active`, its old dates, rates and escalations — the top-up deposits are removed, and the offer's
+`promoted_lease_id` is cleared, so it can be corrected and applied again.
+
+The response message is `Renewal applied to the lease. The lease is pending approval.` while the
+lease waits on its chain, and `Renewal applied to the lease.` when it is already active.
+
+An **`addendum`** is still refused with a validation error naming the type: what it amends was never
+scoped.
 
 ### Rebase
 

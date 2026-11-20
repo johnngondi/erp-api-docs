@@ -84,12 +84,41 @@ A dropdown of **All / Signed / Not signed** maps to omitting the param, `etr_sta
 A dropdown of **All / Taxable / Exempt** maps to omitting the param, `tax_status=taxable` and
 `tax_status=exempt`. Every bucket, subtotal, summary and export follows it.
 
+### Tax Status with Tax (`tax_status` + `tax_id`)
+
+A line with no tax (`tax_id` null) adds no VAT, so a bill whose lines carry no tax is **Exempt**.
+
+The two filters narrow each other. A bill must have a line on `tax_id` **and** fall in the chosen
+`tax_status` group. No pair is rejected, because the group comes from the bill's VAT amount and not
+from the tax it uses:
+
+| Query | Keeps |
+|---|---|
+| `tax_id={0% tax}&tax_status=taxable` | mixed bills, with a 0% line and a taxed line |
+| `tax_id={16% tax}&tax_status=exempt` | bills on 16% whose VAT came to zero; normally none, so the report's usual empty result |
+| `tax_id={16% tax}&tax_status=taxable` | bills with a 16% line and some VAT |
+
+The Tax dropdown therefore keeps every tax whatever Tax Status is chosen. The one `422` is a
+`tax_status` other than `taxable` or `exempt`:
+
+```json
+{
+  "message": "The selected tax status is invalid.",
+  "errors": { "tax_status": ["The selected tax status is invalid."] }
+}
+```
+
 ```
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31&tax_id=1&supplier_id=42
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31&etr_status=signed
 GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31&tax_status=exempt
+GET …/reports/suppliers/vat-analysis-input?period_from=2026-03-01&period_to=2026-03-31&tax_status=taxable&tax_id=1
+GET …/reports/suppliers/vat-analysis-input/export?period_from=2026-03-01&period_to=2026-03-31&tax_status=exempt&format=excel
 ```
+
+The export takes the same filters, so a downloaded file holds the same bills and totals as the
+screen.
 
 ## Header
 

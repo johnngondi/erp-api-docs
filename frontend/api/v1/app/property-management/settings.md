@@ -436,20 +436,47 @@ Create/Update payload (`BankAccountData`):
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
 | `bank_branch_id` | Yes | integer | Must exist in `bank_branches.id` |
-| `currency_id` | No | integer | Nullable; must exist in `currencies.id` |
+| `currency_id` | No | integer | Nullable; must exist in `currencies.id`. Left out of an update, it stays as it is; send `null` to clear it |
 | `account_name` | Yes | string | - |
 | `account_number` | Yes | string | - |
 | `account_number_confirmation` | Yes | string | - |
 | `type` | No | string | `system`, `user` (defaults to `system`) |
 | `user_group_id` | If `type` is 'user' | integer | Must exist in `user_groups.id` |
 | `user_id` | If `type` is 'user' | integer | Must exist in `users.id` |
-| `alias` | No | string | Optional |
+| `alias` | No | string | Optional. Left out of an update, it stays as it is; send `null` to clear it |
+| `status` | No | string | `active`, `inactive`. New accounts are `active` when it is left out; left out of an update, the account keeps its status |
 | `payment_methods` | No | array | Allowed payment methods for this account. Omit to leave existing links untouched on update; send `[]` to clear them. |
 | `payment_methods[].payment_method_id` | Yes (per item) | integer | Must exist in `payment_methods.id` |
 | `payment_methods[].cancellation_fee` | No | decimal | Required if selected payment method `has_cancellation_fee` is true |
 | `payment_methods[].notes` | No | string | Nullable |
 
-Immutable on update — for `PUT/PATCH`, `account_number`, `type`, `user_group_id`, and `user_id`
+#### Editing the account number and owner
+
+On `PUT/PATCH`, `account_number` and the owner (`type`, `user_group_id`, `user_id`) can be changed
+(`update-bank-account`). **On update, only what is sent changes:** leave a field out and it stays
+as it is. That holds for `currency_id`, `alias` and `status` too, which until 2026-11-18 were
+cleared (currency, alias) or reset to `active` (status) by an edit that left them out. Leaving `type`
+out keeps a landlord's or supplier's account theirs; it does not fall back to `system`.
+
+| Field | Rule on update |
+|---|---|
+| `account_number` | A **new** number needs `account_number_confirmation` with the same value, and must not belong to another account. Sending the number the account already has changes nothing and needs no confirmation |
+| `type` | `system` (the company's own) or `user` (a landlord's or supplier's) |
+| `user_id`, `user_group_id` | Required when `type` is `user`. On an account that is already `user`, sending them alone hands it to another owner |
+
+Moving an account to `system` clears `user_id` and puts it in the staff group. The account keeps
+its cashbook, transfers and vouchers whoever owns it; vouchers already raised keep the payee they
+were raised to. Every change is in the account's audit trail.
+
+422 messages: `account_number` ("Type the new account number again to confirm it." or "Another bank
+account already has this account number."), `user_id` ("Select who owns this bank account."),
+`user_group_id` ("Select whether the owner is a landlord or a supplier.").
+
+On the edit form:
+
+- **Account number:** when it is changed, ask for it a second time, as on create, and **block
+  pasting** into the confirmation field.
+- **Submit:** ask the user to confirm they want to edit the bank account before sending.
 
 The response embeds the selected `currency` (`id`, `name`, `code`) and the linked methods under `payment_methods`. Each `payment_methods` item has:
 

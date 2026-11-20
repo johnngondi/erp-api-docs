@@ -120,11 +120,40 @@ decimals the report shows. Credit notes follow the same rule. Any other value re
 flat query param like `etr_status`. The buckets, subtotal, `summary` and exports follow it, and
 `header.filters.tax_status` echoes it (`null` when omitted).
 
+### Tax Status with Tax (`tax_status` + `tax_id`)
+
+A line with no tax (`tax_id` null) adds no VAT, so a document whose lines carry no tax is **Exempt**.
+
+The two filters narrow each other. A document must have a line on `tax_id` **and** fall in the
+chosen `tax_status` group. No pair is rejected, because the group comes from the document's VAT
+amount and not from the tax it uses:
+
+| Query | Keeps |
+|---|---|
+| `tax_id={0% tax}&tax_status=taxable` | mixed documents, with a 0% line and a taxed line |
+| `tax_id={16% tax}&tax_status=exempt` | documents on 16% whose VAT came to zero, such as a zero-value invoice; otherwise the report's usual empty result |
+| `tax_id={16% tax}&tax_status=taxable` | documents with a 16% line and some VAT |
+
+The Tax dropdown therefore keeps every tax whatever Tax Status is chosen. The one `422` is a
+`tax_status` other than `taxable` or `exempt`:
+
+```json
+{
+  "message": "The selected tax status is invalid.",
+  "errors": { "tax_status": ["The selected tax status is invalid."] }
+}
+```
+
 ```
 GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&tax_id=1
 GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&tax_status=taxable
 GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&etr_status=signed
+GET …/reports/tenants/vat-analysis-output?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&tax_status=taxable&tax_id=1
+GET …/reports/tenants/vat-analysis-output/export?facility_ids[]=1&period_from=2026-07-01&period_to=2026-07-31&tax_status=exempt&format=excel
 ```
+
+The export takes the same filters, so a downloaded file holds the same documents and totals as the
+screen.
 
 ### Blocks, wings and floors
 

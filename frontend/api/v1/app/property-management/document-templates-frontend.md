@@ -826,6 +826,59 @@ POST …/document-templates/{id}/render
   The preview's `sample.company` reflects the current company's real letterhead
   (§2), so this is a faithful first look, not a generic placeholder.
 
+### 8.1 Print a document without choosing a template
+
+The print button on any document, and bulk print, use this instead of the
+template picker:
+
+```
+GET …/property-management/documents/{document_type}/{id}/print
+```
+
+`document_type` is one of the eight types in §1 (`facility_invoice`,
+`facility_receipt`, `facility_lpo`, `facility_credit_note`,
+`facility_payment_voucher`, `facility_remittance`, `customer_invoice`,
+`facility_settlement`); `id` is the document's id. Any other type is a `404`.
+
+The server picks the template: the company's **default** template of that type
+that the document's property may use. When there is none, it uses the newest
+active template the property may use. Inactive templates are never used.
+Templates limited to other properties are skipped, so a default limited to
+Property A does not print Property B's invoices. The PDF is exactly what
+`render` gives for the same document on that template.
+
+Returns `200` `application/pdf`, shown inline, named after the document's
+number: `INV0240.pdf`, `RCP0110.pdf`, `LPO0010.pdf`, `CN0029.pdf`, `PV0018.pdf`,
+`REM0048.pdf`, `ST0003.pdf`, and a customer invoice's own number
+(`CI0013.pdf`). Read the name from `Content-Disposition`.
+
+Who may print: anyone who can open the document (its view permission, and for
+staff, being on its property) and holds `view-document-template`.
+
+Every refusal is JSON with a `code` to switch on:
+
+| Status | `code` | When |
+| ------ | ------ | ---- |
+| `403` | `print_not_allowed` | The user cannot open the document, is not on its property, or lacks `view-document-template` |
+| `404` | `document_not_found` | No such document in this company |
+| `422` | `print_not_available` | Its status cannot be printed (pending or rejected; see above), e.g. `Invoice #115 is pending and cannot be printed.` |
+| `422` | `print_template_missing` | No active template of that type the property may use |
+| `500` | `print_failed` | The PDF could not be made; try again |
+
+```json
+{ "message": "Invoice #115 is pending and cannot be printed.", "code": "print_not_available" }
+```
+
+**Bulk print:** call this once per selected document, a few at a time (3 is
+fine), and join the PDFs in the order selected. Each document's pages are the
+same as its single print. A refusal for one document should not stop the
+others: list it with its message.
+
+A payment voucher's **advice** (the payee's copy) still prints from
+`GET …/finance/payment-vouchers/{id}/print?template=advice` (see the payment
+voucher docs). This endpoint prints the internal voucher, the same as that
+endpoint's `?template=voucher`.
+
 ---
 
 ## 9. Quick start checklist

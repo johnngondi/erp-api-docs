@@ -12,7 +12,7 @@ Unlike Audit Trail, this endpoint uses the standard `data.header`, `data.report`
 
 ## Query parameters
 
-All parameters are flat, not `filter[...]`.
+All parameters are flat, not `filter[...]`. Row order is `sort[overview]`, see [Sorting](#sorting).
 
 | Parameter | Meaning | Default |
 | --- | --- | --- |
@@ -27,6 +27,7 @@ All parameters are flat, not `filter[...]`.
 | `approval_template_id` | Generic template belonging to this company | All |
 | `approvable_type` | Fully qualified class from `config/approvals.php`, e.g. `App\Models\Loo`. Options: [`/approvable-types`](#approvable-type-options) | All |
 | `format` | Export only: `excel` or `pdf` | Required for export |
+| `sort[overview]` | Row order: field keys, comma-separated, `-` for descending (`sort[overview]=-avg_turnaround_hours`). See [Sorting](#sorting) | `workflow` |
 
 Setting either `approval_template_id` or `approvable_type` excludes procurement rows. Combining either with `mechanism=procurement` produces an empty report. Unsupported formats, invalid/reversed dates, foreign templates and unsupported mechanisms return 422. All six standard filters are supported, following the ticket rather than the attached Markdown’s narrower filter list. Property filters intersect and apply to the associated property’s current owner, type and status. Invalid IDs/statuses return 422; foreign-company property IDs also return 422. With property filters active, approvals without a surviving linked property are excluded; without those filters their company-scoped history remains included. Date boundaries use the application's timezone.
 
@@ -100,6 +101,38 @@ Generic rows group by approval template and approvable type. Procurement rows gr
 - **Slowest step:** step position/role (or procurement title) with the highest average eligible turnaround within the workflow. It is not necessarily the single longest observation.
 
 Every row and total satisfies `started = completed + rejected + pending`. The subtotal/summary recomputes the average from all underlying eligible workflow-instance means, weighting workflow rows by the number of instances with a measurable turnaround. This follows the ticket’s workflow-instance weighting, rather than weighting by the number of steps. It never averages rounded row averages. No eligible durations means `null`, not an invented zero.
+
+## Sorting
+
+The rows are sorted on the backend, the same way as the Property Management reports (see
+[Sorting rows](../../property-management/reports/README.md#sorting-rows--sort)), so the page and the Excel/PDF
+export always show the same order. Send the column header click as
+`sort[overview]={key}` or `sort[overview]=-{key}`, and pass the same `sort` to `/export`.
+
+```
+GET …/workflow-performance?period_from=2026-11-01&period_to=2026-11-30&sort[overview]=-avg_turnaround_hours
+→ slowest workflows first; the Total row stays last
+```
+
+- Every column is sortable (`sortable: true` on each field). Up to 5 keys, applied in order:
+  `sort[overview]=mechanism,-pending`.
+- Text columns sort A–Z ignoring case, in natural order; counts and hours sort as numbers. A row with
+  no value (`avg_turnaround_hours: null` when nothing has finished) goes last in both directions.
+  Ties keep workflow-name order.
+- The Total row never moves.
+- With no `sort`, rows are in workflow-name order.
+- `data.report[0].header.sort` says what was applied:
+  `{ "applied": ["-avg_turnaround_hours"], "default": ["workflow"], "source": "user" }`.
+  `source` is `default` when no `sort` was sent, or none of its keys is a column. Use `applied` to
+  draw the arrow on the column header.
+- A key that is not a column (`sort[overview]=no_such_column`) is ignored, and the rows keep the
+  default order. A `sort` that breaks the format is a `422`, with the same messages as the Property
+  Management reports:
+  - `sort=started` (not keyed by bucket): on `sort`;
+  - `sort[weekly]=started`: `The bucket weekly is not one this report returns.` on `sort.weekly`;
+  - `sort[overview]=Started`: `The key Started is not a valid field key.` on `sort.overview`;
+  - more than 5 keys: `No more than 5 keys may be given for the bucket overview.`
+- `sort` is not echoed in `data.header.filters`.
 
 ## Response and rendering
 

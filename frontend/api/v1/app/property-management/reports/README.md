@@ -305,7 +305,10 @@ to expect.
 
 `fields` are the [column definitions](#fields--column-definitions) the report declares up front
 (`label`, `key`, `format`, `type`, `weight`, `background_color`, `alignment`, `visible`,
-`togglable`, `sortable`). A column that is [hidden because it is empty](#empty-columns-start-hidden)
+`togglable`, `sortable`, and `exportable` where it is `false`). A field with **`exportable: false`**
+shows on screen like any other but is never printed in the Excel or PDF export, whatever
+[`columns`](#choosing-columns--columns) asks for; the other columns close up, leaving no gap.
+Property Expenses' `invoice` is one. A column that is [hidden because it is empty](#empty-columns-start-hidden)
 is only known at run time, so the catalogue never carries `empty`. Where `dynamic_columns` is set, the live response splices extra columns in at the
 position it describes — **always render from the response's own `fields`**; the catalogue tells
 you what to expect, the response tells you what you got.
@@ -408,6 +411,25 @@ GET …/reports/tenants/tenancy-reports/tenancy-schedule/export?format=pdf&facil
 > the same title. The PDF shrinks a wide bucket's table text (down to 5px from the normal 10px) so
 > every column fits the page width; padding and the total-row size steps shrink with it. Only the
 > **visible** columns count towards that width, so hiding columns lets the text grow back.
+
+#### How a bucket is laid out on PDF pages
+
+> The same rules apply to every report PDF, and to the tenant, supplier and bank statements, which
+> print through the same layout. Each bucket is laid out on its own:
+>
+> 1. **One page, as it is.** The bucket prints at the size its columns fit across the page, in the
+>    report's own orientation (landscape, or portrait for the statements). If it fits one page that
+>    way, done; if it does not but fits one page in the **other orientation** at that size, it turns.
+> 2. **One page, a little smaller.** Otherwise the text shrinks until the bucket fits one page, in
+>    whichever orientation keeps it larger, but **never below 6pt (8px)**, the readable floor.
+> 3. **Several pages.** A bucket that would need smaller text than that prints at its normal size and
+>    continues onto as many pages as it needs. Its **title and column headers repeat** at the top of
+>    every page.
+>
+> Always: **each bucket starts on a new page**, a **row is never split** across two pages, and the
+> first page's header and report info print above the first bucket, on its page. The only text below
+> 6pt is a bucket so wide that its columns cannot fit across a landscape page at 6pt: it shrinks just
+> enough to show every column, never below 5px. The data, totals and Excel export are not affected.
 
 #### The PDF first page and footer
 

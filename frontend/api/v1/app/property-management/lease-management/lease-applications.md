@@ -56,24 +56,21 @@ Applicant (tenant):
 
 Supported query params:
 
-- Filters:
-  - `filter[search]`
-  - `filter[applicant_type]` (`personal` | `business`)
+- Filters on the page's filter panel (PROP-316):
   - `filter[status]` (see `LeaseApplicationStatus`)
-  - `filter[user_id]`
-  - `filter[facility_type_id]`
-  - `filter[city_id]`
-  - `filter[applicant_registered_country_id]`
-  - `filter[application_submitted_at]`
-  - `filter[proposed_start_date]`
-  - `filter[reviewed_at]`
-  - `filter[parking_required]`
-  - `filter[generator_required]`
-  - `filter[registration_type]`
-  - `filter[is_renewal]`
-  - `filter[lease_id]`
-  - `filter[referral_source]`
-  - `filter[created_at]`
+  - `filter[facility_id]` — the property applied for; one id or a comma list (`=61,89`). Fill the
+    dropdown from the properties list; only properties the user is allocated to ever appear.
+  - `filter[facility_type_id]` (Property Type)
+  - `filter[is_renewal]` (Renewal)
+  - `filter[application_submitted_at]` / `filter[application_submitted_between]` (Submitted At)
+  - `filter[reviewed_at]` / `filter[reviewed_between]` (Reviewed At)
+  - `filter[created_at]` / `filter[created_between]` (Created At)
+  - `per_page`
+- Also accepted, but no longer on the filter panel: `filter[search]`, `filter[applicant_type]`
+  (`personal` | `business`), `filter[user_id]`, `filter[city_id]`,
+  `filter[applicant_registered_country_id]`, `filter[proposed_start_date]` /
+  `filter[proposed_start_date_between]`, `filter[parking_required]`, `filter[generator_required]`,
+  `filter[registration_type]`, `filter[lease_id]`, `filter[referral_source]`.
 - Includes: `include=guarantors`, `documents`, `documents.upload`, `facility`, `residentialUnitTypes`, `lease`
 - Sort: `sort=id,created_at,application_submitted_at,proposed_start_date,reviewed_at`
   - Default: **newest first** (`-created_at`, then `-id`), on the staff and the tenant list alike. A `sort=` you send replaces it.

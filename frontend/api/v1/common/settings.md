@@ -157,6 +157,30 @@ note's supporting document both take Excel (row 146). Until October 2026 an `.xl
 `type` is the detected MIME type and `extension` the file's own; `preview` streams the file, so a
 spreadsheet downloads rather than displays.
 
+#### When an upload is refused
+
+A refusal carries a stable **`code`** beside the English `message`. The API's messages are English
+only, so show your own (translated) text keyed on the code and keep `message` as the fallback:
+
+| Status | `code` | When | Extra |
+|---|---|---|---|
+| 422 | `file_missing` | No file in the request, or `upload` is not a file. Used to answer 500 | |
+| 422 | `file_too_large` | Over the server's per-file limit | `max_size_mb`: the largest file it takes |
+| 422 | `file_upload_failed` | The file did not arrive whole (cut off, or the server could not keep it). Worth a retry | |
+| 413 | none | The whole request is over the server's limit. Answered by the web server or before the endpoint runs, so the body may be HTML. Treat any 413 as "file too large" | |
+
+```json
+{
+  "message": "The file is larger than the server accepts (up to 20 MB).",
+  "code": "file_too_large",
+  "errors": { "upload": ["The file is larger than the server accepts (up to 20 MB)."] },
+  "max_size_mb": 20
+}
+```
+
+The limits are the server's, not the app's: 20 MB on staging, 2 MB on a default local PHP. There
+is no type restriction and no app-level size limit.
+
 ### Renaming
 
 `PATCH /settings/file-management/uploads/{upload}` takes `title` and `description`, and changes

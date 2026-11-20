@@ -276,9 +276,14 @@ change on our side, with no change on yours.
 - **Individual files**: `document_type` = the slot's `type`, plus `guarantor_id` for a
   guarantor's. PDF, JPG or PNG, up to **10 MB**. Uploading into a filled slot replaces it.
 - **Combined document**: `document_type` = `combined`, **PDF only**, up to **25 MB**. Guarantor
-  cards (name, ID, phone) are still added with `POST /guarantors`, without their document slots.
+  cards (name, ID, phone) are still added with `POST /guarantors`.
 - **One mode at a time**: the first upload in one mode clears what the other mode left, and
   `upload_mode` says which mode is active. Warn before switching.
+- **A guarantor's file on a combined application** does not switch it: it fills that guarantor's
+  slot, the combined document stays, and `upload_mode` stays `combined`, so no one-by-one slots
+  turn into `missing` warnings. Use it to complete a guarantor the scan had no document for (e.g.
+  one listed on the application form). Only the applicant's own files switch to `individual`. A
+  later combined scan replaces the file only if it has that same document for that guarantor.
 - An ID or KRA PIN is checked automatically after upload, as on any application (157a), so a slot's
   `uploaded.status` can move from `pending` to `verified` or `failed` (with `reason`).
 - **Combined scan, split automatically (157c):** see [below](#the-combined-scan).
@@ -354,6 +359,9 @@ On the card:
   e.g. "Added from your scan: check the details", with Delete within easy reach.
 - A guarantor who already has a card is matched to it by ID number or name, never added twice. One
   person on both the form and an ID is one card. At most 5 cards per scan.
+- A document goes on a guarantor's card only when the name or ID number printed on it is that
+  person's. Someone else's document goes on their own card. An ID with no card behind it gets a new
+  card, and any other document goes to `other`.
 
 A new combined scan removes the cards the previous scan created **as long as nobody has touched
 them** (no edit to the name, ID number, phone or email, no document uploaded by hand), then works

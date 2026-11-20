@@ -31,6 +31,7 @@ cancelled, unless it has a credit note.
 - `GET /customer-invoices`
 - `GET /customer-invoices/{customerInvoice}`
 - `POST /customer-invoices/merge`
+- `POST /customer-invoices/bulk/verify`, `POST /customer-invoices/bulk/send-to-quickbooks`, `POST /customer-invoices/bulk/sign` (see [Bulk actions](#bulk-actions))
 - `PATCH /customer-invoices/{customerInvoice}/verify`
 - `POST /customer-invoices/{customerInvoice}/send-to-quickbooks`
 - `POST /customer-invoices/{customerInvoice}/sign`
@@ -56,7 +57,9 @@ cancelled, unless it has a credit note.
 
 Show actions from the record's `permissions` block, not from these names: each flag is `true` only when
 the user holds the permission **and** the invoice is in a state the action accepts. `permissions.merge`
-is per row; enable the bulk **Merge** action when every selected row has it.
+is per row; enable the bulk **Merge** action when every selected row has it. The bulk **Verify**,
+**Send to QB** and **ETR Sign** use the per-row `verify`, `send_to_quickbooks` and `sign` flags: enable
+each when at least one selected row has its flag (see [Bulk actions](#bulk-actions)).
 
 ## Statuses
 
@@ -114,6 +117,7 @@ Only invoices with at least one line on a property allocated to the user are lis
     "tax": 4000.0,
     "total": 29000.0,
     "verified_at": { "raw": "2026-10-20T08:10:00.000000Z", "formatted": "20 Oct, 2026", "diff": "2 hours ago" },
+    "verification_queued_at": null,
     "verified_by": { "id": 18, "name": "Mary Atieno" },
     "verifiers": [{ "id": 18, "name": "Mary Atieno" }],
     "quickbooks": {
@@ -129,6 +133,7 @@ Only invoices with at least one line on a property allocated to the user are lis
     "cu_invoice_verify_url": null,
     "etr_signed_at": null,
     "etr_error": null,
+    "etr_queued_at": null,
     "etr_status": { "value": "not signed", "color": "secondary" },
     "cancelled_at": null,
     "cancelled_by": null,
@@ -150,6 +155,7 @@ Only invoices with at least one line on a property allocated to the user are lis
       }
     ],
     "created_at": { "raw": "...", "formatted": "20 Oct, 2026", "diff": "3 hours ago" },
+    "queued": { "verify": false, "send_to_quickbooks": false, "sign": false },
     "permissions": {
       "view": true,
       "verify": false,
@@ -168,6 +174,12 @@ Only invoices with at least one line on a property allocated to the user are lis
   is none of the three fees.
 - `verifiers` are who may verify it now. Empty once verified, and empty on an unverified invoice when no payables staff is set (then anyone holding `verify-customer-invoice` may verify it).
 - Money is in the invoice's currency.
+- `queued` says which step is **waiting on its job**: queued (from the single button or a
+  [bulk action](#bulk-actions)) and not yet ended. Show it as in progress. While it is `true`, that
+  step's `permissions` flag is `false`. A step stops counting as waiting once its job ends (the status
+  moves on, or `quickbooks.error` / `etr_error` is set), or two hours after it was queued, whatever
+  happened to it. `verification_queued_at` and `etr_queued_at` are when it was last queued, like
+  `quickbooks.queued_at`, and stay set after the job ends.
 
 ## Who verifies
 
@@ -230,6 +242,7 @@ QuickBooks refused is retried with a new one.
 `422` when:
 
 - `403`: it is not `verified` (`Only a verified customer invoice can be sent to QuickBooks.`)
+- `403`: it is already waiting to be sent (`This customer invoice is already queued for sending to QuickBooks.`)
 - the company is not connected (`QuickBooks is not connected for this company.`)
 - an item or tax code it needs is not set (`Set the QuickBooks item for management fees in the finance settings.` and similar)
 
@@ -244,8 +257,92 @@ already or queued. Once signed the invoice is `signed`, each bill's `tax_invoice
 number, and the CU number is written to the QuickBooks invoice's custom field
 (`quickbooks_cu_custom_field`, default `Cu Invoice Number`; `quickbooks.cu_synced_at`).
 
-`403` when it is not `sent` (`Only a customer invoice sent to QuickBooks can be signed.`); `422` on `etr`
+`403` when it is not `sent` (`Only a customer invoice sent to QuickBooks can be signed.`) or is already
+waiting to be signed (`This customer invoice is already queued for ETR signing.`); `422` on `etr`
 with the device's reason.
+
+## Bulk actions
+
+Three separate actions on the rows selected in the list. They are never chained: verifying does
+not send to QuickBooks, and sending does not sign.
+
+| Action | Endpoint | Permission | Applies to (per row) |
+|---|---|---|---|
+| Verify | `POST /customer-invoices/bulk/verify` | `verify-customer-invoice` | `permissions.verify` |
+| Send to QB | `POST /customer-invoices/bulk/send-to-quickbooks` | `send-customer-invoice-to-quickbooks` | `permissions.send_to_quickbooks` |
+| ETR Sign | `POST /customer-invoices/bulk/sign` | `sign-customer-invoice` | `permissions.sign` |
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `customer_invoice_ids` | Yes | integer[] | 1 to 100 distinct ids |
+
+```json
+{ "customer_invoice_ids": [41, 42, 45] }
+```
+
+Each selected invoice is checked as its single action would check it ([Verify](#verify),
+[Send to QuickBooks](#send-to-quickbooks), [Sign](#sign)). Each one that passes is **queued as its own
+job**, and the response comes back at once. An invoice that does not pass is **skipped with a `code`
+and the reason**, and the rest carry on. An invoice already waiting on that step's job is skipped
+(`already_queued`), so nothing is queued twice. Nothing is done in the request itself:
+
+- **Verify:** `verification_queued_at` is set; the invoice becomes `verified` when its job runs,
+  verified by the user who asked. An invoice verified, merged or cancelled in the meantime is left as
+  it is.
+- **Send to QB:** `quickbooks.queued_at` is set and `quickbooks.error` cleared on each queued
+  invoice. The jobs start **5 seconds apart** so QuickBooks is not hit all at once (100 invoices take
+  about 8 minutes). An invoice missing a QuickBooks item or tax code is skipped with that reason.
+- **ETR Sign:** `etr_queued_at` is set and `etr_error` cleared on each queued invoice (the single
+  Sign button does the same). The jobs sign one at a time on the
+  device, as single signing does.
+
+Refresh the list to follow progress: `queued` shows what is still waiting, and the row's `status`,
+`quickbooks.error` and `etr_error` show how each job ended, the same as for the single actions. No
+notification is sent when a job ends.
+
+Response:
+
+```json
+{
+  "data": {
+    "message": "2 customer invoices queued for sending to QuickBooks.",
+    "queued_count": 2,
+    "queued_ids": [41, 42],
+    "skipped": [
+      { "id": 45, "code": "not_verified", "reason": "Only a verified customer invoice can be sent to QuickBooks." }
+    ]
+  }
+}
+```
+
+With nothing queued, the request still answers `200`, with `queued_count: 0` and every row in
+`skipped`.
+
+Translate from `code`; `reason` is the English text.
+
+| `code` | Action | When |
+|---|---|---|
+| `already_verified` | Verify | Already verified, sent or signed |
+| `not_responsible` | Verify | Someone else verifies it (see [Who verifies](#who-verifies)) |
+| `not_verified` | Send to QB | Not verified yet |
+| `already_sent` | Send to QB | Already in QuickBooks |
+| `quickbooks_setup_missing` | Send to QB | A QuickBooks item or tax code it needs is not set; `reason` names it |
+| `not_sent` | Sign | Not in QuickBooks yet |
+| `already_signed` | Sign | Already signed |
+| `cancelled` | All | Cancelled |
+| `already_queued` | All | Already waiting on that step's job |
+
+Customer invoices have no current-month signing rule (that rule is for
+[tenant invoices](../lease-management/invoices.md)), so bulk Sign skips none for their date.
+
+Refused as a whole:
+
+| Status | When |
+|---|---|
+| **403** | The user lacks the action's permission |
+| **422** on `customer_invoice_ids` | Empty, or more than 100 (`Select at most 100 customer invoices at a time.`) |
+| **422** on `customer_invoice_ids`, `code: invoices_not_found` | Any id not found among the company's invoices on the user's properties (`One or more customer invoices could not be found.`) |
+| **422** on `quickbooks`, `code: quickbooks_not_connected` | Send to QB only: the company is not connected (`QuickBooks is not connected for this company.`) |
 
 ## Cancel
 

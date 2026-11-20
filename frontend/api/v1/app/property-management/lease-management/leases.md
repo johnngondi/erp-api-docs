@@ -203,6 +203,9 @@ On an activation lease:
 - **It ends when it is terminated** (`PATCH /leases/{lease}/terminate`, `terminate-lease`): status
   `terminated`, `terminated_at` set. Nothing ends it on its own. A terminated lease still takes
   invoices, credit notes and receipts, as any terminated lease does.
+- **It cannot be suspended:** `permissions.suspend` is `false`, so hide **Suspend**, and `PATCH
+  /leases/{lease}/suspend` answers **403** ("An activation lease cannot be suspended. Terminate it
+  instead."). It has no spaces or billing to pause.
 - **Money on the lease page:** `total_billed` (everything billed to date), `total_collected`
   (everything collected) and `current_arrears` (the difference) come back on `GET /leases/{lease}`
   and on the list rows, for every lease type. The line-by-line history is the tenant statement.
@@ -345,6 +348,8 @@ No request body required:
 - Suspend: `PATCH /api/v1/app/{company}/property-management/lease-management/leases/{lease}/suspend`
 - Terminate: `PATCH /api/v1/app/{company}/property-management/lease-management/leases/{lease}/terminate`
 
+An activation lease cannot be suspended (**403**); see [Activation leases](#activation-leases).
+
 Response shape:
 
 ```json
@@ -365,7 +370,10 @@ Starts a renewal of a lease that is ending. It creates a **renewal lease applica
 (`is_renewal: true`, `lease_id`) on the tenant's behalf and puts it in front of the
 reviewer, exactly as if the tenant had applied from their portal. From there the ordinary
 application flow applies: review → approve → generate the `renewal` offer → send → sign.
-Promoting a signed renewal offer into the extended lease is still not built.
+The last step, `POST loos/{loo}/promote` on the signed renewal offer, applies it to **this same
+lease**: new term and rates, back to `pending` for the lease approval chain, and the deposit
+difference billed (top-up) or moved to a receipt against the arrears (surplus). See
+[Renewals and addenda](./loo/loo.md#renewals-and-addenda).
 
 **Who.** Anyone who can view the lease: `view-lease` on an allocated property. There is no
 separate renew permission.
@@ -374,7 +382,9 @@ separate renew permission.
 whose `end_at` has already passed but is still `active` qualifies. Refused while the lease
 already has a renewal in progress: a renewal application in `pending` or `review`, an
 `approved` one whose offer has not been spent, or a live offer drafted straight off the
-lease through `POST leases/{lease}/loos`.
+lease through `POST leases/{lease}/loos`. An offer already applied to the lease counts as
+finished, so once a renewal is approved the lease can be renewed again when its new end date
+comes within 12 months.
 
 Request body. Every field is optional:
 

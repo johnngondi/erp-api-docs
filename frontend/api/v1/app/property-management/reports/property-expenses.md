@@ -181,6 +181,9 @@ currency** (like the other two summaries).
   columns); the amount cells are omitted. They carry `type: subtotal`, `background_color: primary`.
 - **`property_{id}` totals row** is a `Total` label with `col_span: 6` (covering the six leading text
   columns), then the `amount` / `tax` / `total` sums; `invoice` is omitted.
+- **`invoice` is on screen only.** The field carries `exportable: false`: the Excel and PDF exports
+  print the other columns of `property_{id}` and leave Invoice out, heading and values, with no
+  empty column, even when `columns` names it.
 - **`invoice`** cell value is one of two shapes, or `null`. Tell them apart by `export_url`:
   - **The customer invoice** `{ id, number, status, export_url }`, on an expense that posted from a
     bill the company invoiced the landlord for: a **management fee** (raised by a remittance) or a
