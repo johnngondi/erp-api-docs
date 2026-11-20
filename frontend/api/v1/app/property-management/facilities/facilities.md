@@ -147,6 +147,13 @@ Reason:
 - `DELETE /facilities/{facility}`
 - `PATCH /facilities/{facility}/activate`
 - `PATCH /facilities/{facility}/deactivate`
+
+`PUT` / `PATCH /facilities/{facility}` change only the fields the payload carries. A field left out
+keeps its stored value, and a field sent as `null` is cleared. This covers fields the property form
+does not show, such as `auto_generate_utility_meters`: a property edit that does not send them leaves
+them as they are. `esd_type` and `esd_config` are never changed by an update (see ETR device below).
+Create still fills defaults for missing fields.
+
 - `GET /facilities/{facility}/admins`
 - `GET /facilities/{facility}/spaces`
 - `GET /facilities/{facility}/roles`
@@ -538,8 +545,10 @@ Each property can sign its invoices and credit notes on its own ETR (KRA fiscal)
 Rules:
 - The seller PIN is never configured here. Signing always sends the **landlord's** KRA PIN, so make sure the landlord has one.
 - `auth_key` is never returned. The response only says whether one is stored (`esd_config.has_auth_key`).
-- On update, leave `auth_key` out to keep the stored key. Send `"auth_key": null` to clear it. Send `"esd_config": null` to clear the whole config.
-- With sectioned payloads (`basic` / `location` / `structure`), send `esd_type` and `esd_config` inside `basic` or at the top level.
+- They are accepted on **create** only. With sectioned payloads (`basic` / `location` / `structure`), send them inside `basic` or at the top level.
+- `PUT` / `PATCH /facilities/{facility}` ignores both, even when they are sent or `null`. The
+  device is set from the server shell. Before 2026-11-20 a property edit that left them out
+  cleared both, so the property's documents went to the default device (Incotex).
 
 `paybill_number` is the M-Pesa paybill tenants of this property pay into, and
 `paybill_account_number` is the account they enter on it. Invoices pick the M-Pesa
