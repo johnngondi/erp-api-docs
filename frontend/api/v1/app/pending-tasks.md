@@ -39,7 +39,9 @@ Supported query params:
   - `filter[domain]` — exact. One of `access-management`, `property-management`,
     `facility-management`, `project-management`.
   - `filter[resource_type]` — the record behind the task, by **bare model name**
-    (`FacilityProcurementRequest`, `FacilityInvoice`, `Loo`, ...). An approval task matches on
+    (`FacilityProcurementRequest`, `FacilityInvoice`, `FacilityBill`, `CustomerInvoice`, `Loo`,
+    ...). `CustomerInvoice` (since 2026-11-24) is the "verify customer invoice" task; its
+    `context.property` is the property of the invoice's first line. An approval task matches on
     the record being approved, not on `ApprovalStep`. Several names may be comma-separated. A name
     the server does not know returns an empty page, not an error. The names on offer come from
     [`resource-types`](#kinds-of-record-among-my-tasks).

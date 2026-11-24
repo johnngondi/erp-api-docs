@@ -576,16 +576,20 @@ Running it again finds nothing.
 `POST /api/v1/app/{company}/property-management/lease-management/leases/{lease}/letting-fee`
 
 Bills the landlord the lease's letting fee (a renewal: re-letting fee) as activation would have: a
-bill from the company under the property's letting fee service contract, posted at once, with its
-customer invoice. How the fee is worked out, its tax and its notes are in
+bill from the company under the property's letting fee service contract, `pending` until its
+customer invoice is verified, with its customer invoice. Cancelling that customer invoice cancels the
+bill, and the fee can be generated here again. How the fee is worked out, its tax and its notes are in
 [Customer invoices](../finance/customer-invoices.md#where-customer-invoices-come-from).
 
 Request body: none.
 
 Gate the **Generate Letting Fee** button on `permissions.billLettingFee` (lease detail only). It is
-`true` when the caller holds `generate-customer-invoice`, is allocated to the property, and the lease
-has **no letting fee bill that is not cancelled**. A lease whose letting fee bill was cancelled can be
-billed again.
+`true` when the caller is allocated to the property, the lease has **no letting fee bill that is not
+cancelled**, and the caller either holds `generate-customer-invoice` or holds
+`verify-customer-invoice` and is one of the people who verify the property's letting fee invoices
+(the Letter of Offer preparation role on it, see
+[Who verifies](../finance/customer-invoices.md#who-verifies); since 2026-11-24). A lease whose
+letting fee bill was cancelled can be billed again.
 
 Responses:
 
