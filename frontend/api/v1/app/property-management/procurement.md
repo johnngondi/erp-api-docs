@@ -57,6 +57,12 @@ A request can be updated or deleted only while its status is `new` or `request` 
 / `permissions.delete` answer false afterwards, for the requester and permission holders alike). Once
 it has gone out for quotes the way to change what was asked is a rebase (below).
 
+An update hands the request to its first step only while `allow_edits` is true: the request is
+`new`, or the first step sent it back to its creator. Then the first step is `pending` and current
+again and its actors get their task. Once the first step has approved (`allow_edits` false), an
+update saves the changes and leaves the steps and the pending tasks as they are: whoever holds the
+current step sees the edited request, and nobody is asked to approve again.
+
 | Field | Required | Type | Allowed Values / Notes |
 |---|---|---|---|
 | `title` | Yes | string | - |
@@ -86,6 +92,33 @@ property. Ask the procurement officer to set a default supplier for the category
 |---|---|---|---|
 | `purchase_item_id` | Yes | integer | Must exist in `purchase_items.id` |
 | `quantity` | Yes | integer | Minimum `1` |
+
+#### Repair: requests left on two steps
+
+Until 24 November 2026 every update reopened the first step, wherever the request stood. A creator
+who edited a request that was already further along started a second approval line behind the real
+one: the first step was `pending` again while a later step was still current, and approving it
+walked forward over steps that had already approved, resetting each to `pending` in turn. The
+request then showed two current steps, and a step that had acted days before was asked again.
+
+The console command `php artisan procurement:close-reopened-steps [request ids...] [--dry-run]`
+puts such requests back on one step. It looks at requests with more than one current step; the ids,
+when given, narrow the run to those requests. On each one, in one transaction:
+
+- the furthest current step (the last in the chain) stays as it is: that is where the request
+  really stands;
+- every earlier current step that is `pending` is closed: `status=approved`, `is_current=false`.
+  Its `actor`, `comment` and `reviewed_at` were never cleared by the reopening, so its earlier
+  approval shows again. Its `prompted_at` is put back to what it was before the reopening, read
+  from the activity log; without a log entry it is left as it is;
+- the request's pending tasks are synced, so only the furthest step's actors hold one.
+
+A request whose earlier current step is in any other status (`waiting-quotes`, `quotes-review`) is
+reported as `needs-review` and left alone: the second line reached the suppliers, and that is put
+right by hand. Steps the second line approved again on its way keep the later `reviewed_at`.
+
+The run prints one row per request (the step kept, the steps closed, result) and changes nothing
+with `--dry-run`. Running it again changes nothing.
 
 ### Suppliers asked to quote
 
