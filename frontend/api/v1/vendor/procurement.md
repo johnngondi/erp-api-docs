@@ -477,6 +477,13 @@ Success response (`DataResource`):
 - `message`: `LPO Document Submitted successfully.`
 - `lpo`: updated LPO with `documentUpload`
 
+Errors:
+
+- `422` with `errors.status` (`An LPO in the current status cannot be closed.`) when the LPO is not in
+  status `lpo`: it is still `pending` approval, or it was already `delivered`, `cancelled` or
+  `rejected`. Show that message and stop offering the upload; sending the document again will not
+  succeed.
+
 ## Contracts
 
 ### List contracts
