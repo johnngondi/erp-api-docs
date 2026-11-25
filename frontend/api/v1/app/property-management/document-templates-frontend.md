@@ -763,8 +763,9 @@ POST   …/settings/documents/templates/{id}/duplicate              // clones (n
 DELETE …/settings/documents/templates/{id}                        // soft delete
 ```
 
-- **Multiple templates per `document_type` are expected** — the list is your
-  print picker. `is_default` only marks the auto-selected one.
+- **Multiple templates per `document_type` are expected.** This is the settings
+  list; a document's print menu uses its own list (§8.1). `is_default` marks the
+  company's default.
 - `filter[facility_id]=X` returns templates usable by that facility (company-wide
   `facility_ids: null` **plus** those whose array contains `X`).
 - List is paginated: `{ data: [...], links, meta }`. Pass `?per_page=`.
@@ -799,7 +800,8 @@ POST …/document-templates/{id}/render
   found for this company.`). The legacy `model_id` key is still accepted as a
   fallback.
 - An invoice, receipt, credit note or LPO that is `pending` or `rejected` cannot be
-  printed, and neither can a `pending` payment voucher. The render returns `422`
+  printed. A payment voucher prints at every status, `pending` included (only its
+  advice waits for release; see §8.1). The render returns `422`
   keyed on `resource_id`, e.g. `Invoice #12 is rejected and cannot be printed.`
   Hide or disable the print action for those statuses. `?preview=1` is not affected.
 - A `cancelled` document does print, as the cancelled copy that replaces one already
@@ -818,21 +820,24 @@ POST …/document-templates/{id}/render
   saving it at a new address shows at once. An image the server can't read keeps
   its address and prints as it did before. The HTML view is unchanged: the browser
   loads its images itself.
-- **The print picker** only needs `id`, `name`, `is_default` and `document_type`
-  from the list (§7). The list changes only when a template is saved, made default,
-  duplicated or deleted, so cache it and refetch after those.
+- **Printing a document from its own page** uses §8.1, not this list: it lists
+  only the templates that document can print on, and marks the one it prints on
+  by default.
 - For a live designer preview, save (or use a transient render of) the current
   layout, then hit `?preview=1&format=html` and drop the HTML into an iframe.
   The preview's `sample.company` reflects the current company's real letterhead
   (§2), so this is a faithful first look, not a generic placeholder.
 
-### 8.1 Print a document without choosing a template
+### 8.1 Print a document from its own page
 
-The print button on any document, and bulk print, use this instead of the
-template picker:
+The print action on any document, its preview and template switcher, the print
+menu on each row of a list, and bulk print all use these calls. The settings
+picker in §7 is for the designer.
 
 ```
-GET …/property-management/documents/{document_type}/{id}/print
+GET …/property-management/documents/{document_type}/{id}/templates
+GET …/property-management/documents/{document_type}/templates?ids=12,13,14
+GET …/property-management/documents/{document_type}/{id}/print[?template_id=]
 ```
 
 `document_type` is one of the eight types in §1 (`facility_invoice`,
@@ -840,37 +845,138 @@ GET …/property-management/documents/{document_type}/{id}/print
 `facility_payment_voucher`, `facility_remittance`, `customer_invoice`,
 `facility_settlement`); `id` is the document's id. Any other type is a `404`.
 
-The server picks the template: the company's **default** template of that type
-that the document's property may use. When there is none, it uses the newest
-active template the property may use. Inactive templates are never used.
-Templates limited to other properties are skipped, so a default limited to
-Property A does not print Property B's invoices. The PDF is exactly what
-`render` gives for the same document on that template.
+#### The templates a document can print on
+
+`GET …/templates` lists them for the print menu ("Print Invoice — Standard",
+"— Reminder") and the switcher in the preview:
+
+```json
+{
+  "data": {
+    "templates": [
+      { "id": 12, "name": "Standard", "is_default": true, "is_advice": false },
+      { "id": 31, "name": "Arrears", "is_default": false, "is_advice": false },
+      { "id": 27, "name": "Reminder", "is_default": false, "is_advice": false }
+    ]
+  }
+}
+```
+
+- Only **active** templates of that type that the document's **property** may
+  use: company-wide ones and those limited to its property. The server works out
+  the property from the document, so two invoices on different properties can
+  list different templates.
+- `is_default` is `true` on exactly one row: the template `print` uses when no
+  `template_id` is sent. That row comes first; the rest are by name.
+- It is usually the company's default, but not always. When the default is limited
+  to other properties, this document's default is the newest template its
+  property may use, and that is the one marked.
+- `is_advice` is `true` on the template a **payment voucher** or **remittance**
+  is sent out on: the advice (the payee's or landlord's copy), labelled e.g.
+  "Print Advice". It is the one the company's advice template setting names,
+  else the default, so it can be the same row as `is_default`. It is `false` on
+  every row of every other type. See "Payment and remittance advice" below.
+- An empty list means no template is set up for this document; `print` answers
+  `print_template_missing`.
+- A document whose status cannot be printed (see §8) still lists its templates.
+  Its `print` is what refuses, with `print_not_available`, so hide the print
+  action by status as before.
+- The list changes only when a template is saved, made default, switched off or
+  deleted, so one fetch per document page is enough.
+
+#### Many documents at once
+
+`GET …/templates?ids=` gives the same lists for up to 500 documents of one type
+in a single call, for the print menu on every row of a list and for bulk print.
+Pass the ids of the rows on screen, comma-separated:
+
+```json
+{
+  "data": {
+    "templates": {
+      "12": [{ "id": 12, "name": "Standard", "is_default": true, "is_advice": false }],
+      "13": [
+        { "id": 12, "name": "Standard", "is_default": true, "is_advice": false },
+        { "id": 40, "name": "Westlands only", "is_default": false, "is_advice": false }
+      ]
+    }
+  }
+}
+```
+
+- `templates` is an object keyed by document id, in the order the ids were sent,
+  each value exactly what that document's own `…/{id}/templates` gives. It is
+  `{}` when none of the ids can be printed.
+- A document that does not exist, or that the user cannot open, is **left out**;
+  the rest still come back. Show no print menu on that row.
+- A repeated id appears once.
+- `422` `print_ids_invalid` when `ids` is missing or empty, holds anything but
+  positive whole numbers, or has more than 500 ids.
+- `403` `print_not_allowed` when the user lacks `view-document-template`.
+
+#### Print
+
+`GET …/print` returns the PDF. With `?template_id=` it prints on that template,
+which must be one of the ids `…/templates` lists for this document. Without it
+(or with it empty), it prints on the row marked `is_default`. Use the same call
+for the preview, each switch of template in it, and Download.
 
 Returns `200` `application/pdf`, shown inline, named after the document's
 number: `INV0240.pdf`, `RCP0110.pdf`, `LPO0010.pdf`, `CN0029.pdf`, `PV0018.pdf`,
 `REM0048.pdf`, `ST0003.pdf`, and a customer invoice's own number
-(`CI0013.pdf`). Read the name from `Content-Disposition`.
+(`CI0013.pdf`). Read the name from `Content-Disposition`. The PDF is exactly what
+`render` gives for the same document on that template.
 
-Who may print: anyone who can open the document (its view permission, and for
-staff, being on its property) and holds `view-document-template`.
+#### Who may print, and refusals
+
+Anyone who can open the document (its view permission, and for staff, being on
+its property) and holds `view-document-template` may list its templates and
+print it on any of them, its advice included. There is no per-template permission.
 
 Every refusal is JSON with a `code` to switch on:
 
 | Status | `code` | When |
 | ------ | ------ | ---- |
-| `403` | `print_not_allowed` | The user cannot open the document, is not on its property, or lacks `view-document-template` |
-| `404` | `document_not_found` | No such document in this company |
-| `422` | `print_not_available` | Its status cannot be printed (pending or rejected; see above), e.g. `Invoice #115 is pending and cannot be printed.` |
-| `422` | `print_template_missing` | No active template of that type the property may use |
+| `403` | `print_not_allowed` | The user cannot open the document, is not on its property, or lacks `view-document-template` (the list and print; the batch only for the permission) |
+| `404` | `document_not_found` | No such document in this company (the list and print) |
+| `422` | `print_ids_invalid` | The batch's `ids` is empty, not whole numbers, or more than 500 |
+| `422` | `print_not_available` | Its status cannot be printed (pending or rejected; see §8), e.g. `Invoice #115 is pending and cannot be printed.` |
+| `422` | `print_template_missing` | No `template_id` sent, and no active template of that type the property may use |
+| `422` | `advice_not_available` | A pending payment voucher on its advice template (see "Payment and remittance advice") |
+| `422` | `print_template_unavailable` | The `template_id` is not one listed for this document: another type or company, switched off, limited to other properties, or deleted since the list was fetched. Refetch the list |
 | `500` | `print_failed` | The PDF could not be made; try again |
 
 ```json
-{ "message": "Invoice #115 is pending and cannot be printed.", "code": "print_not_available" }
+{ "message": "This template cannot print this invoice. Choose one of the templates offered for it.", "code": "print_template_unavailable" }
 ```
 
-**Bulk print:** call this once per selected document, a few at a time (3 is
-fine), and join the PDFs in the order selected. Each document's pages are the
+#### Payment and remittance advice
+
+There is no separate advice type. An advice template is an ordinary
+`facility_payment_voucher` (or `facility_remittance`) template, and a company
+setting (`payment_voucher_advice_template_id`, `remittance_advice_template_id`)
+names the one that is sent out; when it is empty, the default is used. That
+template is in the document's list with `is_advice: true`.
+
+`documents/facility_payment_voucher/{id}/print?template_id={the is_advice row}`
+prints exactly the PDF that `finance/payment-vouchers/{id}/print?template=advice`
+prints, with the same permissions. That endpoint keeps working; the only
+difference is the file name, `PV0018.pdf` here and `PV0018-advice.pdf` there.
+
+A payment voucher prints at every status, `pending` included, on any of its
+templates **except its advice**: the advice tells the payee they have been paid,
+so on a pending voucher `print?template_id={the is_advice row}` answers `422`
+`advice_not_available` ("A payment advice is available once the voucher is
+released."), as `?template=advice` does there. The row is still listed with
+`is_advice: true`, so show **Print Advice** disabled on a pending voucher. When
+no advice template is set, or it is set to the default, the `is_advice` row is the
+default itself: the internal voucher, which prints while pending.
+
+**Bulk print:** read the selection's templates with one `…/templates?ids=` call
+when offering a template, then call `print` once per selected document, a few at
+a time (3 is fine), and join the PDFs in the order selected. Send no `template_id` unless the
+user picked one; a template limited to some properties is refused for documents
+on the others. Each document's pages are the
 same as its single print. A refusal for one document should not stop the
 others: list it with its message.
 
@@ -892,5 +998,5 @@ endpoint's `?template=voucher`.
    `config.field_labels` (§5).
 6. Save via POST/PATCH; on `422`, map error keys back onto nodes (§6); on
    success, re-read `layout` for any server-side clamping.
-7. Preview with `POST render?preview=1&format=html`; print with
-   `POST render` + `{ resource_id }`.
+7. Preview with `POST render?preview=1&format=html`. A document prints from its
+   own page through `…/documents/{type}/{id}/templates` and `…/print` (§8.1).

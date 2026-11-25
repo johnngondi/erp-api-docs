@@ -12,6 +12,8 @@ Base route:
 - `POST /leases` (create)
 - `POST /leases/activation`: create an activation lease with its first invoice. See
   [Activation leases](#activation-leases)
+- `POST /leases/merge/preview`, `POST /leases/merge`: merge one tenant's leases into one lease. See
+  [Merge leases](#merge-leases)
 - `GET /leases/{lease}` (show)
 - `PUT/PATCH /leases/{lease}` (update)
 - `DELETE /leases/{lease}` (delete)
@@ -35,7 +37,10 @@ Supported query params:
 - Filters:
   - `filter[facility_id]` — **exact**; comma-separated ids match any. Lease pickers narrow to one
     property with it
-  - `filter[user_id]`
+  - `filter[user_id]` — **exact**; comma-separated ids match any (several tenants at once)
+  - `filter[mergeable]=1` — leases that can be merged **and** have a partner: another lease of the
+    same tenant on the same property that can be merged too. See
+    [Finding leases to merge](#finding-leases-to-merge)
   - `filter[status]`
   - `filter[lease_type]` — **exact**: `standard` or `activation`
   - `filter[landlord_identifier]` — **exact**. `filter[search]` matches it too
@@ -294,6 +299,301 @@ Example response (abridged):
   (`PUT/PATCH /leases/{lease}`, error on `lease_type`).
 - **Billing and Collections** lists it only for a period it billed, collected or owes in. See
   [Billings and Collections](../reports/billings-and-collections.md).
+
+## Merge leases
+
+Merges other leases of one tenant on one property **into a chosen lease** (the **host**), which
+keeps its id, history and escalations. Typical case: an
+import raised one lease per unit, so a tenant with ten units has ten leases.
+
+Flow on the Leases list:
+
+1. Select the leases, then **Merge**. Opens a full-screen side panel, like Pay Bills.
+2. Choose the lease to merge the others into (the **host**).
+3. The form shows the term and billing, prefilled from the host. Preview as it changes.
+4. Confirm. The host takes that term and billing, goes back to **pending** and through lease
+   approval again, the way a renewal does.
+
+Permission: `merge-lease`, and the caller must be allocated to the property. It is listed in
+`me/permissions`, so gate the bulk **Merge** button on it. `permissions.merge` on a lease's detail
+says whether that lease can be selected (list rows do not carry `permissions`).
+
+### Finding leases to merge
+
+Two additions to the lease list make the picker one step:
+
+- **`filter[mergeable]=1`**: only leases that can go into a merge (active, standard, no exit
+  notice, no renewal in progress, not already being merged) **and** have something to merge with:
+  another such lease of the same tenant on the same property, in a compatible currency. The partner
+  is checked across all leases, whatever else the list is filtered to or paged at.
+- **`sort=user_id`**: by tenant, then property, then lease, so each tenant's leases on a property
+  sit together (`sort=-user_id` reverses the tenant order only).
+
+It combines with the other filters (all are ANDed):
+
+| Filters | Shows |
+|---|---|
+| `mergeable` alone | Every tenant's duplicate leases in the company |
+| `mergeable` + `facility_id` | Every tenant with duplicates on that property |
+| `mergeable` + `user_id` (one or several, comma-separated) | Those tenants' mergeable leases, on every property. Group the rows by property: a selection across properties is refused (`different_property`) |
+| `mergeable` + `facility_id` + `user_id` | That tenant's mergeable leases on that property, when there are at least two |
+| `mergeable` + `status` other than `active`, or `lease_type=activation` | Nothing |
+
+A tenant with one active and one suspended lease on a property shows nothing: the suspended lease
+cannot be merged, so the active one has no partner. Use a large `per_page` in the picker so a
+tenant's set is not split across pages. The preview and the merge still check everything, so a
+lease that changed in between is refused with its `code`.
+
+Show the **Merge** bulk action when `merge-lease` is in `GET /api/v1/app/{company}/me/permissions`.
+
+### What the merge does
+
+- The host keeps its id, tenant, property, tax, landlord identifier, history and escalations. It
+  takes the term (`start_at`, `period_in_years`, `period_in_months`) and billing (`billing_cycle`,
+  `next_due_at`) from the form, and the form's `description` when one is sent. A host with no
+  currency set takes the others'.
+- **While it is pending, nothing moves.** The host is `pending`, so it is not billed until approved
+  (a due date that passes meanwhile is billed once it is approved), like a lease being renewed. The
+  other leases keep running: they are billed, take receipts and show on reports as before. The
+  host's page shows the live preview under `merge.preview`, and what it was under
+  `merge.previous`.
+- **On approval**, everything on the other leases moves into the host: spaces and their
+  components, invoices, credit notes, bills, billings, collections, receipt allocations, deposits,
+  opening balances, statement lines, utility meters and their utility bills, exit notices,
+  documents, and notifications (their links open the host). The host's "utility billed" date is
+  kept only when every lease was billed for utilities this month; otherwise it is cleared, so the
+  meters not billed yet are billed on the host. Meter readings already billed are not billed again.
+  Then each of the other leases is **deleted**, one by one, so each deletion shows in the audit
+  log. The host stays. The other leases' own audit history and approval records stay with them.
+- **Escalations:** the host's stay, and can be edited like on any lease. The other leases'
+  escalations are deleted.
+- **On rejection**, the host goes back to exactly what it was (active, with its old term and
+  billing), and the other leases are untouched. They can be merged again.
+- Where no approval applies (no lease approval set up, or the caller's role bypasses it), the
+  merge happens straight away: the host is active again and already holds everything.
+- The tenant is **not** sent the "your lease is active" email for a merge, and no letting fee is
+  billed: the spaces are not a new letting.
+
+### Which leases can be merged
+
+Refused with a **422**. Every refusal below carries a stable **`code`** beside the message, so it
+can be shown in any language, and **`lease_id`** when one lease is the reason (to highlight its row):
+
+```json
+{
+  "message": "Lease #92 has a renewal in progress.",
+  "code": "renewal_in_progress",
+  "lease_id": 92,
+  "errors": { "lease_ids": ["Lease #92 has a renewal in progress."] }
+}
+```
+
+| `code` | Key | `lease_id` | When |
+|---|---|---|---|
+| `not_found` | `lease_ids` | | A lease is not found, or is in another company |
+| `not_allocated` | `lease_ids` | Yes | The caller is not assigned to the lease's property |
+| `not_active` | `lease_ids` | Yes | The lease is pending, suspended, terminated or rejected |
+| `activation_lease` | `lease_ids` | Yes | An activation lease |
+| `renewal_in_progress` | `lease_ids` | Yes | The lease has a renewal in progress |
+| `exit_notice` | `lease_ids` | Yes | The lease has an exit notice that was not rejected |
+| `already_merging` | `lease_ids` | Yes | The lease is already being merged into another, or is a host with a merge waiting for approval |
+| `different_tenant` | `lease_ids` | | The leases belong to different tenants |
+| `different_property` | `lease_ids` | | The leases are on different properties |
+| `different_currency` | `lease_ids` | | The leases are in different currencies. A lease with no currency set counts as the others' |
+| `host_not_selected` | `host_lease_id` | | The host is not one of the selected leases |
+| `term_too_short` | `period_in_months` | | The term is 0 years 0 months (merge only) |
+| `billing_warnings` | `next_due_at` | | A lease is billed past `next_due_at` and `accept_billing_warnings` was not sent (merge only). The body carries `warnings`, see [Merge](#merge) |
+
+Plain form errors (fewer than 2 or more than 100 leases, a missing or malformed field) are the usual
+422 with `errors` and **no `code`**. A caller without `merge-lease` gets **403**.
+
+The same checks run again when the host is approved, since the leases keep running in
+between. If one no longer qualifies (say it was terminated meanwhile), **the approval is refused
+with a 422**, with the same `code` and `lease_id`, and nothing moves. A lease that was deleted
+meanwhile answers `lease_missing`. The message ends "This merge cannot go ahead. Reject it and
+merge again."
+
+`permissions.merge` on a lease is `false` for the same reasons. The preview's `warnings` carry
+their own codes (`billed_ahead`, `unbilled_gap`), see below.
+
+### Preview
+
+`POST /api/v1/app/{company}/property-management/lease-management/leases/merge/preview`
+
+Writes nothing. Call it when the host or the next due date changes.
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `lease_ids` | Yes | integer[] | 2 to 100 |
+| `host_lease_id` | Yes | integer | One of `lease_ids` |
+| `next_due_at` | No | date | The form's next due date. The host's when not sent |
+
+Response:
+
+```json
+{
+  "data": {
+    "preview": {
+      "host_lease_id": 75,
+      "tenant": { "id": 130, "name": "Wanjiru Kamau" },
+      "facility": { "id": 61, "name": "ACK Gardens" },
+      "currency": { "id": 1, "code": "KES", "name": "Kenyan Shilling" },
+      "next_due_at": "2026-12-01",
+      "suggested_next_due_at": "2027-03-01",
+      "leases": [
+        { "id": 75, "is_host": true, "start_at": "2026-01-01", "end_at": "2028-12-31", "billing_cycle": "monthly",
+          "next_due_at": "2026-12-01", "per_month": 27500, "deposits": 0, "opening_balance": 0, "arrears": 0 },
+        { "id": 78, "is_host": false, "start_at": "2026-01-01", "end_at": "2028-12-31", "billing_cycle": "monthly",
+          "next_due_at": "2027-03-01", "per_month": 32500, "deposits": 60000, "opening_balance": 0, "arrears": 0 }
+      ],
+      "spaces": [
+        { "lease_id": 75, "lease_item_id": 301, "facility_space": { "id": 9001, "name": "A1" }, "per_month": 27500,
+          "components": [
+            { "id": 811, "lease_component": { "id": 1, "name": "Rent" }, "cost_per_month": 25000 },
+            { "id": 812, "lease_component": { "id": 2, "name": "Service Charge" }, "cost_per_month": 2500 }
+          ] }
+      ],
+      "per_month": {
+        "components": [
+          { "lease_component": { "id": 1, "name": "Rent" }, "amount": 55000 },
+          { "lease_component": { "id": 2, "name": "Service Charge" }, "amount": 5000 }
+        ],
+        "total": 60000
+      },
+      "deposits": {
+        "items": [ { "id": 41, "lease_id": 78, "lease_component": { "id": 1, "name": "Rent" }, "amount": 60000, "billed": true, "refunded": false } ],
+        "total": 60000
+      },
+      "opening_balances": { "items": [], "total": 0 },
+      "escalations": [
+        { "id": 17, "lease_component": { "id": 1, "name": "Rent" }, "start_at": "2026-01-01", "end_at": null,
+          "cycle": "years", "period": 1, "rate": 5, "next_due": "2027-01-01" }
+      ],
+      "escalations_dropped": 1,
+      "meters": {
+        "items": [
+          { "id": 12, "meter_number": "KPLC-0042", "name": "A1 electricity", "utility": { "id": 5, "name": "Electricity" },
+            "status": { "value": "active", "color": "success", "label": "Active" }, "lease_ids": [75, 78], "on_host": true, "shared_with_lease_ids": [] },
+          { "id": 13, "meter_number": "NCWSC-0107", "name": "A2 water", "utility": { "id": 6, "name": "Water" },
+            "status": { "value": "active", "color": "success", "label": "Active" }, "lease_ids": [78], "on_host": false, "shared_with_lease_ids": [91] }
+        ],
+        "total": 2
+      },
+      "utility_billing": {
+        "billed_this_month": false,
+        "unbilled_lease_ids": [78],
+        "message": "Not billed for utilities this month: #78. After the merge lease #75 is billed for utilities this month, charging only the readings not billed yet."
+      },
+      "arrears": 0,
+      "warnings": [
+        { "code": "billed_ahead", "lease_id": 78,
+          "message": "Lease #78 is billed up to 28 Feb, 2027. Billing from 01 Dec, 2026 after the merge bills its spaces again for that period." }
+      ]
+    }
+  }
+}
+```
+
+- `spaces` is every space on the selected leases, with the lease it comes from. `per_month` sums
+  them by component and in total: what the tenant will pay a month on the host after the merge.
+- `deposits.total` and `leases[].deposits` count deposits still held (not refunded).
+- `escalations` are the host's, which it keeps; `escalations_dropped` is how many
+  the other leases have, which are deleted on approval.
+- `meters` is every utility meter the leases read, listed once. The host reads all of them after
+  the merge. `lease_ids` are the selected leases that read the meter, `on_host` says whether the
+  host already reads it, `status` is the meter's badge as on the meter list, and `shared_with_lease_ids` are leases outside the merge that also read it
+  and keep reading it. Show them as a table (meter number, utility, from lease, shared with).
+- `utility_billing` says how this month's utility billing carries over. `billed_this_month` is
+  `true` only when every lease was billed for utilities this month; the host then counts as billed.
+  Otherwise the host is billed for utilities this month, charging only readings not billed yet, and
+  `unbilled_lease_ids` lists the leases not billed. Show `message` under the meters table. It is
+  `null` when no lease has a meter.
+- `suggested_next_due_at` is the latest next due date among the leases. **Prefill the form's
+  next due date with it** (not the host's): from it no lease's spaces are billed twice. Leases
+  behind it show `unbilled_gap`; fix those with **Generate next period** on that lease.
+- `warnings` compare each lease's next due date with the one in the form (the host's after the
+  merge), the host's own included. Show them before
+  confirming; they do not block:
+
+| `code` | Meaning |
+|---|---|
+| `billed_ahead` | The lease is billed past the form's next due date. Billing from that date bills its spaces again for the overlap |
+| `unbilled_gap` | The lease is billed only up to before the form's next due date. The gap in between is never billed. Fix: **Generate next period** on that lease until it reaches the date, then merge |
+
+### Merge
+
+`POST /api/v1/app/{company}/property-management/lease-management/leases/merge`
+
+| Field | Required | Type | Notes |
+|---|---|---|---|
+| `lease_ids` | Yes | integer[] | 2 to 100 |
+| `host_lease_id` | Yes | integer | One of `lease_ids` |
+| `start_at` | Yes | date | Prefill with the host's |
+| `period_in_years` | Yes | integer, 0–99 | Prefill with the host's |
+| `period_in_months` | Yes | integer, 0–11 | Prefill with the host's. The term must be at least a month |
+| `billing_cycle` | Yes | string | As on Create Lease. Prefill with the host's |
+| `next_due_at` | Yes | date | Prefill with the host's. See the preview's `warnings` |
+| `description` | No | string, up to 2000 | The host's when not sent |
+| `accept_billing_warnings` | No | boolean | `true` to go ahead although a lease is billed past `next_due_at` (`billed_ahead`). Default `false` |
+
+`end_at` is worked out from the start and term, as on Create Lease.
+
+**Billed twice is refused unless accepted.** When a lease is billed past `next_due_at`, its spaces
+would be billed again for the overlap. Without `accept_billing_warnings: true` that answers **422**:
+
+```json
+{
+  "message": "Some spaces would be billed twice from this next due date. Choose a later date, or confirm to go ahead.",
+  "code": "billing_warnings",
+  "warnings": [
+    { "code": "billed_ahead", "lease_id": 78, "message": "Lease #78 is billed up to 28 Feb, 2027. …" }
+  ],
+  "errors": { "next_due_at": ["Some spaces would be billed twice from this next due date. …"] }
+}
+```
+
+Show the warnings with a checkbox ("I understand these spaces will be billed again for the
+overlap") and resend with `accept_billing_warnings: true`, or move the date to
+`suggested_next_due_at`. `unbilled_gap` alone needs no confirmation: nothing is billed twice.
+
+Response: the **host**, `pending` (`"message": "Leases merged."` and `status: active` with
+`merge.status: completed` when no approval applied):
+
+```json
+{
+  "data": {
+    "message": "Merge raised for approval.",
+    "lease": {
+      "id": 75,
+      "status": { "value": "pending", "color": "warning" },
+      "merge": {
+        "id": 3,
+        "status": { "value": "pending", "color": "warning" },
+        "lease_ids": [78],
+        "previous": { "status": "active", "start_at": "2026-01-01", "period_in_years": 3, "period_in_months": 0,
+          "end_at": "2028-12-31", "billing_cycle": "monthly", "next_due_at": "2026-12-01", "currency_id": 1, "description": null },
+        "completed_at": null,
+        "preview": { "…": "same shape as the preview above" }
+      }
+    }
+  }
+}
+```
+
+### On the lease page
+
+`GET /leases/{lease}` carries, on the detail only:
+
+- `merge`: on a host, its merge waiting for approval, or else its latest one: `{ id, status,
+  lease_ids, previous, completed_at, preview }`. `status` is `pending`, `completed` or `rejected`.
+  `lease_ids` are the leases being merged in (not the host). While pending, `preview` shows
+  everything the host will hold after approval (its own spaces plus the others'), and `previous`
+  what the host was before the merge changed its term and billing, which is what it goes back to on
+  rejection. Both are `null` once the merge is no longer pending. `merge` is `null` on a lease that
+  never took in a merge.
+- `merging_into`: on a lease being merged into another, `{ id, lease_id }`, the merge and the host.
+  Show "Being merged into lease #75" with a link. `null` otherwise.
+- `permissions.merge`: whether this lease can be selected for a merge.
 
 ## Update Lease
 

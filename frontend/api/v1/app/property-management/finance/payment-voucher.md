@@ -249,6 +249,11 @@ The voucher's own items are offered only while the query names the voucher's own
 
 `GET /payment-vouchers/{paymentVoucher}/print?template=voucher|advice`
 
+The shared document print (`documents/facility_payment_voucher/{id}/templates` and `…/print?template_id=`,
+in the document templates guide §8.1) offers every voucher template by name and marks the advice with
+`is_advice`. Its PDFs are the same as here, with the same rule: a pending voucher prints on every
+template except its advice, which answers `422` `advice_not_available` until the voucher is released.
+
 Returns the PDF itself, ready to open, with no preview step: `200`, `Content-Type: application/pdf`,
 `Content-Disposition: inline; filename="PV0005-voucher.pdf"` (or `PV0005-advice.pdf`). The voucher's
 data is not changed. As a `GET` it can be fetched as a blob and opened the way other PDFs are.
@@ -357,15 +362,25 @@ The response's `payment_voucher` includes `remittance_packs` (see below).
 ## Remittance pack (landlord vouchers)
 
 Once the bank's remittance advice is saved on a **landlord** voucher (`PUT …/pay` above), every
-remittance the voucher pays gets a **remittance pack** emailed to its landlord, in one email per
-remittance, with four PDFs attached:
+monthly remittance the voucher pays gets a **remittance pack** emailed to its landlord, in one email
+per remittance, with these attached:
 
 1. the system **remittance advice** (`REM0044 Remittance Advice.pdf`, the remittance advice template),
-2. the **bank's remittance advice** just uploaded (`REM0044 Bank Remittance Advice.pdf`),
-3. the **Income and Expenditure** report (`REM0044 Income and Expenditure.pdf`),
-4. the **Property Collections** report (`REM0044 Property Collections.pdf`).
+2. the **advance remittance advice** of each advance the remittance deducted, one each
+   (`REM0041 Advance Remittance Advice.pdf`); none when it deducted no advance,
+3. the **bank's remittance advice** just uploaded (`REM0044 Bank Remittance Advice.pdf`),
+4. the **Income and Expenditure** report (`REM0044 Income and Expenditure.pdf`),
+5. the **Property Collections** report (`REM0044 Property Collections.pdf`),
+6. the **Property Expenses** report (`REM0044 Property Expenses.pdf`).
 
-Both reports cover the remittance's property over its whole period (`period_from` to `period_to`),
+The advances attached are the ones the remittance deducted: on its property, inside its period, and
+not pending, cancelled or rejected.
+
+**An advance remittance gets no pack.** Its advice is emailed to the landlord when it is approved,
+and it is attached to the pack of the monthly remittance that deducts it. A voucher paying only
+advances sends nothing; one paying advances and monthly remittances sends a pack per monthly one.
+
+The three reports cover the remittance's property over its whole period (`period_from` to `period_to`),
 with the I&E report in monthly columns. They are the same PDFs the reports' Export buttons give,
 generated as the user who uploaded the advice, so that user must be assigned to the property.
 Supplier vouchers send nothing.
@@ -386,7 +401,7 @@ account email. Their billing addresses marked "always copy" are on cc, as on the
 ### `remittance_packs` on the voucher
 
 On `GET /payment-vouchers/{id}`, the `PUT …/pay` response and the retry response. Newest first; empty
-for a supplier voucher or before the advice is uploaded.
+for a supplier voucher, a voucher paying only advance remittances, or before the advice is uploaded.
 
 ```json
 "remittance_packs": [
@@ -434,6 +449,8 @@ Why a pack fails (`error_code`, with its `error`). Both are `null` unless the pa
 | `bank_advice_missing` | `The bank's remittance advice file is missing. Upload it again on the payment voucher.` |
 | `income_and_expenditure_failed` | `The Income and Expenditure report could not be generated.` |
 | `property_collections_failed` | `The Property Collections report could not be generated.` |
+| `property_expenses_failed` | `The Property Expenses report could not be generated.` |
+| `advance_advice_failed` | `The advance remittance advice REM0041 could not be generated.` |
 | `uploader_not_assigned` | `{user} is not assigned to {property}, so its reports cannot be generated.` The staff user who uploaded or retried, not the landlord. |
 | `uploader_missing` | `The user who uploaded the bank advice no longer exists. Retry the pack.` |
 | `remittance_missing` | `The remittance or its payment voucher no longer exists.` |
