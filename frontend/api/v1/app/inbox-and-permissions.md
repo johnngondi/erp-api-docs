@@ -84,17 +84,24 @@ Every key is always present on every portal.
     "modules": {
       "Property Management": ["view-facility", "create-facility", "view-lease"],
       "Access Management": ["view-role", "generate-report"]
-    }
+    },
+    "module_access": ["access-management", "property-management", "human-resource"]
   }
 }
 ```
 
-- `permissions`: every `view-*`, `create-*`, `generate-*`, `export-*`, `sign-*`, `manage-*` and `merge-*` permission your App roles
+- `permissions`: every `view-*`, `create-*`, `generate-*`, `export-*`, `sign-*`, `manage-*`, `merge-*` and `impersonate-*` permission your App roles
   give you in this company, across all modules, each name once.
 - `modules`: the same names grouped by module. `modules["Property Management"]` equals
   `data.permissions` of `GET /api/v1/app/{company}/property-management`, and
-  `modules["Access Management"]` equals that of `GET /api/v1/app/{company}/access-management`.
+  `modules["Access Management"]` equals that of `GET /api/v1/app/{company}/access-management`, and
+  `modules["Human Resource"]` equals that of `GET /api/v1/app/{company}/human-resource/admin`.
   A module you hold nothing in is absent. `{}` when you hold nothing.
+
+- `module_access`: the modules you may open in this company (`access-management`,
+  `property-management`, `facility-management`, `project-management`, `human-resource`), in that
+  order. Set per person in the HR employee form; `human-resource` is always in it. The company owner
+  gets every module. Hide the launcher tiles of modules not listed.
 
 Use it to refresh the permission map (after switching modules, after a `403`) without running a
 dashboard.

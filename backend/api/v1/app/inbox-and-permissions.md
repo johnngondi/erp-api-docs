@@ -136,10 +136,14 @@ The tenant, vendor and landlord portals run 1 and 3 only.
 
 Module-agnostic. `modules` is keyed by permission `tag`. Each entry is exactly what that module's
 dashboard returns under `data.permissions`: the caller's `app` roles in `{company}`, their `app`-group
-permissions with that tag, narrowed to `view-*`, `create-*`, `generate-*`, `export-*`, `sign-*`, `manage-*` and `merge-*`
-names (`manage-*` since 2026-10-20, for settings with no record to carry instance permissions, e.g.
-`manage-quickbooks`; `merge-*` since 2026-11-19, for a bulk action on a list, `merge-lease`).
-`permissions` is the flat, de-duplicated union of every module. It is a superset of the Property
+permissions with that tag, narrowed to `view-*`, `create-*`, `generate-*`, `export-*`, `sign-*`, `manage-*`, `merge-*`
+and `impersonate-*` names (`manage-*` since 2026-10-20, for settings with no record to carry instance permissions, e.g.
+`manage-quickbooks`; `merge-*` since 2026-11-19, for a bulk action on a list, `merge-lease`; `impersonate-*`
+since 2026-11-25, for acting as another employee in the HR staff space, `impersonate-employee`).
+`permissions` is the flat, de-duplicated union of every module. `module_access` (since 2026-11-26)
+is `App\Support\ModuleAccess::forUser()`: the membership's `company_users.modules` with
+`human-resource` always added, read from the roles' permission tags while a membership has no list,
+and every module for the company owner. It is a superset of the Property
 Management dashboard's array. `modules` is always a JSON object, `{}` when the caller has nothing.
 
 Both come from `ResolveDashboardPermissionsAction`. The dashboards call `execute($user, 'app', $tag,

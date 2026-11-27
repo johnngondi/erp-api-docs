@@ -258,6 +258,19 @@ Treat `5xx` as backend/system failure:
 - Company Users:
   - `docs/frontend/api/v1/app/access-management/company-users.md`
 
+## Human Resource Docs
+
+- Overview (the Admin and Staff spaces, the no-permission rule for `me/`, the `X-Acting-Employee` header):
+  - `docs/frontend/api/v1/app/human-resource/README.md`
+- Dashboards:
+  - `docs/frontend/api/v1/app/human-resource/dashboard.md`
+- HR General Settings:
+  - `docs/frontend/api/v1/app/human-resource/settings.md`
+- Employees:
+  - `docs/frontend/api/v1/app/human-resource/employees.md`
+- My profile (staff space):
+  - `docs/frontend/api/v1/app/human-resource/profile.md`
+
 ## Alerts, Pending Tasks and Notifications Docs
 
 All three are readable from every portal, are scoped to the signed-in user, and need no permission.

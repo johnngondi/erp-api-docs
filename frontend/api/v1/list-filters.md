@@ -54,6 +54,7 @@ or type filter, or a date filter without its range, so these conventions hold fo
 | `facility-management/sensors/{sensor}/actions` | — | — | — | `action_trigger`, `action_to_take` | — |
 | `facility-management/settings/utility-management/utilities` | `id`, `utility_type`, `stock_keeping_unit_id` | `created_between` | `created_at` | `name`, `description`, `is_regulated`, `default_price_per_unit` | — |
 | `facility-management/settings/utility-management/utilities/{utility}/prices` | `currency_id`, `facility_id` | `created_between` | `created_at` | `price_per_unit` | — |
+| `human-resource/admin/employees` | `employment_type`, `status`, `company_department_id`, `company_office_id`, `manager_id` | — | — | — | `search` |
 | `project-management/projects` | `id`, `status`, `facility_id` | `created_between`, `initiated_between`, `estimated_start_date_between`, `completed_between`, `estimated_end_date_between` | `created_at`, `initiated_at`, `estimated_start_date`, `completed_at`, `estimated_end_date` | `title`, `total_budget` | — |
 | `project-management/projects/{project}/milestones` | `status` | — | — | `title` | — |
 | `project-management/projects/{project}/milestones/{milestone}/tasks` | `status`, `assigned_to_id` | — | — | `title`, `priority`, `estimated_duration_in_days` | — |
