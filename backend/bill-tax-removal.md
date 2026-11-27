@@ -23,6 +23,16 @@ For each bill it can take, the command writes the following, in one transaction 
 | Expense (posted bill) | `tax` → `0`, `total` → `amount`, `balance` → `total − paid`. `amount` is already in the reporting currency and is unchanged |
 | Vendor statement (posted bill) | The bill's posting credit → the new total |
 
+## Merged bills
+
+A merged bill's tax is the sum of the bills merged into it. Removing it also removes it from those
+bills, all the way down when a merged bill was itself merged again, so cancelling the merged bill
+later brings them back without the tax. On the merged bill, each line (one per merged bill) loses
+its tax, and its withholdings are rebuilt as above, so a `when_has_tax` withholding such as VAT 2%
+drops off. Each bill merged into it that carried tax gets the same item, bill, withholding and LPO
+changes. Those bills are pending by construction, so they have no expense or statement to follow.
+The report's LPO column lists every LPO changed underneath the merged bill.
+
 ## Bills it leaves alone
 
 Each one is listed with the reason, and nothing is written for it:
@@ -30,7 +40,6 @@ Each one is listed with the reason, and nothing is written for it:
 | Reason | Why |
 |---|---|
 | Not found / merged | Deleted, or merged into another bill (named). Remove the tax from the bill it went into |
-| Merged bill | Its tax came from the bills merged into it, so it is not this command's to change |
 | Credit note / liability bill | Neither is a supplier's taxed invoice |
 | No tax | Nothing to remove |
 | Not pending or unpaid | Money has moved, or the bill is cancelled or reversed |
